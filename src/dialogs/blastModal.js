@@ -97,6 +97,7 @@ function showAddBlastModal() {
   document.getElementById("fBlastMode").value = "Manual";
   document.getElementById("fSurfaceArea").value = "";
   document.getElementById("fDrillStart").value = isoDate(APP.planStart);
+  document.getElementById("fDrillStartTime").value = "06:00";
   document.getElementById("fPctD65").value = 0;
   document.getElementById("fPctPV").value = 1;
   document.getElementById("fLoadRate").value = 100000;
@@ -133,6 +134,7 @@ function editBlast(idx) {
   document.getElementById("fBlastMode").value = b.mode;
   document.getElementById("fSurfaceArea").value = b.surfaceArea || "";
   document.getElementById("fDrillStart").value = b.drillStart || "";
+  document.getElementById("fDrillStartTime").value = b.drillStartTime || "06:00";
   document.getElementById("fPctD65").value = b.pctD65;
   document.getElementById("fPctPV").value = b.pctPV;
   document.getElementById("fLoadRate").value = b.loadRate;
@@ -190,6 +192,7 @@ function saveBlast() {
 
   var loadRate = parseFloat(document.getElementById("fLoadRate").value) || 100000;
   var drillStart = document.getElementById("fDrillStart").value;
+  var drillStartTime = document.getElementById("fDrillStartTime").value || "06:00";
   var rateD65 = parseFloat(document.getElementById("fRateD65").value) || 19;
   var ratePV = parseFloat(document.getElementById("fRatePV").value) || 20;
   var numD65 = parseInt(document.getElementById("fNumD65").value) || 0;
@@ -264,6 +267,7 @@ function saveBlast() {
     volume: volume,
     expMass: expMass,
     drillStart: drillStart,
+    drillStartTime: drillStartTime,
     drillDays: drillDays,
     loadStart: null,
     loadDays: loadDays,

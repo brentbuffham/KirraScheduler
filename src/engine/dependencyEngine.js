@@ -34,6 +34,9 @@ function recalcDependencies() {
   APP.blasts.forEach(function(blast, idx) {
     if (!blast.drillStart || !blast.drillDays) return;
 
+    // Step 2b-i) Reset warnings before recalculating
+    blast._depWarning = "";
+
     var deps = getBlastDeps(blast);
     var drillStartDate = new Date(blast.drillStart);
     var drillDays = blast.drillDays || 1;
@@ -80,8 +83,17 @@ function recalcDependencies() {
       });
     }
 
-    // Step 2f) Set loading start and calculate loading days
-    blast.loadStart = isoDate(loadEarliest);
+    // Step 2f) Set loading start — respect manual override or auto-calculate
+    var autoLoadStart = isoDate(loadEarliest);
+    if (blast.loadStartManual && blast.loadStart) {
+      if (blast.loadStart < autoLoadStart) {
+        blast._depWarning = (blast._depWarning ? blast._depWarning + "; " : "") +
+          "Loading starts before " + Math.round(deps.drillPctForLoad * 100) + "% drill complete (earliest: " + formatDate(autoLoadStart) + ")";
+      }
+    } else {
+      blast.loadStart = autoLoadStart;
+    }
+
     var loadDays = blast.loadRate > 0 ? Math.ceil((blast.expMass || 0) / blast.loadRate) : 1;
     blast.loadDays = Math.max(loadDays, 1);
 
@@ -89,16 +101,25 @@ function recalcDependencies() {
     var drillDaysForBlast = Math.ceil(drillDays * deps.drillPctForBlast);
     var drillReadyDate = addDays(drillStartDate, drillDaysForBlast);
 
+    var loadStartForCalc = new Date(blast.loadStart);
     var loadDaysForBlast = Math.ceil(blast.loadDays * deps.loadPctForBlast);
-    var loadReadyDate = addDays(loadEarliest, loadDaysForBlast);
+    var loadReadyDate = addDays(loadStartForCalc, loadDaysForBlast);
 
-    // Blast date = latest of (drill ready, load ready) + lead days
     var blastEarliest = new Date(Math.max(drillReadyDate.getTime(), loadReadyDate.getTime()));
     blastEarliest = addDays(blastEarliest, deps.minLeadDays);
 
-    blast.blastDate = isoDate(blastEarliest);
+    // Step 2h) Blast date — respect manual override or auto-calculate
+    var autoBlastDate = isoDate(blastEarliest);
+    if (blast.blastDateManual && blast.blastDate) {
+      if (blast.blastDate < autoBlastDate) {
+        blast._depWarning = (blast._depWarning ? blast._depWarning + "; " : "") +
+          "Blast date before dependencies met (earliest: " + formatDate(autoBlastDate) + ")";
+      }
+    } else {
+      blast.blastDate = autoBlastDate;
+    }
 
-    // Step 2h) Store computed dependency info for rendering
+    // Step 2i) Store computed dependency info for rendering
     blast._computed = {
       drillPctForLoad: deps.drillPctForLoad,
       drillPctForBlast: deps.drillPctForBlast,
@@ -109,7 +130,9 @@ function recalcDependencies() {
       loadOverlapStart: blast.loadStart,
       hasOverlap: deps.drillPctForLoad < 1.0,
       drillEndDate: isoDate(addDays(drillStartDate, drillDays - 1)),
-      loadEndDate: isoDate(addDays(loadEarliest, blast.loadDays - 1)),
+      loadEndDate: isoDate(addDays(loadStartForCalc, blast.loadDays - 1)),
+      autoLoadStart: autoLoadStart,
+      autoBlastDate: autoBlastDate,
     };
   });
 }

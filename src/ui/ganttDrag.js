@@ -1,8 +1,9 @@
 // ============================================================
 //  GANTT DRAG
-//  Drag-to-move drilling bars on the Gantt chart.
-//  Moving a drill start cascades load and blast dates via
-//  the dependency engine.
+//  Drag-to-move bars on the Gantt chart for all sections:
+//    - DRILLING bars: shift drillStart, cascade via dependencies
+//    - LOADING bars: shift loadStart (manual override), warn on breach
+//    - BLASTING milestone: shift blastDate (manual override), warn on breach
 // ============================================================
 
 import { APP } from "../state/appState.js";
@@ -10,16 +11,15 @@ import { addDays, isoDate } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 
-var CELL_WIDTH = 32; // px per day column (matches CSS .gantt-cell min/max-width)
+var CELL_WIDTH = 32;
 
 var dragState = {
   active: false,
   blastIdx: null,
   section: null,
   startX: 0,
-  origDrillStart: null,
-  ghostEl: null,
-  dayOffset: 0
+  dayOffset: 0,
+  ghostEl: null
 };
 
 // Step 1) Initialise drag handlers on the Gantt scroll container
@@ -32,36 +32,35 @@ function initGanttDrag() {
   document.addEventListener("mouseup", onDragEnd);
 }
 
-// Step 2) Start drag — only on drill bars
+// Step 2) Start drag — works for drill, load, and blast bars
 function onDragStart(e) {
   var bar = e.target.closest(".gantt-bar");
   if (!bar) return;
 
-  // Only allow dragging DRILLING bars
   var row = bar.closest(".gantt-row");
   if (!row) return;
-  var section = row.dataset.section;
-  if (section !== "drilling") return;
 
+  var section = row.dataset.section;
   var blastIdx = parseInt(row.dataset.blast);
   if (isNaN(blastIdx)) return;
 
   var blast = APP.blasts[blastIdx];
-  if (!blast || !blast.drillStart) return;
+  if (!blast) return;
+
+  // Step 2a) Validate the bar is draggable for its section
+  if (section === "drilling" && !blast.drillStart) return;
+  if (section === "loading" && !blast.loadStart) return;
+  if (section === "blasting" && !blast.blastDate) return;
 
   e.preventDefault();
   dragState.active = true;
   dragState.blastIdx = blastIdx;
   dragState.section = section;
   dragState.startX = e.clientX;
-  dragState.origDrillStart = blast.drillStart;
   dragState.dayOffset = 0;
 
-  // Step 2a) Visual feedback: add drag class
   bar.classList.add("gantt-bar-dragging");
   dragState.ghostEl = bar;
-
-  // Change cursor on the whole document while dragging
   document.body.style.cursor = "grabbing";
 }
 
@@ -74,11 +73,10 @@ function onDragMove(e) {
   var dayOffset = Math.round(dx / CELL_WIDTH);
   dragState.dayOffset = dayOffset;
 
-  // Step 3a) Show offset as a CSS transform on the row
+  // Step 3a) Apply visual transform to all bars in the row
   if (dragState.ghostEl) {
     var row = dragState.ghostEl.closest(".gantt-row");
     if (row) {
-      // Highlight all cells in this row that have bars
       var bars = row.querySelectorAll(".gantt-bar");
       bars.forEach(function(b) {
         b.style.transform = "translateX(" + (dayOffset * CELL_WIDTH) + "px)";
@@ -89,7 +87,7 @@ function onDragMove(e) {
   }
 }
 
-// Step 4) End drag — apply the date change and recalculate
+// Step 4) End drag — apply the date change based on section
 function onDragEnd(e) {
   if (!dragState.active) return;
 
@@ -97,6 +95,7 @@ function onDragEnd(e) {
 
   var dayOffset = dragState.dayOffset;
   var blastIdx = dragState.blastIdx;
+  var section = dragState.section;
 
   // Step 4a) Reset visual transforms
   if (dragState.ghostEl) {
@@ -115,22 +114,38 @@ function onDragEnd(e) {
   // Step 4b) Apply offset if non-zero
   if (dayOffset !== 0 && blastIdx !== null) {
     var blast = APP.blasts[blastIdx];
-    if (blast && blast.drillStart) {
-      var newStart = addDays(new Date(blast.drillStart), dayOffset);
-      blast.drillStart = isoDate(newStart);
+    if (blast) {
 
-      // Step 4c) Recalculate all dependencies (this cascades load + blast dates)
+      if (section === "drilling" && blast.drillStart) {
+        // Step 4c) Drilling: shift drillStart, let engine cascade load + blast
+        var newDrill = addDays(new Date(blast.drillStart), dayOffset);
+        blast.drillStart = isoDate(newDrill);
+        blast.loadStartManual = false;
+        blast.blastDateManual = false;
+
+      } else if (section === "loading" && blast.loadStart) {
+        // Step 4d) Loading: manual override — mark as manual so engine validates
+        var newLoad = addDays(new Date(blast.loadStart), dayOffset);
+        blast.loadStart = isoDate(newLoad);
+        blast.loadStartManual = true;
+
+      } else if (section === "blasting" && blast.blastDate) {
+        // Step 4e) Blasting: manual override — mark as manual so engine validates
+        var newBlast = addDays(new Date(blast.blastDate), dayOffset);
+        blast.blastDate = isoDate(newBlast);
+        blast.blastDateManual = true;
+      }
+
+      // Step 4f) Recalculate dependencies and re-render
       recalcDependencies();
       renderGantt();
-
-      // Re-attach drag handlers after re-render
-      initGanttDrag();
     }
   }
 
-  // Step 4d) Reset state
+  // Step 4g) Reset state
   dragState.active = false;
   dragState.blastIdx = null;
+  dragState.section = null;
   dragState.ghostEl = null;
   dragState.dayOffset = 0;
 }

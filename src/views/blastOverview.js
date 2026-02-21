@@ -74,7 +74,7 @@ function renderBlasts() {
     html += "<td>" + formatDate(b.drillStart) + "</td>";
     html += "<td>" + formatDate(b.loadStart) + "</td>";
     html += "<td>" + formatDate(b.blastDate) + "</td>";
-    html += "<td style=\"font-size:9px;color:var(--accent-purple)\">" + depSummary + "</td>";
+    html += "<td style=\"font-size:11px;color:var(--accent-purple)\">" + depSummary + "</td>";
     html += "</tr>";
   });
 

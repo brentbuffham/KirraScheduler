@@ -46,7 +46,7 @@ function renderForecast() {
   statsHtml += "</div>";
   statsHtml += "<div class=\"stat-card accent-green\">";
   statsHtml += "  <div class=\"stat-label\">Charge Source</div>";
-  statsHtml += "  <div class=\"stat-value\" style=\"font-size:14px\">" + (APP.chargeConfigs.length ? "Kirra Config" : "Designed") + "</div>";
+  statsHtml += "  <div class=\"stat-value\" style=\"font-size:16px\">" + (APP.chargeConfigs.length ? "Kirra Config" : "Designed") + "</div>";
   statsHtml += "  <div class=\"stat-sub\">" + (APP.chargeConfigs.length ? APP.chargeConfigs.length + " configs loaded" : "From schedule data") + "</div>";
   statsHtml += "</div>";
   document.getElementById("forecastStats").innerHTML = statsHtml;

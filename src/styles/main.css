@@ -1,18 +1,19 @@
 /* ============================================================
-   Blast Scheduler — Main Stylesheet
+   Kirra Scheduler — Main Stylesheet
    ============================================================ */
 
-/* Step 1) CSS Custom Properties */
+/* Step 1) CSS Custom Properties — Dark Theme (default) */
 :root {
-  --bg-primary: #0a0e17;
-  --bg-secondary: #111827;
-  --bg-tertiary: #1a2332;
-  --bg-card: #151d2e;
-  --border: #1e2d42;
-  --border-active: #2d4a6f;
-  --text-primary: #e8edf5;
-  --text-secondary: #8899b0;
-  --text-muted: #4a5c73;
+  --bg-primary: #121212;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #242424;
+  --bg-card: #1e1e1e;
+  --border: #333333;
+  --border-active: #4d4d4d;
+  --border-row: rgba(51,51,51,0.5);
+  --text-primary: #d9d9d9;
+  --text-secondary: #999999;
+  --text-muted: #666666;
   --accent-drill: #3b82f6;
   --accent-load: #f59e0b;
   --accent-blast: #ef4444;
@@ -20,6 +21,7 @@
   --accent-green: #10b981;
   --accent-purple: #8b5cf6;
   --accent-cyan: #06b6d4;
+  --accent-brand: #e53935;
   --presplit: #a78bfa;
   --buffer: #38bdf8;
   --production: #f97316;
@@ -31,16 +33,73 @@
   --gantt-blast: #ef4444;
   --gantt-complete: #10b981;
   --gantt-planned: #374151;
-  --shadow: 0 4px 24px rgba(0,0,0,0.4);
-  --radius: 6px;
-  --radius-lg: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.5);
+  --radius: 4px;
+  --radius-lg: 8px;
+  --hover-overlay: rgba(255,255,255,0.03);
+  color-scheme: dark;
+}
+
+/* Step 1b) Light Theme Override (reduced 10% brightness) */
+:root[data-theme="light"] {
+  --bg-primary: #c4c4c4;
+  --bg-secondary: #cccccc;
+  --bg-tertiary: #d6d6d6;
+  --bg-card: #e8e8e8;
+  --border: #aaaaaa;
+  --border-active: #888888;
+  --border-row: rgba(160,160,160,0.5);
+  --text-primary: #1a1a1a;
+  --text-secondary: #444444;
+  --text-muted: #777777;
+  --gantt-planned: #b8b8b8;
+  --shadow: 0 4px 24px rgba(0,0,0,0.15);
+  --hover-overlay: rgba(0,0,0,0.04);
+  color-scheme: light;
+}
+
+/* Step 1b-ii) Colorblind Mode — deuteranopia-safe palette */
+:root[data-cb="true"] {
+  --accent-blast: #cc3377;
+  --accent-green: #2196f3;
+  --accent-fire: #cc3377;
+  --gantt-blast: #cc3377;
+  --gantt-complete: #2196f3;
+}
+:root[data-cb="true"] .dep-warning {
+  background: rgba(204,51,119,0.2);
+  color: var(--accent-blast);
+}
+:root[data-cb="true"] .dep-ok {
+  background: rgba(33,150,243,0.2);
+  color: var(--accent-green);
+}
+:root[data-cb="true"] .badge-blast { background: rgba(204,51,119,0.15); color: var(--accent-blast); }
+:root[data-cb="true"] .badge-complete { background: rgba(33,150,243,0.15); color: var(--accent-green); }
+
+/* Step 1c) Theme transition */
+body,
+.app-header,
+.tab-bar,
+.tab,
+.stat-card,
+.data-table-container,
+.gantt-container,
+.settings-bar,
+.pattern-card,
+.drop-zone,
+.modal,
+.tooltip,
+.context-menu,
+.btn {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 /* Step 2) Reset */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', 'Arial', 'Helvetica', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   overflow-x: hidden;
@@ -71,17 +130,18 @@ body {
   gap: 12px;
 }
 .app-logo svg { width: 32px; height: 32px; }
+.app-logo img { width: 32px; height: 32px; border-radius: 6px; }
 .app-logo h1 {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent-drill), var(--accent-cyan));
+  background: linear-gradient(135deg, var(--accent-brand), var(--accent-fire));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .app-logo .subtitle {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
@@ -94,7 +154,7 @@ body {
 /* Step 5) Buttons */
 .btn {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   padding: 7px 14px;
   border-radius: var(--radius);
@@ -102,7 +162,6 @@ body {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -128,17 +187,16 @@ body {
 }
 .tab {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   padding: 10px 18px;
   color: var(--text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: all 0.15s;
   white-space: nowrap;
 }
 .tab:hover { color: var(--text-secondary); }
-.tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+.tab.active { color: var(--accent-brand); border-bottom-color: var(--accent-brand); }
 
 /* Step 7) Main Layout */
 .main-content { padding: 16px 24px; }
@@ -166,14 +224,14 @@ body {
 }
 .setting-group label {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .setting-group input, .setting-group select {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 14px;
   padding: 5px 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -206,7 +264,7 @@ body {
 }
 .gantt-table th, .gantt-table td {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .gantt-table thead th {
@@ -233,17 +291,17 @@ body {
   background: var(--bg-secondary);
 }
 .gantt-header-month {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--accent-cyan);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 .gantt-header-week {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 .gantt-header-date {
-  font-size: 10px;
+  font-size: 11px;
   min-width: 32px;
   padding: 2px 1px;
 }
@@ -253,13 +311,28 @@ body {
 /* Step 10) Gantt rows */
 .gantt-section-header td {
   background: var(--bg-tertiary);
-  padding: 8px 12px;
+  padding: 6px 12px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   border-top: 2px solid var(--border-active);
   letter-spacing: 1px;
   text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+}
+.gantt-section-header td .collapse-arrow {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+  transition: transform 0.2s;
+  margin-right: 4px;
+}
+.gantt-section-header.collapsed td .collapse-arrow {
+  transform: rotate(-90deg);
+}
+.gantt-row.section-hidden {
+  display: none;
 }
 .gantt-section-header td .section-icon {
   display: inline-block;
@@ -271,9 +344,10 @@ body {
 }
 .gantt-row td {
   padding: 3px 1px;
-  border-bottom: 1px solid rgba(30,45,66,0.5);
+  border-bottom: 1px solid var(--border-row);
   height: 28px;
   vertical-align: middle;
+  font-size: 12px;
 }
 .gantt-row td.sticky-col {
   position: sticky;
@@ -299,6 +373,7 @@ body {
 .gantt-row:hover td { background: rgba(59,130,246,0.04); }
 .gantt-row:hover td.sticky-col,
 .gantt-row:hover td.sticky-col-2 { background: var(--bg-tertiary); }
+[data-theme="light"] .gantt-row:hover td { background: rgba(59,130,246,0.07); }
 
 /* Step 11) Gantt bar cells */
 .gantt-cell {
@@ -343,11 +418,11 @@ body {
 .gantt-bar .dep-marker::after {
   content: attr(data-label);
   position: absolute;
-  top: -13px;
+  top: -15px;
   left: 50%;
   transform: translateX(-50%);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 7px;
+  font-size: 9px;
   color: var(--accent-purple);
   white-space: nowrap;
   font-weight: 700;
@@ -363,11 +438,11 @@ body {
 }
 .dep-warning {
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  line-height: 14px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
   text-align: center;
-  font-size: 9px;
+  font-size: 11px;
   border-radius: 50%;
   background: rgba(239,68,68,0.2);
   color: var(--accent-blast);
@@ -377,11 +452,11 @@ body {
 }
 .dep-ok {
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  line-height: 14px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
   text-align: center;
-  font-size: 9px;
+  font-size: 11px;
   border-radius: 50%;
   background: rgba(16,185,129,0.2);
   color: var(--accent-green);
@@ -391,8 +466,7 @@ body {
 }
 .dep-link-indicator {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  color: var(--accent-purple);
+  font-size: 10px;
   position: absolute;
   right: -1px;
   top: -1px;
@@ -400,7 +474,7 @@ body {
   color: #fff;
   border-radius: 2px;
   padding: 0 2px;
-  line-height: 10px;
+  line-height: 12px;
   z-index: 4;
   pointer-events: none;
 }
@@ -429,7 +503,7 @@ body {
 }
 .stat-card .stat-label {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -437,17 +511,17 @@ body {
 }
 .stat-card .stat-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
 }
 .stat-card .stat-unit {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin-left: 4px;
 }
 .stat-card .stat-sub {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
   font-family: 'JetBrains Mono', monospace;
@@ -469,7 +543,7 @@ body {
 }
 .data-table-container .table-title {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
@@ -484,7 +558,7 @@ body {
 }
 .data-table th {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -498,18 +572,19 @@ body {
 }
 .data-table td {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   padding: 7px 12px;
-  border-bottom: 1px solid rgba(30,45,66,0.3);
+  border-bottom: 1px solid var(--border-row);
   color: var(--text-secondary);
 }
 .data-table tr:hover td { background: rgba(59,130,246,0.04); }
+[data-theme="light"] .data-table tr:hover td { background: rgba(59,130,246,0.07); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Step 14) Status badges */
 .badge {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 10px;
@@ -543,7 +618,7 @@ body {
 .pattern-card:hover { border-color: var(--border-active); }
 .pattern-card .pattern-id {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--accent-cyan);
   margin-bottom: 8px;
@@ -552,7 +627,7 @@ body {
   display: flex;
   justify-content: space-between;
   padding: 3px 0;
-  font-size: 11px;
+  font-size: 13px;
 }
 .pattern-card .pattern-detail .label { color: var(--text-muted); }
 .pattern-card .pattern-detail .value { color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
@@ -572,16 +647,16 @@ body {
   border-color: var(--accent-drill);
   background: rgba(59,130,246,0.06);
 }
-.drop-zone .drop-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.drop-zone .drop-icon { font-size: 38px; margin-bottom: 12px; opacity: 0.4; }
 .drop-zone .drop-text {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
 .drop-zone .drop-sub {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .drop-zone input[type="file"] { display: none; }
@@ -620,7 +695,7 @@ body {
 }
 .modal-header h3 {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 .modal-body { padding: 20px; }
@@ -635,7 +710,7 @@ body {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
 }
 
@@ -649,7 +724,7 @@ body {
 .form-field label {
   display: block;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -658,7 +733,7 @@ body {
 .form-field input, .form-field select {
   width: 100%;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 14px;
   padding: 7px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -679,7 +754,7 @@ body {
   max-height: 200px;
   overflow-y: auto;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.6;
 }
 .import-log .log-ok { color: var(--accent-green); }
@@ -709,7 +784,7 @@ body {
   border-radius: var(--radius);
   padding: 8px 12px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-primary);
   z-index: 2000;
   pointer-events: none;
@@ -736,7 +811,7 @@ body {
 .context-menu .ctx-item {
   padding: 7px 14px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -773,23 +848,30 @@ body {
 /* Step 25) Forecast table */
 .forecast-table { margin-top: 12px; }
 
-/* Step 26) Gantt drag-to-move */
-.gantt-bar.drill {
+/* Step 26) Gantt drag-to-move (all bar types) */
+.gantt-bar.drill,
+.gantt-bar.load {
   cursor: grab;
 }
 .gantt-bar.drill:active,
+.gantt-bar.load:active,
+.gantt-bar.milestone:active,
 .gantt-bar-dragging {
   cursor: grabbing;
   box-shadow: 0 2px 12px rgba(59,130,246,0.4);
 }
-.gantt-bar.drill.planned {
+.gantt-bar.drill.planned,
+.gantt-bar.load.planned {
+  cursor: grab;
+}
+.gantt-bar.milestone {
   cursor: grab;
 }
 
 /* Step 27) Equipment table multi-select */
 select[multiple] {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -813,4 +895,92 @@ select[multiple] option:checked {
     rgba(239,68,68,0.08) 3px,
     rgba(239,68,68,0.08) 6px
   );
+}
+
+/* Step 29) Theme toggle button */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.theme-toggle:hover {
+  border-color: var(--border-active);
+  color: var(--text-primary);
+}
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+.theme-toggle .icon-sun { display: inline-flex; }
+.theme-toggle .icon-moon { display: none; }
+[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+[data-theme="light"] .theme-toggle .icon-moon { display: inline-flex; }
+
+/* Step 29b) Colorblind toggle button */
+.cb-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.cb-toggle:hover {
+  border-color: var(--border-active);
+  color: var(--text-primary);
+}
+.cb-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+[data-cb="true"] .cb-toggle {
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+}
+
+/* Step 30) SVG Connector Overlay */
+#ganttConnectorSvg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: visible;
+}
+
+/* Step 31) Start-time indicator */
+.gantt-bar .start-time-label {
+  position: absolute;
+  top: -15px;
+  left: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+  pointer-events: none;
+  font-weight: 700;
+  text-shadow: 0 0 4px var(--bg-primary);
+}
+
+/* Step 32) Breach warning pulse */
+@keyframes breachPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.dep-warning.breach-active {
+  animation: breachPulse 1s infinite;
+  background: rgba(239,68,68,0.3);
 }

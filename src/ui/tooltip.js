@@ -26,7 +26,7 @@ function showBarTooltip(e, bar) {
   if (section === "DRILLING") {
     html += "<div class=\"tt-row\"><span>Drill Meters</span><span class=\"tt-val\">" + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + " m</span></div>";
     html += "<div class=\"tt-row\"><span>Duration</span><span class=\"tt-val\">" + blast.drillDays + " days</span></div>";
-    html += "<div style=\"border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;\">";
+    html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;padding-top:4px;\">";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-purple)\">Load starts at</span><span class=\"tt-val\">" + Math.round(deps.drillPctForLoad * 100) + "% drilled</span></div>";
     if (comp.hasOverlap) {
       html += "<div class=\"tt-row\"><span style=\"color:var(--accent-load)\">Loading begins</span><span class=\"tt-val\">" + formatDate(comp.loadOverlapStart) + "</span></div>";
@@ -38,7 +38,7 @@ function showBarTooltip(e, bar) {
     html += "<div class=\"tt-row\"><span>Explosive</span><span class=\"tt-val\">" + formatNum(blast.expMass) + " kg</span></div>";
     html += "<div class=\"tt-row\"><span>Load Rate</span><span class=\"tt-val\">" + formatNum(blast.loadRate) + " kg/day</span></div>";
     html += "<div class=\"tt-row\"><span>Duration</span><span class=\"tt-val\">" + blast.loadDays + " days</span></div>";
-    html += "<div style=\"border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;\">";
+    html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;padding-top:4px;\">";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-purple)\">Drill was at</span><span class=\"tt-val\">" + Math.round(deps.drillPctForLoad * 100) + "% when load started</span></div>";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-blast)\">Blast at load</span><span class=\"tt-val\">" + Math.round(deps.loadPctForBlast * 100) + "%</span></div>";
     if (deps.minLeadDays > 0) {
@@ -48,7 +48,7 @@ function showBarTooltip(e, bar) {
   } else {
     html += "<div class=\"tt-row\"><span>Volume</span><span class=\"tt-val\">" + formatNum(blast.volume) + " bcm</span></div>";
     html += "<div class=\"tt-row\"><span>PF</span><span class=\"tt-val\">" + (blast.volume ? formatNum(blast.expMass / blast.volume, 2) : "\u2014") + " kg/bcm</span></div>";
-    html += "<div style=\"border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;\">";
+    html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;padding-top:4px;\">";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-purple)\">Requires</span><span class=\"tt-val\">" + Math.round(deps.drillPctForBlast * 100) + "% drill + " + Math.round(deps.loadPctForBlast * 100) + "% load</span></div>";
     if (deps.minLeadDays > 0) {
       html += "<div class=\"tt-row\"><span style=\"color:var(--accent-load)\">+" + deps.minLeadDays + " lead day(s)</span></div>";
@@ -60,7 +60,7 @@ function showBarTooltip(e, bar) {
   }
 
   if (blast._depWarning) {
-    html += "<div style=\"margin-top:4px;padding:4px 6px;background:rgba(239,68,68,0.15);border-radius:4px;color:var(--accent-blast);font-size:10px;\">" + blast._depWarning + "</div>";
+    html += "<div style=\"margin-top:4px;padding:4px 6px;background:rgba(239,68,68,0.15);border-radius:4px;color:var(--accent-blast);font-size:12px;\">" + blast._depWarning + "</div>";
   }
 
   tt.innerHTML = html;

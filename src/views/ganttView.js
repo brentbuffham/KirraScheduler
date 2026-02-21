@@ -10,6 +10,10 @@ import { formatNum, addDays, isoDate, getWeekNumber, isWeekend, isToday } from "
 import { showBarTooltip, hideTooltip } from "../ui/tooltip.js";
 import { showCtxMenu } from "../ui/contextMenu.js";
 import { initGanttDrag } from "../ui/ganttDrag.js";
+import { renderConnectors } from "../ui/ganttConnectors.js";
+
+// Step 0) Track collapsed sections between re-renders
+var _collapsedSections = {};
 
 // Step 1) Main Gantt rendering function
 function renderGantt() {
@@ -107,13 +111,19 @@ function renderGantt() {
   for (var di = 0; di < dates.length; di++) {
     var dd = dates[di];
     var cls = isToday(dd) ? "today" : (isWeekend(dd) ? "weekend" : "");
-    html += "<th class=\"gantt-header-date " + cls + "\">" + dd.getDate() + "<br><span style=\"font-size:8px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
+    html += "<th class=\"gantt-header-date " + cls + "\">" + dd.getDate() + "<br><span style=\"font-size:9px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
   }
   html += "</tr></thead><tbody>";
 
-  // Step 1e) Render sections (Drilling, Loading, Blasting)
+  // Step 1e) Render sections (Drilling, Loading, Blasting) — collapsible
   function renderSection(sectionName, color, getDateRange) {
-    html += "<tr class=\"gantt-section-header\"><td colspan=\"" + (dates.length + 2) + "\"><span class=\"section-icon\" style=\"background:" + color + "\"></span>" + sectionName + "</td></tr>";
+    var secKey = sectionName.toLowerCase();
+    var collapsed = _collapsedSections[secKey] ? " collapsed" : "";
+    html += "<tr class=\"gantt-section-header" + collapsed + "\" data-section-toggle=\"" + secKey + "\">";
+    html += "<td colspan=\"" + (dates.length + 2) + "\">";
+    html += "<span class=\"collapse-arrow\">\u25BC</span>";
+    html += "<span class=\"section-icon\" style=\"background:" + color + "\"></span>" + sectionName;
+    html += "</td></tr>";
 
     APP.blasts.forEach(function(blast, idx) {
       var range = getDateRange(blast);
@@ -139,7 +149,7 @@ function renderGantt() {
       var info = "";
       if (sectionName === "DRILLING") {
         var drillIds = (blast.assignedDrills || []).join(",");
-        var drillTag = drillIds ? "<span style=\"font-size:8px;color:var(--accent-cyan);\">" + drillIds + "</span> " : "";
+        var drillTag = drillIds ? "<span style=\"font-size:9px;color:var(--accent-cyan);\">" + drillIds + "</span> " : "";
         info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + depIcon + maintIcon;
       } else if (sectionName === "LOADING") {
         info = formatNum(blast.expMass) + "kg" + depIcon;
@@ -217,7 +227,18 @@ function renderGantt() {
         html += "<td class=\"gantt-cell\" style=\"" + wkend + maintStyle + "\">";
         if (barClass) {
           var ttData = "data-tt-blast=\"" + blast.name + "\" data-tt-section=\"" + sectionName + "\" data-tt-date=\"" + ds + "\"";
-          html += "<div class=\"gantt-bar " + barClass + "\" " + ttData + ">" + barExtra + "</div>";
+          var barStyle = "";
+
+          // Step) Show start time on first drill day cell
+          if (sectionName === "DRILLING" && ds === range.start && blast.drillStartTime) {
+            var hhmm = blast.drillStartTime.split(":");
+            var startHour = parseInt(hhmm[0]) || 0;
+            var offsetPx = Math.round((startHour / 24) * 28);
+            barStyle = " style=\"left:" + (1 + offsetPx) + "px;\"";
+            barExtra += "<span class=\"start-time-label\">" + blast.drillStartTime + "</span>";
+          }
+
+          html += "<div class=\"gantt-bar " + barClass + "\"" + barStyle + " " + ttData + ">" + barExtra + "</div>";
         }
         html += "</td>";
       }
@@ -264,6 +285,56 @@ function renderGantt() {
 
   // Step 1i) Re-initialise drag handlers after re-render
   initGanttDrag();
+
+  // Step 1j) Attach section collapse/expand toggle
+  document.querySelectorAll(".gantt-section-header[data-section-toggle]").forEach(function(hdr) {
+    hdr.addEventListener("click", function() {
+      var secKey = hdr.dataset.sectionToggle;
+      _collapsedSections[secKey] = !_collapsedSections[secKey];
+      hdr.classList.toggle("collapsed");
+      // Step 1j-a) Toggle visibility on all gantt-row elements in this section
+      var sibling = hdr.nextElementSibling;
+      while (sibling && !sibling.classList.contains("gantt-section-header")) {
+        if (sibling.classList.contains("gantt-row")) {
+          sibling.classList.toggle("section-hidden", _collapsedSections[secKey]);
+        }
+        sibling = sibling.nextElementSibling;
+      }
+      // Step 1j-b) Redraw connectors after layout change
+      requestAnimationFrame(function() { renderConnectors(); });
+    });
+  });
+
+  // Step 1j-c) Apply persisted collapsed state to rows
+  Object.keys(_collapsedSections).forEach(function(secKey) {
+    if (!_collapsedSections[secKey]) return;
+    var hdr = document.querySelector(".gantt-section-header[data-section-toggle=\"" + secKey + "\"]");
+    if (!hdr) return;
+    var sibling = hdr.nextElementSibling;
+    while (sibling && !sibling.classList.contains("gantt-section-header")) {
+      if (sibling.classList.contains("gantt-row")) {
+        sibling.classList.add("section-hidden");
+      }
+      sibling = sibling.nextElementSibling;
+    }
+  });
+
+  // Step 1k) Horizontal scroll via Shift+Wheel or Alt+Wheel
+  var scrollEl = document.getElementById("ganttScroll");
+  if (scrollEl && !scrollEl._hScrollBound) {
+    scrollEl._hScrollBound = true;
+    scrollEl.addEventListener("wheel", function(e) {
+      if (e.shiftKey || e.altKey) {
+        e.preventDefault();
+        scrollEl.scrollLeft += e.deltaY || e.deltaX;
+      }
+    }, { passive: false });
+  }
+
+  // Step 1l) Render dependency connectors (deferred for layout)
+  requestAnimationFrame(function() {
+    renderConnectors();
+  });
 }
 
 export { renderGantt };

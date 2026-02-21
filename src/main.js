@@ -12,6 +12,7 @@ import { recalcDependencies } from "./engine/dependencyEngine.js";
 import { initTabs } from "./ui/tabs.js";
 import { initContextMenu } from "./ui/contextMenu.js";
 import { initGanttDrag } from "./ui/ganttDrag.js";
+import { initThemeToggle } from "./ui/themeToggle.js";
 import { initBlastModal } from "./dialogs/blastModal.js";
 import { initEquipmentModals } from "./dialogs/equipmentModal.js";
 import { initImportPreview } from "./io/importPreview.js";
@@ -27,6 +28,7 @@ import { renderConformance } from "./views/conformanceView.js";
 import { renderEquipment } from "./views/equipmentView.js";
 
 // Step 3) Initialise UI event listeners
+initThemeToggle();
 initTabs();
 initContextMenu();
 initBlastModal();
@@ -62,4 +64,4 @@ renderEquipment();
 // Step 7) Initialise Gantt drag-to-move after initial render
 initGanttDrag();
 
-console.log("Blast Scheduler initialised.");
+console.log("Kirra Scheduler initialised.");

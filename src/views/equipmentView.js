@@ -85,7 +85,7 @@ function renderDrillTable() {
     html += "<td class=\"num\">" + drill.maxDiam + "</td>";
     html += "<td class=\"num\">" + formatNum(drill.rateM_per_day) + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + drill.status + "</span></td>";
-    html += "<td style=\"font-size:10px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td>" + maintBadge + "</td>";
     html += "</tr>";
   });
@@ -120,7 +120,7 @@ function renderMPUTable() {
     html += "<td class=\"num\">" + formatNum(mpu.capacity_kg) + "</td>";
     html += "<td class=\"num\">" + formatNum(mpu.rateKg_per_day) + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + mpu.status + "</span></td>";
-    html += "<td style=\"font-size:10px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td>" + maintBadge + "</td>";
     html += "</tr>";
   });
@@ -218,7 +218,7 @@ function renderMaintenanceTable() {
     html += "<td>" + formatDate(m.end) + "</td>";
     html += "<td class=\"num\">" + days + "</td>";
     html += "<td>" + m.reason + "</td>";
-    html += "<td style=\"font-size:10px;\">" + conflictHtml + "</td>";
+    html += "<td style=\"font-size:12px;\">" + conflictHtml + "</td>";
     html += "</tr>";
   });
 
