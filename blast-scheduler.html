@@ -1,0 +1,2541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minesite Drill & Blast Scheduler</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1a2332;
+  --bg-card: #151d2e;
+  --border: #1e2d42;
+  --border-active: #2d4a6f;
+  --text-primary: #e8edf5;
+  --text-secondary: #8899b0;
+  --text-muted: #4a5c73;
+  --accent-drill: #3b82f6;
+  --accent-load: #f59e0b;
+  --accent-blast: #ef4444;
+  --accent-fire: #ff6b35;
+  --accent-green: #10b981;
+  --accent-purple: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --presplit: #a78bfa;
+  --buffer: #38bdf8;
+  --production: #f97316;
+  --waste: #6b7280;
+  --ore: #fbbf24;
+  --yellow-zone: #eab308;
+  --gantt-drill: #3b82f6;
+  --gantt-load: #f59e0b;
+  --gantt-blast: #ef4444;
+  --gantt-complete: #10b981;
+  --gantt-planned: #374151;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --radius: 6px;
+  --radius-lg: 10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-drill); }
+
+/* Header */
+.app-header {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.app-logo svg { width: 32px; height: 32px; }
+.app-logo h1 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent-drill), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.app-logo .subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Buttons */
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-active); color: var(--text-primary); background: var(--bg-card); }
+.btn-primary { background: var(--accent-drill); border-color: var(--accent-drill); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: var(--accent-blast); border-color: var(--accent-blast); color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
+.btn-warning { background: var(--accent-load); border-color: var(--accent-load); color: #000; }
+.btn svg { width: 14px; height: 14px; }
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+  overflow-x: auto;
+}
+.tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 10px 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+
+/* Main Layout */
+.main-content { padding: 16px 24px; }
+
+/* Tab Panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Settings bar */
+.settings-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  align-items: center;
+}
+.setting-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.setting-group label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.setting-group input, .setting-group select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  width: auto;
+  min-width: 80px;
+}
+.setting-group input:focus, .setting-group select:focus {
+  outline: none;
+  border-color: var(--accent-drill);
+}
+
+/* Gantt Chart */
+.gantt-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.gantt-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+}
+.gantt-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.gantt-table th, .gantt-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.gantt-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 10;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: center;
+}
+.gantt-table thead th.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--bg-secondary);
+}
+.gantt-table thead th.sticky-col-2 {
+  position: sticky;
+  left: 180px;
+  z-index: 20;
+  background: var(--bg-secondary);
+}
+.gantt-header-month {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.gantt-header-week {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.gantt-header-date {
+  font-size: 10px;
+  min-width: 32px;
+  padding: 2px 1px;
+}
+.gantt-header-date.weekend { color: var(--accent-blast); opacity: 0.6; }
+.gantt-header-date.today { color: var(--accent-cyan); font-weight: 700; }
+
+/* Gantt rows */
+.gantt-section-header td {
+  background: var(--bg-tertiary);
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-top: 2px solid var(--border-active);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.gantt-section-header td .section-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.gantt-row td {
+  padding: 3px 1px;
+  border-bottom: 1px solid rgba(30,45,66,0.5);
+  height: 28px;
+  vertical-align: middle;
+}
+.gantt-row td.sticky-col {
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  z-index: 5;
+  padding-left: 16px;
+  padding-right: 8px;
+  min-width: 180px;
+  max-width: 180px;
+  font-weight: 500;
+}
+.gantt-row td.sticky-col-2 {
+  position: sticky;
+  left: 180px;
+  background: var(--bg-card);
+  z-index: 5;
+  padding: 3px 8px;
+  text-align: right;
+  color: var(--text-muted);
+  min-width: 90px;
+}
+.gantt-row:hover td { background: rgba(59,130,246,0.04); }
+.gantt-row:hover td.sticky-col,
+.gantt-row:hover td.sticky-col-2 { background: var(--bg-tertiary); }
+
+/* Gantt bar cells */
+.gantt-cell {
+  min-width: 32px;
+  max-width: 32px;
+  position: relative;
+}
+.gantt-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 1px;
+  right: 1px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.gantt-bar:hover { opacity: 0.85; filter: brightness(1.15); }
+.gantt-bar.drill { background: var(--gantt-drill); }
+.gantt-bar.load { background: var(--gantt-load); }
+.gantt-bar.blast { background: var(--gantt-blast); }
+.gantt-bar.complete { background: var(--gantt-complete); }
+.gantt-bar.planned { background: var(--gantt-planned); border: 1px dashed var(--text-muted); }
+.gantt-bar.milestone {
+  background: var(--accent-fire);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+}
+/* Dependency progress threshold marker on drill bar */
+.gantt-bar .dep-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--accent-purple);
+  z-index: 2;
+  pointer-events: none;
+}
+.gantt-bar .dep-marker::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7px;
+  color: var(--accent-purple);
+  white-space: nowrap;
+  font-weight: 700;
+}
+/* Overlap zone where loading is happening while drilling continues */
+.gantt-bar.drill-load-overlap {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--gantt-drill),
+    var(--gantt-drill) 3px,
+    var(--gantt-load) 3px,
+    var(--gantt-load) 6px
+  );
+}
+/* Dependency warning icon */
+.dep-warning {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 9px;
+  border-radius: 50%;
+  background: rgba(239,68,68,0.2);
+  color: var(--accent-blast);
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
+}
+.dep-ok {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 9px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.2);
+  color: var(--accent-green);
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
+}
+/* Dependency link line in Gantt */
+.dep-link-indicator {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  color: var(--accent-purple);
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  background: var(--accent-purple);
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 2px;
+  line-height: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent-cyan);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Stats cards */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.stat-card .stat-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.stat-card .stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.stat-card .stat-unit {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.stat-card .stat-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.stat-card.accent-blue { border-left: 3px solid var(--accent-drill); }
+.stat-card.accent-amber { border-left: 3px solid var(--accent-load); }
+.stat-card.accent-red { border-left: 3px solid var(--accent-blast); }
+.stat-card.accent-green { border-left: 3px solid var(--accent-green); }
+.stat-card.accent-purple { border-left: 3px solid var(--accent-purple); }
+.stat-card.accent-cyan { border-left: 3px solid var(--accent-cyan); }
+
+/* Blast table */
+.data-table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.data-table-container .table-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+}
+.data-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(30,45,66,0.3);
+  color: var(--text-secondary);
+}
+.data-table tr:hover td { background: rgba(59,130,246,0.04); }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Status badges */
+.badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+.badge-drill { background: rgba(59,130,246,0.15); color: var(--accent-drill); }
+.badge-load { background: rgba(245,158,11,0.15); color: var(--accent-load); }
+.badge-blast { background: rgba(239,68,68,0.15); color: var(--accent-blast); }
+.badge-complete { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+.badge-active { background: rgba(6,182,212,0.15); color: var(--accent-cyan); }
+.badge-presplit { background: rgba(167,139,250,0.15); color: var(--presplit); }
+.badge-buffer { background: rgba(56,189,248,0.15); color: var(--buffer); }
+.badge-production { background: rgba(249,115,22,0.15); color: var(--production); }
+
+/* Pattern designer */
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pattern-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: border-color 0.15s;
+}
+.pattern-card:hover { border-color: var(--border-active); }
+.pattern-card .pattern-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 8px;
+}
+.pattern-card .pattern-detail {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 11px;
+}
+.pattern-card .pattern-detail .label { color: var(--text-muted); }
+.pattern-card .pattern-detail .value { color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+
+/* File drop zone */
+.drop-zone {
+  border: 2px dashed var(--border-active);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  margin-bottom: 16px;
+  background: rgba(59,130,246,0.02);
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent-drill);
+  background: rgba(59,130,246,0.06);
+}
+.drop-zone .drop-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.drop-zone .drop-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.drop-zone .drop-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.drop-zone input[type="file"] { display: none; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+.modal-body { padding: 20px; }
+.modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Form fields in modal */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.form-field label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.form-field input, .form-field select {
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+}
+.form-field input:focus, .form-field select:focus {
+  outline: none;
+  border-color: var(--accent-drill);
+}
+
+/* Import log */
+.import-log {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.import-log .log-ok { color: var(--accent-green); }
+.import-log .log-warn { color: var(--accent-load); }
+.import-log .log-err { color: var(--accent-blast); }
+.import-log .log-info { color: var(--accent-cyan); }
+
+/* Conformance bar */
+.conformance-bar {
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.conformance-bar .fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s;
+}
+
+/* Tooltip */
+.tooltip {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  z-index: 2000;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  max-width: 300px;
+  display: none;
+}
+.tooltip .tt-title { font-weight: 700; margin-bottom: 4px; color: var(--accent-cyan); }
+.tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; color: var(--text-secondary); }
+.tooltip .tt-row .tt-val { color: var(--text-primary); }
+
+/* Explosive forecast */
+.forecast-table { margin-top: 12px; }
+
+/* Responsive helpers */
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.gap-8 { gap: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mt-8 { margin-top: 8px; }
+
+/* Blinking indicator */
+@keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+.live-dot {
+  width: 6px; height: 6px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 2s infinite;
+  margin-right: 6px;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 3000;
+  min-width: 180px;
+  padding: 4px 0;
+  display: none;
+}
+.context-menu .ctx-item {
+  padding: 7px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.context-menu .ctx-item:hover {
+  background: rgba(59,130,246,0.08);
+  color: var(--text-primary);
+}
+.context-menu .ctx-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="app-logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <rect x="2" y="2" width="28" height="28" rx="6" fill="#1a2332" stroke="#3b82f6" stroke-width="1.5"/>
+      <path d="M16 6L16 18" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M12 18L20 18" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="16" cy="22" r="3" fill="#ef4444" opacity="0.8"/>
+      <path d="M13 22L19 22" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="22" cy="10" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="10" cy="14" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="22" cy="14" r="1.5" fill="#3b82f6" opacity="0.4"/>
+    </svg>
+    <div>
+      <h1>BLAST SCHEDULER</h1>
+      <div class="subtitle">Minesite Drill & Blast Planning</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn" onclick="exportSchedule()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button class="btn btn-primary" onclick="showAddBlastModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Blast
+    </button>
+  </div>
+</header>
+
+<!-- Tab bar -->
+<nav class="tab-bar">
+  <div class="tab active" data-tab="gantt">GANTT SCHEDULE</div>
+  <div class="tab" data-tab="blasts">BLAST OVERVIEW</div>
+  <div class="tab" data-tab="patterns">PATTERN LIBRARY</div>
+  <div class="tab" data-tab="forecast">EXPLOSIVE FORECAST</div>
+  <div class="tab" data-tab="conformance">CONFORMANCE</div>
+  <div class="tab" data-tab="import">IMPORT / DXF</div>
+</nav>
+
+<!-- Main content -->
+<main class="main-content">
+
+  <!-- GANTT TAB -->
+  <div id="tab-gantt" class="tab-panel active">
+    <div class="settings-bar">
+      <div class="setting-group">
+        <label>Plan Start</label>
+        <input type="date" id="planStartDate" value="2026-02-25">
+      </div>
+      <div class="setting-group">
+        <label>Weeks</label>
+        <input type="number" id="ganttWeeks" value="8" min="2" max="26" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Rig Hours</label>
+        <input type="number" id="rigHours" value="24" min="1" max="24" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Availability</label>
+        <input type="number" id="rigAvail" value="0.85" min="0" max="1" step="0.05" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Utilisation</label>
+        <input type="number" id="rigUtil" value="0.75" min="0" max="1" step="0.05" style="width:60px">
+      </div>
+      <button class="btn btn-primary" onclick="recalcAndRender()" style="margin-left:auto">Refresh Gantt</button>
+    </div>
+
+    <!-- Dependency settings bar -->
+    <div class="settings-bar" style="border-left:3px solid var(--accent-purple);">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:8px;">Dependencies</div>
+      <div class="setting-group">
+        <label>Drill % to Load</label>
+        <input type="number" id="depDrillForLoad" value="0.5" min="0" max="1" step="0.05" style="width:60px" title="Loading can start once drilling reaches this % complete">
+      </div>
+      <div class="setting-group">
+        <label>Drill % to Blast</label>
+        <input type="number" id="depDrillForBlast" value="1.0" min="0" max="1" step="0.05" style="width:60px" title="Blast requires drilling at this % complete">
+      </div>
+      <div class="setting-group" style="opacity:0.6;" title="Loading must be 100% complete before blasting — this is a hard constraint">
+        <label>Load % to Blast</label>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-blast);font-weight:700;padding:5px 8px;">100% (fixed)</span>
+      </div>
+      <div class="setting-group">
+        <label>Lead Days</label>
+        <input type="number" id="depMinLead" value="0" min="0" max="14" style="width:50px" title="Minimum days between load complete and blast">
+      </div>
+      <div class="setting-group">
+        <label style="display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="depEnforceSeq" checked style="width:auto;min-width:auto;accent-color:var(--accent-purple);">
+          Enforce Sequence
+        </label>
+      </div>
+      <button class="btn" onclick="recalcDependencies(); renderGantt();" style="margin-left:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        Recalc Dates
+      </button>
+    </div>
+
+    <div class="stats-row" id="ganttStats"></div>
+    <div class="gantt-container">
+      <div class="gantt-scroll" id="ganttScroll">
+        <table class="gantt-table" id="ganttTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLAST OVERVIEW TAB -->
+  <div id="tab-blasts" class="tab-panel">
+    <div class="stats-row" id="blastStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">
+        <span class="live-dot"></span> Active Blasts
+      </div>
+      <div style="overflow-x:auto; max-height: calc(100vh - 320px);">
+        <table class="data-table" id="blastTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PATTERN LIBRARY TAB -->
+  <div id="tab-patterns" class="tab-panel">
+    <div class="flex-between mb-16">
+      <h2 style="font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--text-secondary);">Production Drill & Blast Patterns</h2>
+      <button class="btn" onclick="showAddPatternModal()">Add Pattern</button>
+    </div>
+    <div class="pattern-grid" id="patternGrid"></div>
+  </div>
+
+  <!-- EXPLOSIVE FORECAST TAB -->
+  <div id="tab-forecast" class="tab-panel">
+    <div class="settings-bar">
+      <div class="setting-group">
+        <label>Loading Rate (kg/day)</label>
+        <input type="number" id="loadingRate" value="100000" style="width:100px">
+      </div>
+      <div class="setting-group">
+        <label>Charge Config Source</label>
+        <select id="chargeSource">
+          <option value="designed">Designed (from Gantt data)</option>
+          <option value="kirra">Kirra Charge Config</option>
+        </select>
+      </div>
+    </div>
+    <div class="stats-row" id="forecastStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">Weekly Explosive Forecast</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="forecastTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFORMANCE TAB -->
+  <div id="tab-conformance" class="tab-panel">
+    <div class="stats-row" id="confStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">Monthly Drill & Blast Conformance</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="confTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT TAB -->
+  <div id="tab-import" class="tab-panel">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+      <!-- DXF Import -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-drill); margin-bottom:12px;">DXF Polygon Import</h3>
+        <div class="drop-zone" id="dxfDropZone">
+          <div class="drop-icon">📐</div>
+          <div class="drop-text">Drop DXF file here</div>
+          <div class="drop-sub">Format: BLASTNAME-HOLETYPE{[Burden][Spacing][BenchHt][Subdrill][Diameter]}</div>
+          <input type="file" id="dxfFileInput" accept=".dxf">
+        </div>
+        <div class="import-log" id="dxfLog">
+          <span class="log-info">Ready for DXF import...</span>
+        </div>
+      </div>
+
+      <!-- Kirra Config Import -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-purple); margin-bottom:12px;">Kirra Charge Config Import</h3>
+        <div class="drop-zone" id="kirraDropZone">
+          <div class="drop-icon">⚡</div>
+          <div class="drop-text">Drop Kirra Charge Config Export</div>
+          <div class="drop-sub">JSON export from Kirra App for site-based charging</div>
+          <input type="file" id="kirraFileInput" accept=".json,.kirra">
+        </div>
+        <div class="import-log" id="kirraLog">
+          <span class="log-info">Ready for Kirra config import...</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-green); margin-bottom:12px;">Kirra Project File Import</h3>
+      <div class="drop-zone" id="kirraProjectDropZone" style="padding:24px;">
+        <div class="drop-icon">🗂️</div>
+        <div class="drop-text">Drop Kirra Project File (.kirra / .json)</div>
+        <div class="drop-sub">May include Solids, Blast Boundaries, Hole Data, and Charge Configs</div>
+        <input type="file" id="kirraProjectInput" accept=".json,.kirra">
+      </div>
+      <div class="import-log" id="kirraProjectLog">
+        <span class="log-info">Ready for Kirra project import...</span>
+      </div>
+    </div>
+
+    <!-- Imported blasts preview -->
+    <div class="data-table-container mt-8" id="importPreview" style="display:none;">
+      <div class="table-title">Imported Blast Definitions</div>
+      <div style="overflow-x:auto; max-height:300px;">
+        <table class="data-table" id="importTable"></table>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <button class="btn btn-success" onclick="mergeImported()">Merge into Schedule</button>
+        <button class="btn" onclick="clearImported()" style="margin-left:8px;">Discard</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <div class="ctx-item" onclick="editBlastFromCtx()">✏️ Edit Blast</div>
+  <div class="ctx-item" onclick="setBlastStatus('drilling')">🔵 Set Drilling</div>
+  <div class="ctx-item" onclick="setBlastStatus('loading')">🟡 Set Loading</div>
+  <div class="ctx-item" onclick="setBlastStatus('fired')">🔴 Set Fired</div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item" onclick="duplicateBlast()">📋 Duplicate</div>
+  <div class="ctx-item" style="color:var(--accent-blast)" onclick="removeBlast()">🗑 Remove</div>
+</div>
+
+<!-- Add/Edit Blast Modal -->
+<div class="modal-overlay" id="blastModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="blastModalTitle">Add Blast</h3>
+      <button class="modal-close" onclick="closeModal('blastModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Blast Name</label>
+          <input type="text" id="fBlastName" placeholder="e.g. S4_226_413">
+        </div>
+        <div class="form-field">
+          <label>Mode</label>
+          <select id="fBlastMode">
+            <option value="Manual">Manual</option>
+            <option value="Auto">Auto</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Surface Area (m²)</label>
+          <input type="number" id="fSurfaceArea" placeholder="0">
+        </div>
+        <div class="form-field">
+          <label>Pattern Selection</label>
+          <select id="fPattern"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Drill Start Date</label>
+          <input type="date" id="fDrillStart">
+        </div>
+        <div class="form-field">
+          <label>% D65 / % PV271</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="fPctD65" value="0" min="0" max="1" step="0.1" style="width:50%">
+            <input type="number" id="fPctPV" value="1" min="0" max="1" step="0.1" style="width:50%">
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Loading Rate (kg/day)</label>
+          <input type="number" id="fLoadRate" value="100000">
+        </div>
+        <div class="form-field">
+          <label>Volume (bcm) — auto-calculated if area set</label>
+          <input type="number" id="fVolume" placeholder="Auto from pattern">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Explosive Mass (kg) — auto from PF</label>
+          <input type="number" id="fExpMass" placeholder="Auto from PF × Volume">
+        </div>
+        <div class="form-field">
+          <label>D65 Rate (m/day)</label>
+          <input type="number" id="fRateD65" value="19">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>PV271 Rate (m/day)</label>
+          <input type="number" id="fRatePV" value="20">
+        </div>
+        <div class="form-field">
+          <label># D65s / # PVs</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="fNumD65" value="0" style="width:50%">
+            <input type="number" id="fNumPV" value="4" style="width:50%">
+          </div>
+        </div>
+      </div>
+
+      <!-- Dependency Overrides -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          ⛓ Dependency Overrides <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— leave blank to use global defaults</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Drill % to Start Loading</label>
+            <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="1" step="0.05">
+          </div>
+          <div class="form-field">
+            <label>Drill % to Blast</label>
+            <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="1" step="0.05">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="opacity:0.5;" title="Loading must be 100% complete before blasting — this cannot be overridden">
+            <label>Load % to Blast</label>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-blast);font-weight:700;padding:7px 10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border);">100% — HARD CONSTRAINT</div>
+          </div>
+          <div class="form-field">
+            <label>Min Lead Days (Load→Blast)</label>
+            <input type="number" id="fDepMinLead" placeholder="Global: 0" min="0" max="30">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Predecessor Blast</label>
+            <select id="fDepPredecessor">
+              <option value="">— None —</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Predecessor Constraint</label>
+            <select id="fDepPredType">
+              <option value="blast-before-drill">Predecessor must fire before drill starts</option>
+              <option value="blast-before-load">Predecessor must fire before loading starts</option>
+              <option value="drill-before-drill">Predecessor drill done before this drill</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('blastModal')">Cancel</button>
+      <button class="btn btn-primary" id="blastModalSave" onclick="saveBlast()">Add Blast</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  APPLICATION STATE
+// ============================================================
+const APP = {
+  planStart: new Date('2026-02-25'),
+  ganttWeeks: 8,
+  rigHours: 24,
+  availability: 0.85,
+  utilisation: 0.75,
+  editingBlastIdx: null,
+  ctxBlastIdx: null,
+  ctxSection: null,
+  importedBlasts: [],
+  chargeConfigs: [],  // from Kirra
+
+  // Global dependency defaults (per-blast overrides allowed)
+  deps: {
+    drillPctForLoad: 0.5,     // Loading can start when drilling is X% complete
+    drillPctForBlast: 1.0,    // Blasting requires drilling X% complete
+    loadPctForBlast: 1.0,     // FIXED: Blasting ALWAYS requires 100% loading complete (non-configurable)
+    minLeadDays: 0,           // Minimum days between load complete and blast
+    enforceSequence: true,    // Enforce blast-to-blast sequence (can't blast B before A if A precedes)
+  },
+  
+  // Pattern library
+  patterns: [
+    { id:'1.1.01', benchHt:12, diam:229, pf:0.6, burden:7.65, spacing:8.85, subdrill:1.5, stemming:4, type:'WASTE' },
+    { id:'1.1.02', benchHt:12, diam:229, pf:0.7, burden:7.1, spacing:8.2, subdrill:1.5, stemming:4, type:'WASTE' },
+    { id:'1.1.02a', benchHt:12, diam:229, pf:0.8, burden:7, spacing:8, subdrill:1.5, stemming:3.4, type:'WASTE' },
+    { id:'1.1.03', benchHt:12, diam:229, pf:0.8, burden:6.5, spacing:7.5, subdrill:1.5, stemming:3.8, type:'WASTE' },
+    { id:'1.1.04', benchHt:12, diam:229, pf:0.9, burden:6.25, spacing:7.25, subdrill:1.5, stemming:4, type:'WASTE' },
+    { id:'1.1.05', benchHt:12, diam:229, pf:1.0, burden:5.95, spacing:6.85, subdrill:1.5, stemming:4, type:'WASTE' },
+    { id:'1.1.06', benchHt:12, diam:229, pf:1.1, burden:5.65, spacing:6.55, subdrill:1.5, stemming:4, type:'YELLOW' },
+    { id:'1.1.07', benchHt:12, diam:229, pf:1.2, burden:5.5, spacing:6.2, subdrill:1.5, stemming:3.8, type:'YELLOW' },
+    { id:'1.1.08', benchHt:12, diam:229, pf:1.3, burden:5.2, spacing:6.0, subdrill:1.5, stemming:4, type:'YELLOW' },
+    { id:'1.1.09', benchHt:12, diam:229, pf:1.4, burden:5.0, spacing:5.8, subdrill:1.5, stemming:4, type:'YELLOW' },
+    { id:'1.1.10', benchHt:12, diam:229, pf:1.5, burden:4.85, spacing:5.6, subdrill:1.5, stemming:4, type:'ORE' },
+    { id:'1.1.11', benchHt:12, diam:229, pf:1.6, burden:4.7, spacing:5.4, subdrill:1.5, stemming:4, type:'ORE' },
+    { id:'1.1.12', benchHt:12, diam:229, pf:1.7, burden:4.55, spacing:5.25, subdrill:1.5, stemming:4, type:'ORE' },
+    { id:'1.1.12a', benchHt:12, diam:229, pf:1.75, burden:4.7, spacing:5.2, subdrill:1.6, stemming:3.1, type:'ORE' },
+    { id:'1.1.13', benchHt:12, diam:229, pf:1.8, burden:4.5, spacing:5.2, subdrill:1.5, stemming:3.5, type:'ORE' },
+    { id:'1.1.14', benchHt:12, diam:229, pf:1.9, burden:4.3, spacing:5.0, subdrill:1.5, stemming:4, type:'ORE' },
+    { id:'1.1.14a', benchHt:12, diam:229, pf:1.9, burden:4.5, spacing:5.0, subdrill:1.5, stemming:3.7, type:'ORE' },
+    { id:'1.1.15', benchHt:12, diam:229, pf:2.0, burden:4.4, spacing:4.9, subdrill:1.6, stemming:3.6, type:'ORE' },
+    { id:'1.1.43P12', benchHt:12, diam:127, pf:0.6, burden:1.0, spacing:1.6, subdrill:0.6, stemming:2.2, type:'PRESPLIT' },
+    { id:'1.1.44P24', benchHt:24, diam:127, pf:0.6, burden:1.0, spacing:1.8, subdrill:0.3, stemming:2.2, type:'PRESPLIT' },
+  ],
+
+  // Blast schedule data (from GANTT sheet)
+  blasts: [
+    // Auto blasts (from Kirra/API data)
+    {
+      name:'S4_214_410P_V2', mode:'Auto', surfaceArea:0, pattern:'', pctD65:1, pctPV:0,
+      rateD65:19, ratePV:20, numD65:1, numPV:0, loadRate:80000,
+      d65Meters:3496.4, pvMeters:0, volume:6219, expMass:3064.5,
+      drillStart:'2026-02-21', drillDays:1, loadStart:'2026-02-21', loadDays:1,
+      blastDate:'2026-02-22', status:'active',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRESPLIT', diam:0.127, burden:1, spacing:1.8, holes:138, drillMeters:3496.4, expMass:3168 }
+      ]
+    },
+    {
+      name:'S4_226_412_V1', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
+      rateD65:17, ratePV:20, numD65:0, numPV:3, loadRate:100000,
+      d65Meters:1149, pvMeters:5766.4, volume:124236, expMass:236949,
+      drillStart:'2026-02-21', drillDays:3, loadStart:'2026-02-23', loadDays:3,
+      blastDate:'2026-02-26', status:'active',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'BUFFER', diam:0.127, burden:3.8, spacing:2.3, holes:65, drillMeters:882.9, expMass:6416 },
+        { type:'PRODUCTION', diam:0.165, burden:3.5, spacing:4.7, holes:19, drillMeters:266.1, expMass:5403 },
+        { type:'PRODUCTION', diam:0.229, burden:4.7, spacing:4.7, holes:420, drillMeters:5768.9, expMass:225812 }
+      ]
+    },
+    {
+      name:'S4_226_410_V1', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
+      rateD65:19, ratePV:20, numD65:0, numPV:3, loadRate:100000,
+      d65Meters:2333, pvMeters:7461.8, volume:165245, expMass:326375,
+      drillStart:'2026-02-23', drillDays:7, loadStart:'2026-02-27', loadDays:4,
+      blastDate:'2026-03-02', status:'active',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'BUFFER', diam:0.127, burden:3, spacing:1.6, holes:24, drillMeters:324.1, expMass:1461 },
+        { type:'BUFFER', diam:0.165, burden:3.6, spacing:3, holes:73, drillMeters:896.1, expMass:15934 },
+        { type:'PRODUCTION', diam:0.165, burden:4.4, spacing:2.5, holes:89, drillMeters:1112.8, expMass:21559 },
+        { type:'PRODUCTION', diam:0.229, burden:4.9, spacing:4.4, holes:563, drillMeters:7461.8, expMass:287420 }
+      ]
+    },
+    {
+      name:'S4_214_411P', mode:'Manual', surfaceArea:100, pattern:'1.1.44P24', pctD65:1, pctPV:0,
+      rateD65:19, ratePV:20, numD65:2, numPV:0, loadRate:100000,
+      d65Meters:1350, pvMeters:0, volume:2400, expMass:1440,
+      drillStart:'2026-03-01', drillDays:2, loadStart:'2026-03-05', loadDays:1,
+      blastDate:'2026-03-06', status:'planned',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRESPLIT', diam:0.127, burden:1, spacing:1.8, holes:0, drillMeters:1350, expMass:1440 }
+      ]
+    },
+    {
+      name:'S4_226_411', mode:'Manual', surfaceArea:10240, pattern:'1.1.15', pctD65:0, pctPV:1,
+      rateD65:20, ratePV:19, numD65:0, numPV:4, loadRate:100000,
+      d65Meters:0, pvMeters:6459.4, volume:122880, expMass:245760,
+      drillStart:'2026-03-02', drillDays:6, loadStart:'2026-03-07', loadDays:3,
+      blastDate:'2026-03-10', status:'planned',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRODUCTION', diam:0.229, burden:4.4, spacing:4.9, holes:0, drillMeters:6459.4, expMass:245760 }
+      ]
+    },
+    {
+      name:'S4_214_412P', mode:'Manual', surfaceArea:220, pattern:'1.1.44P24', pctD65:1, pctPV:0,
+      rateD65:15, ratePV:21, numD65:2, numPV:4, loadRate:100000,
+      d65Meters:2970, pvMeters:0, volume:5280, expMass:3168,
+      drillStart:'2026-03-04', drillDays:3, loadStart:null, loadDays:0,
+      blastDate:null, status:'planned',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRESPLIT', diam:0.127, burden:1, spacing:1.8, holes:0, drillMeters:2970, expMass:3168 }
+      ]
+    },
+    {
+      name:'S4_226_413', mode:'Manual', surfaceArea:5000, pattern:'1.1.15', pctD65:0, pctPV:1,
+      rateD65:17, ratePV:20, numD65:0, numPV:4, loadRate:100000,
+      d65Meters:0, pvMeters:3154, volume:60000, expMass:120000,
+      drillStart:'2026-03-07', drillDays:3, loadStart:null, loadDays:0,
+      blastDate:null, status:'planned',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRODUCTION', diam:0.229, burden:4.4, spacing:4.9, holes:0, drillMeters:3154, expMass:120000 }
+      ]
+    },
+    {
+      name:'S4_226_407', mode:'Manual', surfaceArea:11886, pattern:'1.1.15', pctD65:0, pctPV:1,
+      rateD65:45, ratePV:20, numD65:0, numPV:4, loadRate:100000,
+      d65Meters:0, pvMeters:7497.7, volume:142632, expMass:285264,
+      drillStart:'2026-03-09', drillDays:6, loadStart:null, loadDays:0,
+      blastDate:null, status:'planned',
+      deps: { drillPctForLoad:null, drillPctForBlast:null, loadPctForBlast:null, minLeadDays:null, predecessor:null },
+      holeTypes:[
+        { type:'PRODUCTION', diam:0.229, burden:4.4, spacing:4.9, holes:0, drillMeters:7497.7, expMass:285264 }
+      ]
+    }
+  ],
+
+  // Conformance data
+  conformance: {
+    targetBCM: 600000,
+    actualBCM: 426594,
+    targetMTD: 700000,
+    monthStart: '2026-02-01'
+  }
+};
+
+// ============================================================
+//  UTILITY FUNCTIONS
+// ============================================================
+function formatNum(n, dec=0) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-AU', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function formatDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-AU', { day:'2-digit', month:'short' });
+}
+function daysBetween(a, b) {
+  return Math.ceil((new Date(b) - new Date(a)) / 86400000);
+}
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+function isoDate(d) {
+  return d.toISOString().split('T')[0];
+}
+function getWeekNumber(d) {
+  const date = new Date(d);
+  const jan1 = new Date(date.getFullYear(), 0, 1);
+  return Math.ceil(((date - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+}
+function isWeekend(d) {
+  const day = new Date(d).getDay();
+  return day === 0 || day === 6;
+}
+function isToday(d) {
+  const today = new Date();
+  const dt = new Date(d);
+  return dt.toDateString() === today.toDateString();
+}
+
+// ============================================================
+//  TAB NAVIGATION
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    
+    // Render on switch
+    const id = tab.dataset.tab;
+    if (id === 'gantt') renderGantt();
+    else if (id === 'blasts') renderBlasts();
+    else if (id === 'patterns') renderPatterns();
+    else if (id === 'forecast') renderForecast();
+    else if (id === 'conformance') renderConformance();
+  });
+});
+
+// ============================================================
+//  DEPENDENCY ENGINE
+// ============================================================
+
+// Get effective dependency values for a blast (per-blast override or global)
+function getBlastDeps(blast) {
+  const g = APP.deps;
+  const b = blast.deps || {};
+  return {
+    drillPctForLoad:  b.drillPctForLoad  !== null && b.drillPctForLoad  !== undefined && b.drillPctForLoad  !== '' ? parseFloat(b.drillPctForLoad) : g.drillPctForLoad,
+    drillPctForBlast: b.drillPctForBlast !== null && b.drillPctForBlast !== undefined && b.drillPctForBlast !== '' ? parseFloat(b.drillPctForBlast) : g.drillPctForBlast,
+    loadPctForBlast:  1.0,  // HARD CONSTRAINT: loading must be 100% complete before blasting
+    minLeadDays:      b.minLeadDays      !== null && b.minLeadDays      !== undefined && b.minLeadDays      !== '' ? parseInt(b.minLeadDays) : g.minLeadDays,
+    predecessor:      b.predecessor || null,
+    predType:         b.predType || 'blast-before-drill',
+  };
+}
+
+// Recalculate all load/blast dates based on dependency thresholds
+function recalcDependencies() {
+  // Read global settings from UI
+  APP.deps.drillPctForLoad  = parseFloat(document.getElementById('depDrillForLoad').value)  || 0;
+  APP.deps.drillPctForBlast = parseFloat(document.getElementById('depDrillForBlast').value) || 1;
+  APP.deps.loadPctForBlast  = 1.0; // Hard constraint: always 100%
+  APP.deps.minLeadDays      = parseInt(document.getElementById('depMinLead').value)          || 0;
+  APP.deps.enforceSequence  = document.getElementById('depEnforceSeq').checked;
+
+  // Process each blast
+  APP.blasts.forEach((blast, idx) => {
+    if (!blast.drillStart || !blast.drillDays) return;
+    
+    const deps = getBlastDeps(blast);
+    const drillStartDate = new Date(blast.drillStart);
+    const drillDays = blast.drillDays || 1;
+
+    // --- Loading start: after drill reaches threshold % ---
+    const drillDaysForLoad = Math.ceil(drillDays * deps.drillPctForLoad);
+    let loadEarliest = addDays(drillStartDate, drillDaysForLoad);
+
+    // --- Predecessor constraint ---
+    if (deps.predecessor) {
+      const pred = APP.blasts.find(b => b.name === deps.predecessor);
+      if (pred) {
+        let predConstraintDate = null;
+        if (deps.predType === 'blast-before-drill' && pred.blastDate) {
+          // This blast's drill can't start before predecessor fires — 
+          // but we don't shift drill start here, just warn. Loading is affected indirectly.
+          const predFire = new Date(pred.blastDate);
+          if (drillStartDate < predFire) {
+            blast._depWarning = `Drill starts before predecessor ${pred.name} fires (${formatDate(pred.blastDate)})`;
+          }
+        } else if (deps.predType === 'blast-before-load' && pred.blastDate) {
+          const predFire = new Date(pred.blastDate);
+          if (loadEarliest < predFire) {
+            loadEarliest = addDays(predFire, 1); // Day after predecessor fires
+          }
+        } else if (deps.predType === 'drill-before-drill') {
+          const predDrillEnd = pred.drillStart ? addDays(new Date(pred.drillStart), pred.drillDays || 1) : null;
+          if (predDrillEnd && drillStartDate < predDrillEnd) {
+            blast._depWarning = `Drill overlaps with predecessor ${pred.name} drill (ends ${formatDate(predDrillEnd)})`;
+          }
+        }
+      }
+    }
+
+    // Set loading start and calculate loading days
+    blast.loadStart = isoDate(loadEarliest);
+    const loadDays = blast.loadRate > 0 ? Math.ceil((blast.expMass || 0) / blast.loadRate) : 1;
+    blast.loadDays = Math.max(loadDays, 1);
+    const loadEndDate = addDays(loadEarliest, blast.loadDays);
+
+    // --- Blasting date: after both drill and load thresholds met + lead days ---
+    const drillDaysForBlast = Math.ceil(drillDays * deps.drillPctForBlast);
+    const drillReadyDate = addDays(drillStartDate, drillDaysForBlast);
+
+    const loadDaysForBlast = Math.ceil(blast.loadDays * deps.loadPctForBlast);
+    const loadReadyDate = addDays(loadEarliest, loadDaysForBlast);
+
+    // Blast date = latest of (drill ready, load ready) + lead days
+    let blastEarliest = new Date(Math.max(drillReadyDate.getTime(), loadReadyDate.getTime()));
+    blastEarliest = addDays(blastEarliest, deps.minLeadDays);
+
+    blast.blastDate = isoDate(blastEarliest);
+
+    // Store computed dependency info for rendering
+    blast._computed = {
+      drillPctForLoad: deps.drillPctForLoad,
+      drillPctForBlast: deps.drillPctForBlast,
+      loadPctForBlast: deps.loadPctForBlast,
+      drillDayForLoadStart: drillDaysForLoad,
+      loadStartDate: blast.loadStart,
+      drillOverlapEnd: isoDate(addDays(drillStartDate, drillDays - 1)), // When drilling finishes
+      loadOverlapStart: blast.loadStart, // When loading begins
+      hasOverlap: deps.drillPctForLoad < 1.0, // Loading starts before drilling finishes
+      drillEndDate: isoDate(addDays(drillStartDate, drillDays - 1)),
+      loadEndDate: isoDate(addDays(loadEarliest, blast.loadDays - 1)),
+    };
+  });
+}
+
+// Combined refresh
+function recalcAndRender() {
+  recalcDependencies();
+  renderGantt();
+}
+
+// ============================================================
+//  GANTT CHART
+// ============================================================
+function renderGantt() {
+  APP.planStart = new Date(document.getElementById('planStartDate').value);
+  APP.ganttWeeks = parseInt(document.getElementById('ganttWeeks').value);
+  APP.rigHours = parseFloat(document.getElementById('rigHours').value);
+  APP.availability = parseFloat(document.getElementById('rigAvail').value);
+  APP.utilisation = parseFloat(document.getElementById('rigUtil').value);
+
+  const totalDays = APP.ganttWeeks * 7;
+  const dates = [];
+  // Start 5 days before plan start to show history
+  const visStart = addDays(APP.planStart, -5);
+  for (let i = 0; i < totalDays + 5; i++) {
+    dates.push(addDays(visStart, i));
+  }
+
+  // Stats
+  const totalVolume = APP.blasts.reduce((s, b) => s + (b.volume || 0), 0);
+  const totalExp = APP.blasts.reduce((s, b) => s + (b.expMass || 0), 0);
+  const totalDrillM = APP.blasts.reduce((s, b) => s + (b.d65Meters || 0) + (b.pvMeters || 0), 0);
+  const activeCount = APP.blasts.filter(b => b.status === 'active').length;
+  const plannedCount = APP.blasts.filter(b => b.status === 'planned').length;
+  const effectiveHours = APP.rigHours * APP.availability * APP.utilisation;
+  
+  document.getElementById('ganttStats').innerHTML = `
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Total Blasts</div>
+      <div class="stat-value">${APP.blasts.length}</div>
+      <div class="stat-sub">${activeCount} active · ${plannedCount} planned</div>
+    </div>
+    <div class="stat-card accent-amber">
+      <div class="stat-label">Total Volume</div>
+      <div class="stat-value">${formatNum(totalVolume)}<span class="stat-unit">bcm</span></div>
+    </div>
+    <div class="stat-card accent-red">
+      <div class="stat-label">Total Explosive</div>
+      <div class="stat-value">${formatNum(totalExp)}<span class="stat-unit">kg</span></div>
+      <div class="stat-sub">Avg PF: ${formatNum(totalExp/totalVolume, 2)} kg/bcm</div>
+    </div>
+    <div class="stat-card accent-cyan">
+      <div class="stat-label">Total Drill Meters</div>
+      <div class="stat-value">${formatNum(totalDrillM)}<span class="stat-unit">m</span></div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="stat-label">Effective Rig Hours/Day</div>
+      <div class="stat-value">${formatNum(effectiveHours, 1)}<span class="stat-unit">hrs</span></div>
+      <div class="stat-sub">${APP.rigHours}h × ${APP.availability} × ${APP.utilisation}</div>
+    </div>
+  `;
+
+  // Build table
+  let html = '<thead>';
+  
+  // Month row
+  html += '<tr><th class="sticky-col" rowspan="3" style="text-align:left;min-width:180px;">Blast</th>';
+  html += '<th class="sticky-col-2" rowspan="3" style="min-width:90px;">Info</th>';
+  let prevMonth = '';
+  for (const d of dates) {
+    const m = d.toLocaleDateString('en-AU', { month:'long' });
+    if (m !== prevMonth) {
+      let span = 0;
+      for (let j = dates.indexOf(d); j < dates.length; j++) {
+        if (dates[j].toLocaleDateString('en-AU', { month:'long' }) === m) span++;
+        else break;
+      }
+      html += `<th colspan="${span}" class="gantt-header-month">${m}</th>`;
+      prevMonth = m;
+    }
+  }
+  html += '</tr>';
+
+  // Week row
+  html += '<tr>';
+  let prevWeek = -1;
+  for (const d of dates) {
+    const w = getWeekNumber(d);
+    if (w !== prevWeek) {
+      let span = 0;
+      for (let j = dates.indexOf(d); j < dates.length; j++) {
+        if (getWeekNumber(dates[j]) === w) span++;
+        else break;
+      }
+      html += `<th colspan="${span}" class="gantt-header-week">Wk ${w}</th>`;
+      prevWeek = w;
+    }
+  }
+  html += '</tr>';
+
+  // Date row
+  html += '<tr>';
+  for (const d of dates) {
+    const cls = isToday(d) ? 'today' : (isWeekend(d) ? 'weekend' : '');
+    const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+    html += `<th class="gantt-header-date ${cls}">${d.getDate()}<br><span style="font-size:8px;opacity:0.5;">${dayNames[d.getDay()]}</span></th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  // Helper: get Gantt bar class and determine date range
+  function renderSection(sectionName, color, getDateRange) {
+    html += `<tr class="gantt-section-header"><td colspan="${dates.length + 2}"><span class="section-icon" style="background:${color}"></span>${sectionName}</td></tr>`;
+    
+    APP.blasts.forEach((blast, idx) => {
+      const range = getDateRange(blast);
+      if (!range) return;
+      
+      const deps = getBlastDeps(blast);
+      const comp = blast._computed || {};
+      
+      // Build info column with dependency indicator
+      let depIcon = '';
+      if (blast._depWarning) {
+        depIcon = `<span class="dep-warning" title="${blast._depWarning}">!</span>`;
+      } else if (comp.hasOverlap && sectionName === 'DRILLING') {
+        depIcon = `<span class="dep-ok" title="Load starts at ${Math.round(deps.drillPctForLoad*100)}% drill">⛓</span>`;
+      }
+      
+      const info = sectionName === 'DRILLING' 
+        ? `${formatNum((blast.d65Meters||0)+(blast.pvMeters||0))}m${depIcon}`
+        : sectionName === 'LOADING'
+        ? `${formatNum(blast.expMass)}kg${depIcon}`
+        : `${formatNum(blast.volume)} bcm`;
+
+      html += `<tr class="gantt-row" data-blast="${idx}" data-section="${sectionName.toLowerCase()}">`;
+      html += `<td class="sticky-col" oncontextmenu="showCtxMenu(event,${idx},'${sectionName.toLowerCase()}')">${blast.name}</td>`;
+      html += `<td class="sticky-col-2">${info}</td>`;
+
+      for (let di = 0; di < dates.length; di++) {
+        const d = dates[di];
+        const ds = isoDate(d);
+        let barClass = '';
+        let barExtra = '';
+        
+        if (range.start && range.end && ds >= range.start && ds <= range.end) {
+          barClass = sectionName === 'DRILLING' ? 'drill' : sectionName === 'LOADING' ? 'load' : 'blast';
+          if (blast.status === 'planned' && sectionName !== 'BLASTING') barClass += ' planned';
+          
+          // Check for drill-load overlap zone on drill bars
+          if (sectionName === 'DRILLING' && comp.hasOverlap && comp.loadOverlapStart) {
+            if (ds >= comp.loadOverlapStart && ds <= comp.drillOverlapEnd) {
+              barClass = 'drill-load-overlap';
+              if (blast.status === 'planned') barClass += ' planned';
+            }
+          }
+
+          // Add dependency threshold marker on drill bars
+          if (sectionName === 'DRILLING' && blast.drillStart && blast.drillDays > 1) {
+            const drillStartDate = new Date(blast.drillStart);
+            // Marker for "load can start" threshold
+            const loadThreshDay = isoDate(addDays(drillStartDate, Math.ceil(blast.drillDays * deps.drillPctForLoad) - 1));
+            if (ds === loadThreshDay && deps.drillPctForLoad < 1.0) {
+              barExtra += `<div class="dep-marker" style="left:calc(100% - 1px);" data-label="${Math.round(deps.drillPctForLoad*100)}%→Load"></div>`;
+            }
+            // Marker for "blast ready" threshold (if < 100%)
+            if (deps.drillPctForBlast < 1.0) {
+              const blastThreshDay = isoDate(addDays(drillStartDate, Math.ceil(blast.drillDays * deps.drillPctForBlast) - 1));
+              if (ds === blastThreshDay) {
+                barExtra += `<div class="dep-marker" style="left:calc(100% - 1px);background:var(--accent-blast);" data-label="${Math.round(deps.drillPctForBlast*100)}%→Blast"></div>`;
+              }
+            }
+          }
+
+          // Add dependency threshold marker on load bars  
+          if (sectionName === 'LOADING' && blast.loadStart && blast.loadDays > 1) {
+            if (deps.loadPctForBlast < 1.0) {
+              const loadStartDate = new Date(blast.loadStart);
+              const blastThreshDay = isoDate(addDays(loadStartDate, Math.ceil(blast.loadDays * deps.loadPctForBlast) - 1));
+              if (ds === blastThreshDay) {
+                barExtra += `<div class="dep-marker" style="left:calc(100% - 1px);background:var(--accent-blast);" data-label="${Math.round(deps.loadPctForBlast*100)}%→Blast"></div>`;
+              }
+            }
+          }
+        }
+
+        if (sectionName === 'BLASTING' && blast.blastDate && ds === blast.blastDate) {
+          barClass = 'milestone';
+        }
+        
+        const wkend = isWeekend(d) ? 'opacity:0.7;' : '';
+        html += `<td class="gantt-cell" style="${wkend}">`;
+        if (barClass) {
+          const ttData = `data-tt-blast="${blast.name}" data-tt-section="${sectionName}" data-tt-date="${ds}"`;
+          html += `<div class="gantt-bar ${barClass}" ${ttData}>${barExtra}</div>`;
+        }
+        html += '</td>';
+      }
+      html += '</tr>';
+    });
+  }
+
+  renderSection('DRILLING', 'var(--accent-drill)', b => {
+    if (!b.drillStart) return null;
+    const start = b.drillStart;
+    const end = isoDate(addDays(new Date(b.drillStart), (b.drillDays || 1) - 1));
+    return { start, end };
+  });
+
+  renderSection('LOADING', 'var(--accent-load)', b => {
+    if (!b.loadStart) return null;
+    const start = b.loadStart;
+    const days = b.loadDays || Math.ceil((b.expMass || 0) / (b.loadRate || 100000));
+    const end = isoDate(addDays(new Date(b.loadStart), Math.max(days - 1, 0)));
+    return { start, end };
+  });
+
+  renderSection('BLASTING', 'var(--accent-blast)', b => {
+    if (!b.blastDate) return null;
+    return { start: b.blastDate, end: b.blastDate };
+  });
+
+  html += '</tbody>';
+  document.getElementById('ganttTable').innerHTML = html;
+
+  // Bar tooltips
+  document.querySelectorAll('.gantt-bar').forEach(bar => {
+    bar.addEventListener('mouseenter', e => showBarTooltip(e, bar));
+    bar.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+function showBarTooltip(e, bar) {
+  const name = bar.dataset.ttBlast;
+  const section = bar.dataset.ttSection;
+  const date = bar.dataset.ttDate;
+  const blast = APP.blasts.find(b => b.name === name);
+  if (!blast) return;
+  
+  const deps = getBlastDeps(blast);
+  const comp = blast._computed || {};
+  
+  const tt = document.getElementById('tooltip');
+  let html = `<div class="tt-title">${name}</div>`;
+  html += `<div class="tt-row"><span>Phase</span><span class="tt-val">${section}</span></div>`;
+  html += `<div class="tt-row"><span>Date</span><span class="tt-val">${formatDate(date)}</span></div>`;
+  
+  if (section === 'DRILLING') {
+    html += `<div class="tt-row"><span>Drill Meters</span><span class="tt-val">${formatNum((blast.d65Meters||0)+(blast.pvMeters||0))} m</span></div>`;
+    html += `<div class="tt-row"><span>Duration</span><span class="tt-val">${blast.drillDays} days</span></div>`;
+    html += `<div style="border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;">`;
+    html += `<div class="tt-row"><span style="color:var(--accent-purple)">⛓ Load starts at</span><span class="tt-val">${Math.round(deps.drillPctForLoad*100)}% drilled</span></div>`;
+    if (comp.hasOverlap) {
+      html += `<div class="tt-row"><span style="color:var(--accent-load)">↳ Loading begins</span><span class="tt-val">${formatDate(comp.loadOverlapStart)}</span></div>`;
+      html += `<div class="tt-row"><span style="color:var(--gantt-drill)">↳ Drill finishes</span><span class="tt-val">${formatDate(comp.drillEndDate)}</span></div>`;
+    }
+    html += `<div class="tt-row"><span style="color:var(--accent-blast)">⛓ Blast at drill</span><span class="tt-val">${Math.round(deps.drillPctForBlast*100)}%</span></div>`;
+    html += `</div>`;
+  } else if (section === 'LOADING') {
+    html += `<div class="tt-row"><span>Explosive</span><span class="tt-val">${formatNum(blast.expMass)} kg</span></div>`;
+    html += `<div class="tt-row"><span>Load Rate</span><span class="tt-val">${formatNum(blast.loadRate)} kg/day</span></div>`;
+    html += `<div class="tt-row"><span>Duration</span><span class="tt-val">${blast.loadDays} days</span></div>`;
+    html += `<div style="border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;">`;
+    html += `<div class="tt-row"><span style="color:var(--accent-purple)">⛓ Drill was at</span><span class="tt-val">${Math.round(deps.drillPctForLoad*100)}% when load started</span></div>`;
+    html += `<div class="tt-row"><span style="color:var(--accent-blast)">⛓ Blast at load</span><span class="tt-val">${Math.round(deps.loadPctForBlast*100)}%</span></div>`;
+    if (deps.minLeadDays > 0) {
+      html += `<div class="tt-row"><span style="color:var(--accent-load)">⛓ Lead days</span><span class="tt-val">${deps.minLeadDays} day(s)</span></div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<div class="tt-row"><span>Volume</span><span class="tt-val">${formatNum(blast.volume)} bcm</span></div>`;
+    html += `<div class="tt-row"><span>PF</span><span class="tt-val">${blast.volume ? formatNum(blast.expMass/blast.volume, 2) : '—'} kg/bcm</span></div>`;
+    html += `<div style="border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;">`;
+    html += `<div class="tt-row"><span style="color:var(--accent-purple)">⛓ Requires</span><span class="tt-val">${Math.round(deps.drillPctForBlast*100)}% drill + ${Math.round(deps.loadPctForBlast*100)}% load</span></div>`;
+    if (deps.minLeadDays > 0) {
+      html += `<div class="tt-row"><span style="color:var(--accent-load)">⛓ +${deps.minLeadDays} lead day(s)</span></div>`;
+    }
+    if (deps.predecessor) {
+      html += `<div class="tt-row"><span style="color:var(--accent-purple)">⛓ After</span><span class="tt-val">${deps.predecessor}</span></div>`;
+    }
+    html += `</div>`;
+  }
+  
+  if (blast._depWarning) {
+    html += `<div style="margin-top:4px;padding:4px 6px;background:rgba(239,68,68,0.15);border-radius:4px;color:var(--accent-blast);font-size:10px;">⚠ ${blast._depWarning}</div>`;
+  }
+  
+  tt.innerHTML = html;
+  tt.style.display = 'block';
+  tt.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
+  tt.style.top = (e.clientY - 10) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ============================================================
+//  BLAST OVERVIEW
+// ============================================================
+function renderBlasts() {
+  const totalVol = APP.blasts.reduce((s,b) => s + (b.volume||0), 0);
+  const totalExp = APP.blasts.reduce((s,b) => s + (b.expMass||0), 0);
+  const totalHoles = APP.blasts.reduce((s,b) => s + b.holeTypes.reduce((h,ht) => h + (ht.holes||0), 0), 0);
+  
+  document.getElementById('blastStats').innerHTML = `
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Active Blasts</div>
+      <div class="stat-value">${APP.blasts.filter(b=>b.status==='active').length}</div>
+    </div>
+    <div class="stat-card accent-amber">
+      <div class="stat-label">Total Volume</div>
+      <div class="stat-value">${formatNum(totalVol)}<span class="stat-unit">bcm</span></div>
+    </div>
+    <div class="stat-card accent-red">
+      <div class="stat-label">Total Explosive</div>
+      <div class="stat-value">${formatNum(totalExp)}<span class="stat-unit">kg</span></div>
+    </div>
+    <div class="stat-card accent-purple">
+      <div class="stat-label">Total Holes</div>
+      <div class="stat-value">${formatNum(totalHoles)}</div>
+    </div>
+  `;
+
+  let html = '<thead><tr>';
+  html += '<th>Blast Name</th><th>Status</th><th>Mode</th><th>Pattern</th>';
+  html += '<th>Hole Types</th><th class="num">Volume (bcm)</th><th class="num">Exp. (kg)</th>';
+  html += '<th class="num">PF (kg/bcm)</th><th class="num">Drill (m)</th>';
+  html += '<th>Drill Start</th><th>Load Start</th><th>Blast Date</th>';
+  html += '<th style="color:var(--accent-purple)">Deps</th>';
+  html += '</tr></thead><tbody>';
+
+  APP.blasts.forEach((b, idx) => {
+    const pf = b.volume ? (b.expMass / b.volume).toFixed(2) : '—';
+    const drillM = (b.d65Meters || 0) + (b.pvMeters || 0);
+    const statusBadge = b.status === 'active' ? 'badge-active' : b.status === 'fired' ? 'badge-blast' : 'badge-drill';
+    const holeTypeSummary = b.holeTypes.map(ht => {
+      const badge = ht.type === 'PRESPLIT' ? 'badge-presplit' : ht.type === 'BUFFER' ? 'badge-buffer' : 'badge-production';
+      return `<span class="badge ${badge}">${ht.type}</span>`;
+    }).join(' ');
+
+    const deps = getBlastDeps(b);
+    let depSummary = `${Math.round(deps.drillPctForLoad*100)}%→L`;
+    if (deps.drillPctForBlast < 1) depSummary += ` ${Math.round(deps.drillPctForBlast*100)}%D→B`;
+    if (deps.loadPctForBlast < 1) depSummary += ` ${Math.round(deps.loadPctForBlast*100)}%L→B`;
+    if (deps.predecessor) depSummary += ` ⛓${deps.predecessor.substring(0,10)}`;
+    const hasWarning = b._depWarning ? `<span class="dep-warning" title="${b._depWarning}">!</span>` : '';
+
+    html += `<tr ondblclick="editBlast(${idx})" style="cursor:pointer">`;
+    html += `<td style="color:var(--text-primary);font-weight:600;">${b.name}${hasWarning}</td>`;
+    html += `<td><span class="badge ${statusBadge}">${b.status}</span></td>`;
+    html += `<td>${b.mode}</td>`;
+    html += `<td>${b.pattern || '—'}</td>`;
+    html += `<td>${holeTypeSummary}</td>`;
+    html += `<td class="num">${formatNum(b.volume)}</td>`;
+    html += `<td class="num">${formatNum(b.expMass)}</td>`;
+    html += `<td class="num">${pf}</td>`;
+    html += `<td class="num">${formatNum(drillM)}</td>`;
+    html += `<td>${formatDate(b.drillStart)}</td>`;
+    html += `<td>${formatDate(b.loadStart)}</td>`;
+    html += `<td>${formatDate(b.blastDate)}</td>`;
+    html += `<td style="font-size:9px;color:var(--accent-purple)">${depSummary}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  document.getElementById('blastTable').innerHTML = html;
+}
+
+// ============================================================
+//  PATTERN LIBRARY
+// ============================================================
+function renderPatterns() {
+  const grid = document.getElementById('patternGrid');
+  const typeColors = {
+    WASTE: 'var(--waste)', YELLOW: 'var(--yellow-zone)', ORE: 'var(--ore)', PRESPLIT: 'var(--presplit)'
+  };
+  
+  grid.innerHTML = APP.patterns.map(p => `
+    <div class="pattern-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="pattern-id">${p.id}</div>
+        <span class="badge" style="background:${typeColors[p.type]}20;color:${typeColors[p.type]}">${p.type}</span>
+      </div>
+      <div class="pattern-detail"><span class="label">Bench Height</span><span class="value">${p.benchHt} m</span></div>
+      <div class="pattern-detail"><span class="label">Diameter</span><span class="value">${p.diam} mm</span></div>
+      <div class="pattern-detail"><span class="label">Burden</span><span class="value">${p.burden} m</span></div>
+      <div class="pattern-detail"><span class="label">Spacing</span><span class="value">${p.spacing} m</span></div>
+      <div class="pattern-detail"><span class="label">Powder Factor</span><span class="value">${p.pf} kg/bcm</span></div>
+      <div class="pattern-detail"><span class="label">Sub-drill</span><span class="value">${p.subdrill} m</span></div>
+      <div class="pattern-detail"><span class="label">Stemming</span><span class="value">${p.stemming} m</span></div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+//  EXPLOSIVE FORECAST
+// ============================================================
+function renderForecast() {
+  const loadRate = parseFloat(document.getElementById('loadingRate').value) || 100000;
+  const totalExp = APP.blasts.reduce((s,b) => s + (b.expMass||0), 0);
+  const totalVol = APP.blasts.reduce((s,b) => s + (b.volume||0), 0);
+  
+  // Build weekly buckets
+  const weeks = {};
+  APP.blasts.forEach(b => {
+    if (!b.blastDate && !b.loadStart) return;
+    const loadDate = b.loadStart || b.drillStart;
+    if (!loadDate) return;
+    const wk = getWeekNumber(new Date(loadDate));
+    const yr = new Date(loadDate).getFullYear();
+    const key = `${yr}-W${wk}`;
+    if (!weeks[key]) weeks[key] = { week: wk, year: yr, blasts: [], totalExp: 0, totalVol: 0, loadDays: 0 };
+    weeks[key].blasts.push(b.name);
+    weeks[key].totalExp += (b.expMass || 0);
+    weeks[key].totalVol += (b.volume || 0);
+    weeks[key].loadDays += Math.ceil((b.expMass || 0) / loadRate);
+  });
+
+  document.getElementById('forecastStats').innerHTML = `
+    <div class="stat-card accent-red">
+      <div class="stat-label">Total Explosive Required</div>
+      <div class="stat-value">${formatNum(totalExp)}<span class="stat-unit">kg</span></div>
+      <div class="stat-sub">${formatNum(totalExp/1000)} tonnes</div>
+    </div>
+    <div class="stat-card accent-amber">
+      <div class="stat-label">Loading Days Required</div>
+      <div class="stat-value">${formatNum(Math.ceil(totalExp / loadRate))}<span class="stat-unit">days</span></div>
+      <div class="stat-sub">@ ${formatNum(loadRate)} kg/day</div>
+    </div>
+    <div class="stat-card accent-cyan">
+      <div class="stat-label">Avg PF</div>
+      <div class="stat-value">${totalVol ? formatNum(totalExp/totalVol, 2) : '—'}<span class="stat-unit">kg/bcm</span></div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="stat-label">Charge Source</div>
+      <div class="stat-value" style="font-size:14px">${APP.chargeConfigs.length ? 'Kirra Config' : 'Designed'}</div>
+      <div class="stat-sub">${APP.chargeConfigs.length ? APP.chargeConfigs.length + ' configs loaded' : 'From schedule data'}</div>
+    </div>
+  `;
+
+  let html = '<thead><tr><th>Week</th><th>Blasts</th><th class="num">Explosive (kg)</th><th class="num">Volume (bcm)</th><th class="num">Load Days</th><th class="num">Daily Rate (kg)</th></tr></thead><tbody>';
+  
+  const sortedWeeks = Object.values(weeks).sort((a,b) => a.year - b.year || a.week - b.week);
+  sortedWeeks.forEach(w => {
+    const dailyRate = w.loadDays > 0 ? w.totalExp / w.loadDays : 0;
+    html += `<tr>`;
+    html += `<td>Wk ${w.week}, ${w.year}</td>`;
+    html += `<td>${w.blasts.join(', ')}</td>`;
+    html += `<td class="num">${formatNum(w.totalExp)}</td>`;
+    html += `<td class="num">${formatNum(w.totalVol)}</td>`;
+    html += `<td class="num">${w.loadDays}</td>`;
+    html += `<td class="num">${formatNum(dailyRate)}</td>`;
+    html += `</tr>`;
+  });
+  
+  html += '</tbody>';
+  document.getElementById('forecastTable').innerHTML = html;
+}
+
+// ============================================================
+//  CONFORMANCE
+// ============================================================
+function renderConformance() {
+  const conf = APP.conformance;
+  const pct = conf.actualBCM / conf.targetBCM;
+  const variance = conf.actualBCM - conf.targetBCM;
+  const barColor = pct >= 0.9 ? 'var(--accent-green)' : pct >= 0.7 ? 'var(--accent-load)' : 'var(--accent-blast)';
+
+  document.getElementById('confStats').innerHTML = `
+    <div class="stat-card accent-green">
+      <div class="stat-label">Target BCM (Month)</div>
+      <div class="stat-value">${formatNum(conf.targetBCM)}<span class="stat-unit">bcm</span></div>
+    </div>
+    <div class="stat-card accent-cyan">
+      <div class="stat-label">Actual BCM (MTD)</div>
+      <div class="stat-value">${formatNum(conf.actualBCM)}<span class="stat-unit">bcm</span></div>
+      <div class="conformance-bar"><div class="fill" style="width:${Math.min(pct*100,100)}%;background:${barColor}"></div></div>
+    </div>
+    <div class="stat-card ${variance >= 0 ? 'accent-green' : 'accent-red'}">
+      <div class="stat-label">Variance</div>
+      <div class="stat-value" style="color:${variance >= 0 ? 'var(--accent-green)' : 'var(--accent-blast)'}">${variance >= 0 ? '+' : ''}${formatNum(variance)}<span class="stat-unit">bcm</span></div>
+    </div>
+    <div class="stat-card accent-purple">
+      <div class="stat-label">Conformance</div>
+      <div class="stat-value">${formatNum(pct*100, 1)}<span class="stat-unit">%</span></div>
+    </div>
+  `;
+
+  let html = '<thead><tr><th>Blast</th><th class="num">Planned BCM</th><th class="num">Planned Exp (kg)</th><th>Blast Date</th><th>Status</th></tr></thead><tbody>';
+  APP.blasts.forEach(b => {
+    const statusBadge = b.status === 'active' ? 'badge-active' : b.status === 'fired' ? 'badge-complete' : 'badge-drill';
+    html += `<tr>`;
+    html += `<td style="font-weight:600;color:var(--text-primary)">${b.name}</td>`;
+    html += `<td class="num">${formatNum(b.volume)}</td>`;
+    html += `<td class="num">${formatNum(b.expMass)}</td>`;
+    html += `<td>${formatDate(b.blastDate)}</td>`;
+    html += `<td><span class="badge ${statusBadge}">${b.status}</span></td>`;
+    html += `</tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('confTable').innerHTML = html;
+}
+
+// ============================================================
+//  ADD / EDIT BLAST MODAL
+// ============================================================
+function populatePatternDropdown() {
+  const sel = document.getElementById('fPattern');
+  sel.innerHTML = '<option value="">-- Select Pattern --</option>';
+  APP.patterns.forEach(p => {
+    sel.innerHTML += `<option value="${p.id}">${p.id} — ${p.type} (PF: ${p.pf})</option>`;
+  });
+}
+
+function showAddBlastModal() {
+  APP.editingBlastIdx = null;
+  document.getElementById('blastModalTitle').textContent = 'Add Blast';
+  document.getElementById('blastModalSave').textContent = 'Add Blast';
+  document.getElementById('fBlastName').value = '';
+  document.getElementById('fBlastMode').value = 'Manual';
+  document.getElementById('fSurfaceArea').value = '';
+  document.getElementById('fDrillStart').value = isoDate(APP.planStart);
+  document.getElementById('fPctD65').value = 0;
+  document.getElementById('fPctPV').value = 1;
+  document.getElementById('fLoadRate').value = 100000;
+  document.getElementById('fVolume').value = '';
+  document.getElementById('fExpMass').value = '';
+  document.getElementById('fRateD65').value = 19;
+  document.getElementById('fRatePV').value = 20;
+  document.getElementById('fNumD65').value = 0;
+  document.getElementById('fNumPV').value = 4;
+  // Dependency fields — blank = use global
+  document.getElementById('fDepDrillForLoad').value = '';
+  document.getElementById('fDepDrillForBlast').value = '';
+  document.getElementById('fDepMinLead').value = '';
+  populatePredecessorDropdown(null);
+  document.getElementById('fDepPredecessor').value = '';
+  document.getElementById('fDepPredType').value = 'blast-before-drill';
+  // Update placeholders with current globals
+  document.getElementById('fDepDrillForLoad').placeholder = `Global: ${Math.round(APP.deps.drillPctForLoad*100)}%`;
+  document.getElementById('fDepDrillForBlast').placeholder = `Global: ${Math.round(APP.deps.drillPctForBlast*100)}%`;
+  document.getElementById('fDepMinLead').placeholder = `Global: ${APP.deps.minLeadDays}`;
+  populatePatternDropdown();
+  openModal('blastModal');
+}
+
+function populatePredecessorDropdown(excludeName) {
+  const sel = document.getElementById('fDepPredecessor');
+  sel.innerHTML = '<option value="">— None —</option>';
+  APP.blasts.forEach(b => {
+    if (b.name !== excludeName) {
+      sel.innerHTML += `<option value="${b.name}">${b.name}</option>`;
+    }
+  });
+}
+
+function editBlast(idx) {
+  APP.editingBlastIdx = idx;
+  const b = APP.blasts[idx];
+  document.getElementById('blastModalTitle').textContent = 'Edit Blast: ' + b.name;
+  document.getElementById('blastModalSave').textContent = 'Save Changes';
+  document.getElementById('fBlastName').value = b.name;
+  document.getElementById('fBlastMode').value = b.mode;
+  document.getElementById('fSurfaceArea').value = b.surfaceArea || '';
+  document.getElementById('fDrillStart').value = b.drillStart || '';
+  document.getElementById('fPctD65').value = b.pctD65;
+  document.getElementById('fPctPV').value = b.pctPV;
+  document.getElementById('fLoadRate').value = b.loadRate;
+  document.getElementById('fVolume').value = b.volume || '';
+  document.getElementById('fExpMass').value = b.expMass || '';
+  document.getElementById('fRateD65').value = b.rateD65;
+  document.getElementById('fRatePV').value = b.ratePV;
+  document.getElementById('fNumD65').value = b.numD65;
+  document.getElementById('fNumPV').value = b.numPV;
+  // Dependency fields
+  const bd = b.deps || {};
+  document.getElementById('fDepDrillForLoad').value = bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined ? bd.drillPctForLoad : '';
+  document.getElementById('fDepDrillForBlast').value = bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined ? bd.drillPctForBlast : '';
+  document.getElementById('fDepMinLead').value = bd.minLeadDays !== null && bd.minLeadDays !== undefined ? bd.minLeadDays : '';
+  populatePredecessorDropdown(b.name);
+  document.getElementById('fDepPredecessor').value = bd.predecessor || '';
+  document.getElementById('fDepPredType').value = bd.predType || 'blast-before-drill';
+  // Update placeholders
+  document.getElementById('fDepDrillForLoad').placeholder = `Global: ${Math.round(APP.deps.drillPctForLoad*100)}%`;
+  document.getElementById('fDepDrillForBlast').placeholder = `Global: ${Math.round(APP.deps.drillPctForBlast*100)}%`;
+  document.getElementById('fDepMinLead').placeholder = `Global: ${APP.deps.minLeadDays}`;
+  populatePatternDropdown();
+  document.getElementById('fPattern').value = b.pattern || '';
+  openModal('blastModal');
+}
+
+function saveBlast() {
+  const name = document.getElementById('fBlastName').value.trim();
+  if (!name) { alert('Blast name required'); return; }
+
+  const patId = document.getElementById('fPattern').value;
+  const pattern = APP.patterns.find(p => p.id === patId);
+  const area = parseFloat(document.getElementById('fSurfaceArea').value) || 0;
+  let volume = parseFloat(document.getElementById('fVolume').value) || 0;
+  let expMass = parseFloat(document.getElementById('fExpMass').value) || 0;
+  
+  // Auto-calc from pattern
+  if (pattern && area > 0 && !volume) {
+    volume = area * pattern.benchHt;
+  }
+  if (pattern && volume > 0 && !expMass) {
+    expMass = volume * pattern.pf;
+  }
+
+  // Estimate drill meters
+  let drillMeters = 0;
+  if (pattern && area > 0) {
+    const holesEst = area / (pattern.burden * pattern.spacing);
+    const holeDepth = pattern.benchHt + pattern.subdrill;
+    drillMeters = holesEst * holeDepth;
+  }
+
+  const loadRate = parseFloat(document.getElementById('fLoadRate').value) || 100000;
+  const drillStart = document.getElementById('fDrillStart').value;
+  const rateD65 = parseFloat(document.getElementById('fRateD65').value) || 19;
+  const ratePV = parseFloat(document.getElementById('fRatePV').value) || 20;
+  const numD65 = parseInt(document.getElementById('fNumD65').value) || 0;
+  const numPV = parseInt(document.getElementById('fNumPV').value) || 0;
+  const pctD65 = parseFloat(document.getElementById('fPctD65').value) || 0;
+  const pctPV = parseFloat(document.getElementById('fPctPV').value) || 0;
+
+  // Estimate durations
+  const totalMeters = drillMeters || 0;
+  const d65Meters = totalMeters * pctD65;
+  const pvMeters = totalMeters * pctPV;
+  
+  const d65DailyM = numD65 > 0 ? rateD65 * numD65 : 0;
+  const pvDailyM = numPV > 0 ? ratePV * numPV : 0;
+  const totalDailyM = d65DailyM + pvDailyM;
+  const drillDays = totalDailyM > 0 ? Math.ceil(totalMeters / totalDailyM) : 1;
+  const loadDays = loadRate > 0 ? Math.ceil(expMass / loadRate) : 1;
+
+  // Read dependency overrides from modal (blank = null = use global)
+  const fDepDL = document.getElementById('fDepDrillForLoad').value;
+  const fDepDB = document.getElementById('fDepDrillForBlast').value;
+  const fDepML = document.getElementById('fDepMinLead').value;
+  const fDepPred = document.getElementById('fDepPredecessor').value;
+  const fDepPredType = document.getElementById('fDepPredType').value;
+
+  const blastDeps = {
+    drillPctForLoad:  fDepDL !== '' ? parseFloat(fDepDL) : null,
+    drillPctForBlast: fDepDB !== '' ? parseFloat(fDepDB) : null,
+    loadPctForBlast:  null, // Hard constraint: always 100%, not overridable
+    minLeadDays:      fDepML !== '' ? parseInt(fDepML) : null,
+    predecessor:      fDepPred || null,
+    predType:         fDepPredType || 'blast-before-drill',
+  };
+
+  const holeTypes = [];
+  if (pattern) {
+    holeTypes.push({
+      type: pattern.type,
+      diam: pattern.diam / 1000,
+      burden: pattern.burden,
+      spacing: pattern.spacing,
+      holes: area > 0 ? Math.round(area / (pattern.burden * pattern.spacing)) : 0,
+      drillMeters: drillMeters,
+      expMass: expMass
+    });
+  }
+
+  // Build blast with placeholder dates — recalcDependencies will compute actual load/blast dates
+  const blastData = {
+    name, mode: document.getElementById('fBlastMode').value,
+    surfaceArea: area, pattern: patId,
+    pctD65, pctPV, rateD65, ratePV, numD65, numPV,
+    loadRate, d65Meters, pvMeters, volume, expMass,
+    drillStart, drillDays, loadStart: null, loadDays,
+    blastDate: null, status: 'planned',
+    deps: blastDeps,
+    holeTypes
+  };
+
+  if (APP.editingBlastIdx !== null) {
+    blastData.status = APP.blasts[APP.editingBlastIdx].status;
+    APP.blasts[APP.editingBlastIdx] = blastData;
+  } else {
+    APP.blasts.push(blastData);
+  }
+
+  closeModal('blastModal');
+  recalcDependencies();
+  renderGantt();
+  renderBlasts();
+}
+
+// ============================================================
+//  CONTEXT MENU
+// ============================================================
+function showCtxMenu(e, idx, section) {
+  e.preventDefault();
+  APP.ctxBlastIdx = idx;
+  APP.ctxSection = section;
+  const menu = document.getElementById('contextMenu');
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+}
+
+document.addEventListener('click', () => {
+  document.getElementById('contextMenu').style.display = 'none';
+});
+
+function editBlastFromCtx() { editBlast(APP.ctxBlastIdx); }
+function setBlastStatus(status) {
+  APP.blasts[APP.ctxBlastIdx].status = status;
+  renderGantt();
+}
+function duplicateBlast() {
+  const b = JSON.parse(JSON.stringify(APP.blasts[APP.ctxBlastIdx]));
+  b.name += '_copy';
+  b.status = 'planned';
+  APP.blasts.push(b);
+  renderGantt();
+}
+function removeBlast() {
+  if (confirm('Remove ' + APP.blasts[APP.ctxBlastIdx].name + '?')) {
+    APP.blasts.splice(APP.ctxBlastIdx, 1);
+    renderGantt();
+  }
+}
+
+// ============================================================
+//  MODAL HELPERS
+// ============================================================
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ============================================================
+//  DXF IMPORT
+// ============================================================
+function setupDropZone(zoneId, inputId, handler) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) handler(file);
+  });
+  input.addEventListener('change', e => {
+    if (e.target.files[0]) handler(e.target.files[0]);
+  });
+}
+
+function parseDXFFile(file) {
+  const log = document.getElementById('dxfLog');
+  log.innerHTML = `<div class="log-info">Reading ${file.name}...</div>`;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const content = e.target.result;
+    const blasts = parseDXFEntities(content);
+    
+    if (blasts.length === 0) {
+      log.innerHTML += `<div class="log-warn">⚠ No blast polygons found. Expected layer naming: BLASTNAME-HOLETYPE{[B][S][BH][SD][D]}</div>`;
+      return;
+    }
+    
+    log.innerHTML += `<div class="log-ok">✓ Found ${blasts.length} blast definition(s)</div>`;
+    APP.importedBlasts = blasts;
+    showImportPreview();
+  };
+  reader.readAsText(file);
+}
+
+function parseDXFEntities(content) {
+  const blasts = [];
+  const lines = content.split('\n').map(l => l.trim());
+  
+  // Find polylines and extract layer names matching our pattern
+  // Pattern: BLASTNAME-HOLETYPE{[Burden][Spacing][BenchHt][Subdrill][Diameter]}
+  const layerPattern = /^(.+?)-(.+?)\{\[([^\]]*)\]\[([^\]]*)\]\[([^\]]*)\]\[([^\]]*)\]\[([^\]]*)\]\}/;
+  
+  const foundLayers = new Set();
+  const polygons = {};
+  
+  // Scan for LWPOLYLINE entities
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === 'LWPOLYLINE' || lines[i] === 'POLYLINE') {
+      // Find the layer name (group code 8)
+      let layer = '';
+      let vertices = [];
+      for (let j = i + 1; j < Math.min(i + 500, lines.length); j++) {
+        if (lines[j] === '8' && lines[j+1]) { layer = lines[j+1]; }
+        if (lines[j] === '10' && lines[j+1]) {
+          const x = parseFloat(lines[j+1]);
+          // Group code 20 = Y
+          if (lines[j+2] === '20' && lines[j+3]) {
+            const y = parseFloat(lines[j+3]);
+            vertices.push({ x, y });
+          }
+        }
+        if (lines[j] === '0') break; // Next entity
+      }
+      
+      if (layer) {
+        foundLayers.add(layer);
+        if (!polygons[layer]) polygons[layer] = [];
+        polygons[layer].push(vertices);
+      }
+    }
+  }
+
+  // Also check for layer names in TABLE section
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === '2' && lines[i-1] === '0' ) {
+      foundLayers.add(lines[i+1] || lines[i]);
+    }
+  }
+
+  const log = document.getElementById('dxfLog');
+  log.innerHTML += `<div class="log-info">Found ${foundLayers.size} layers in DXF</div>`;
+  
+  // Parse layer names
+  foundLayers.forEach(layer => {
+    const match = layer.match(layerPattern);
+    if (match) {
+      const [_, blastName, holeType, burden, spacing, benchHt, subdrill, diameter] = match;
+      
+      // Check if we already have this blast
+      let blast = blasts.find(b => b.name === blastName);
+      if (!blast) {
+        blast = { name: blastName, holeTypes: [], polygons: [] };
+        blasts.push(blast);
+      }
+      
+      blast.holeTypes.push({
+        type: holeType.toUpperCase(),
+        burden: parseFloat(burden) || 0,
+        spacing: parseFloat(spacing) || 0,
+        benchHt: parseFloat(benchHt) || 12,
+        subdrill: parseFloat(subdrill) || 1.5,
+        diam: parseFloat(diameter) || 229,
+        layer: layer,
+        polygon: polygons[layer] || []
+      });
+      
+      log.innerHTML += `<div class="log-ok">✓ ${blastName} → ${holeType} (B:${burden} S:${spacing} BH:${benchHt})</div>`;
+    } else {
+      // Check for simple blast names without the full pattern
+      log.innerHTML += `<div class="log-warn">⚠ Layer "${layer}" doesn't match expected pattern</div>`;
+    }
+  });
+
+  return blasts;
+}
+
+// ============================================================
+//  KIRRA CHARGE CONFIG IMPORT
+// ============================================================
+function parseKirraConfig(file) {
+  const log = document.getElementById('kirraLog');
+  log.innerHTML = `<div class="log-info">Reading ${file.name}...</div>`;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      // Handle various Kirra export formats
+      if (data.chargeConfigs || data.charge_configs) {
+        const configs = data.chargeConfigs || data.charge_configs;
+        APP.chargeConfigs = Array.isArray(configs) ? configs : [configs];
+        log.innerHTML += `<div class="log-ok">✓ Loaded ${APP.chargeConfigs.length} charge config(s)</div>`;
+        
+        APP.chargeConfigs.forEach(cfg => {
+          const name = cfg.name || cfg.configName || 'Unknown';
+          const decks = cfg.decks || cfg.chargeDeck || [];
+          log.innerHTML += `<div class="log-ok">  → ${name}: ${decks.length} deck(s)</div>`;
+        });
+      } else if (data.name || data.configName) {
+        // Single config
+        APP.chargeConfigs = [data];
+        log.innerHTML += `<div class="log-ok">✓ Loaded charge config: ${data.name || data.configName}</div>`;
+      } else {
+        log.innerHTML += `<div class="log-warn">⚠ No charge configs found in file. Expected 'chargeConfigs' or 'charge_configs' key.</div>`;
+      }
+      
+      renderForecast();
+    } catch(err) {
+      log.innerHTML += `<div class="log-err">✗ Parse error: ${err.message}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+//  KIRRA PROJECT FILE IMPORT
+// ============================================================
+function parseKirraProject(file) {
+  const log = document.getElementById('kirraProjectLog');
+  log.innerHTML = `<div class="log-info">Reading ${file.name}...</div>`;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      log.innerHTML += `<div class="log-ok">✓ Parsed Kirra project file</div>`;
+      
+      // Look for known sections
+      const sections = ['blasts','patterns','holes','solids','chargeConfigs','boundaries','surfaces'];
+      sections.forEach(key => {
+        if (data[key]) {
+          const count = Array.isArray(data[key]) ? data[key].length : Object.keys(data[key]).length;
+          log.innerHTML += `<div class="log-ok">  → ${key}: ${count} items</div>`;
+        }
+      });
+      
+      // Import charge configs if present
+      if (data.chargeConfigs) {
+        APP.chargeConfigs = Array.isArray(data.chargeConfigs) ? data.chargeConfigs : [data.chargeConfigs];
+        log.innerHTML += `<div class="log-info">  Charge configs merged into forecast engine</div>`;
+      }
+      
+      // Import solids info
+      if (data.solids) {
+        log.innerHTML += `<div class="log-info">  Solid meshes detected — can be used for volume calculations</div>`;
+      }
+      
+      // Import blast definitions
+      if (data.blasts) {
+        const blastArr = Array.isArray(data.blasts) ? data.blasts : Object.values(data.blasts);
+        blastArr.forEach(b => {
+          const imported = {
+            name: b.name || b.blastName || 'Unknown',
+            holeTypes: (b.holeTypes || []).map(ht => ({
+              type: ht.type || ht.holeType || 'PRODUCTION',
+              burden: ht.burden || 0,
+              spacing: ht.spacing || 0,
+              benchHt: ht.benchHt || ht.benchHeight || 12,
+              subdrill: ht.subdrill || 1.5,
+              diam: ht.diameter || ht.diam || 229
+            })),
+            polygons: b.boundary || b.polygon || []
+          };
+          APP.importedBlasts.push(imported);
+        });
+        showImportPreview();
+      }
+      
+    } catch(err) {
+      log.innerHTML += `<div class="log-err">✗ Parse error: ${err.message}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+//  IMPORT PREVIEW
+// ============================================================
+function showImportPreview() {
+  const container = document.getElementById('importPreview');
+  container.style.display = 'block';
+  
+  let html = '<thead><tr><th>Blast Name</th><th>Hole Types</th><th>Burden</th><th>Spacing</th><th>Bench Ht</th><th>Diam (mm)</th></tr></thead><tbody>';
+  
+  APP.importedBlasts.forEach(b => {
+    b.holeTypes.forEach((ht, i) => {
+      html += `<tr>`;
+      html += i === 0 ? `<td rowspan="${b.holeTypes.length}" style="font-weight:600;color:var(--text-primary)">${b.name}</td>` : '';
+      const badge = ht.type === 'PRESPLIT' ? 'badge-presplit' : ht.type === 'BUFFER' ? 'badge-buffer' : 'badge-production';
+      html += `<td><span class="badge ${badge}">${ht.type}</span></td>`;
+      html += `<td class="num">${ht.burden || '—'}</td>`;
+      html += `<td class="num">${ht.spacing || '—'}</td>`;
+      html += `<td class="num">${ht.benchHt || '—'}</td>`;
+      html += `<td class="num">${ht.diam || '—'}</td>`;
+      html += `</tr>`;
+    });
+  });
+  
+  html += '</tbody>';
+  document.getElementById('importTable').innerHTML = html;
+}
+
+function mergeImported() {
+  APP.importedBlasts.forEach(imp => {
+    // Check if already exists
+    const existing = APP.blasts.find(b => b.name === imp.name);
+    if (existing) {
+      // Update hole types
+      existing.holeTypes = imp.holeTypes.map(ht => ({
+        type: ht.type,
+        diam: (ht.diam || 229) / 1000,
+        burden: ht.burden,
+        spacing: ht.spacing,
+        holes: 0,
+        drillMeters: 0,
+        expMass: 0
+      }));
+    } else {
+      // Calculate estimates from first hole type and pattern match
+      const ht0 = imp.holeTypes[0] || {};
+      const benchHt = ht0.benchHt || 12;
+      
+      APP.blasts.push({
+        name: imp.name, mode: 'Manual', surfaceArea: 0, pattern: '',
+        pctD65: 0, pctPV: 1, rateD65: 19, ratePV: 20, numD65: 0, numPV: 4,
+        loadRate: 100000, d65Meters: 0, pvMeters: 0, volume: 0, expMass: 0,
+        drillStart: isoDate(APP.planStart), drillDays: 1,
+        loadStart: null, loadDays: 0, blastDate: null,
+        status: 'planned',
+        holeTypes: imp.holeTypes.map(ht => ({
+          type: ht.type,
+          diam: (ht.diam || 229) / 1000,
+          burden: ht.burden,
+          spacing: ht.spacing,
+          holes: 0,
+          drillMeters: 0,
+          expMass: 0
+        }))
+      });
+    }
+  });
+
+  APP.importedBlasts = [];
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('dxfLog').innerHTML += `<div class="log-ok">✓ Merged into schedule</div>`;
+  renderGantt();
+  renderBlasts();
+}
+
+function clearImported() {
+  APP.importedBlasts = [];
+  document.getElementById('importPreview').style.display = 'none';
+}
+
+// ============================================================
+//  EXPORT
+// ============================================================
+function exportSchedule() {
+  const data = {
+    exportDate: new Date().toISOString(),
+    settings: {
+      planStart: isoDate(APP.planStart),
+      rigHours: APP.rigHours,
+      availability: APP.availability,
+      utilisation: APP.utilisation
+    },
+    blasts: APP.blasts,
+    patterns: APP.patterns,
+    chargeConfigs: APP.chargeConfigs
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `blast_schedule_${isoDate(new Date())}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+setupDropZone('dxfDropZone', 'dxfFileInput', parseDXFFile);
+setupDropZone('kirraDropZone', 'kirraFileInput', parseKirraConfig);
+setupDropZone('kirraProjectDropZone', 'kirraProjectInput', parseKirraProject);
+
+// Initial render
+recalcDependencies();
+renderGantt();
+renderBlasts();
+renderPatterns();
+renderForecast();
+renderConformance();
+</script>
+</body>
+</html>
