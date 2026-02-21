@@ -1,0 +1,816 @@
+/* ============================================================
+   Blast Scheduler — Main Stylesheet
+   ============================================================ */
+
+/* Step 1) CSS Custom Properties */
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1a2332;
+  --bg-card: #151d2e;
+  --border: #1e2d42;
+  --border-active: #2d4a6f;
+  --text-primary: #e8edf5;
+  --text-secondary: #8899b0;
+  --text-muted: #4a5c73;
+  --accent-drill: #3b82f6;
+  --accent-load: #f59e0b;
+  --accent-blast: #ef4444;
+  --accent-fire: #ff6b35;
+  --accent-green: #10b981;
+  --accent-purple: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --presplit: #a78bfa;
+  --buffer: #38bdf8;
+  --production: #f97316;
+  --waste: #6b7280;
+  --ore: #fbbf24;
+  --yellow-zone: #eab308;
+  --gantt-drill: #3b82f6;
+  --gantt-load: #f59e0b;
+  --gantt-blast: #ef4444;
+  --gantt-complete: #10b981;
+  --gantt-planned: #374151;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --radius: 6px;
+  --radius-lg: 10px;
+}
+
+/* Step 2) Reset */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Step 3) Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-drill); }
+
+/* Step 4) Header */
+.app-header {
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.app-logo svg { width: 32px; height: 32px; }
+.app-logo h1 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent-drill), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.app-logo .subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Step 5) Buttons */
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-active); color: var(--text-primary); background: var(--bg-card); }
+.btn-primary { background: var(--accent-drill); border-color: var(--accent-drill); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: var(--accent-blast); border-color: var(--accent-blast); color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
+.btn-warning { background: var(--accent-load); border-color: var(--accent-load); color: #000; }
+.btn svg { width: 14px; height: 14px; }
+
+/* Step 6) Tabs */
+.tab-bar {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+  overflow-x: auto;
+}
+.tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 10px 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+
+/* Step 7) Main Layout */
+.main-content { padding: 16px 24px; }
+
+/* Tab Panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Step 8) Settings bar */
+.settings-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  align-items: center;
+}
+.setting-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.setting-group label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.setting-group input, .setting-group select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  width: auto;
+  min-width: 80px;
+}
+.setting-group input:focus, .setting-group select:focus {
+  outline: none;
+  border-color: var(--accent-drill);
+}
+
+/* Step 9) Gantt Chart */
+.gantt-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.gantt-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+}
+.gantt-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.gantt-table th, .gantt-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.gantt-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 10;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: center;
+}
+.gantt-table thead th.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--bg-secondary);
+}
+.gantt-table thead th.sticky-col-2 {
+  position: sticky;
+  left: 180px;
+  z-index: 20;
+  background: var(--bg-secondary);
+}
+.gantt-header-month {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.gantt-header-week {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.gantt-header-date {
+  font-size: 10px;
+  min-width: 32px;
+  padding: 2px 1px;
+}
+.gantt-header-date.weekend { color: var(--accent-blast); opacity: 0.6; }
+.gantt-header-date.today { color: var(--accent-cyan); font-weight: 700; }
+
+/* Step 10) Gantt rows */
+.gantt-section-header td {
+  background: var(--bg-tertiary);
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-top: 2px solid var(--border-active);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.gantt-section-header td .section-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.gantt-row td {
+  padding: 3px 1px;
+  border-bottom: 1px solid rgba(30,45,66,0.5);
+  height: 28px;
+  vertical-align: middle;
+}
+.gantt-row td.sticky-col {
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  z-index: 5;
+  padding-left: 16px;
+  padding-right: 8px;
+  min-width: 180px;
+  max-width: 180px;
+  font-weight: 500;
+}
+.gantt-row td.sticky-col-2 {
+  position: sticky;
+  left: 180px;
+  background: var(--bg-card);
+  z-index: 5;
+  padding: 3px 8px;
+  text-align: right;
+  color: var(--text-muted);
+  min-width: 90px;
+}
+.gantt-row:hover td { background: rgba(59,130,246,0.04); }
+.gantt-row:hover td.sticky-col,
+.gantt-row:hover td.sticky-col-2 { background: var(--bg-tertiary); }
+
+/* Step 11) Gantt bar cells */
+.gantt-cell {
+  min-width: 32px;
+  max-width: 32px;
+  position: relative;
+}
+.gantt-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 1px;
+  right: 1px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.gantt-bar:hover { opacity: 0.85; filter: brightness(1.15); }
+.gantt-bar.drill { background: var(--gantt-drill); }
+.gantt-bar.load { background: var(--gantt-load); }
+.gantt-bar.blast { background: var(--gantt-blast); }
+.gantt-bar.complete { background: var(--gantt-complete); }
+.gantt-bar.planned { background: var(--gantt-planned); border: 1px dashed var(--text-muted); }
+.gantt-bar.milestone {
+  background: var(--accent-fire);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+}
+.gantt-bar .dep-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--accent-purple);
+  z-index: 2;
+  pointer-events: none;
+}
+.gantt-bar .dep-marker::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7px;
+  color: var(--accent-purple);
+  white-space: nowrap;
+  font-weight: 700;
+}
+.gantt-bar.drill-load-overlap {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--gantt-drill),
+    var(--gantt-drill) 3px,
+    var(--gantt-load) 3px,
+    var(--gantt-load) 6px
+  );
+}
+.dep-warning {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 9px;
+  border-radius: 50%;
+  background: rgba(239,68,68,0.2);
+  color: var(--accent-blast);
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
+}
+.dep-ok {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 9px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.2);
+  color: var(--accent-green);
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
+}
+.dep-link-indicator {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  color: var(--accent-purple);
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  background: var(--accent-purple);
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 2px;
+  line-height: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent-cyan);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Step 12) Stats cards */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.stat-card .stat-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.stat-card .stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.stat-card .stat-unit {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.stat-card .stat-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.stat-card.accent-blue { border-left: 3px solid var(--accent-drill); }
+.stat-card.accent-amber { border-left: 3px solid var(--accent-load); }
+.stat-card.accent-red { border-left: 3px solid var(--accent-blast); }
+.stat-card.accent-green { border-left: 3px solid var(--accent-green); }
+.stat-card.accent-purple { border-left: 3px solid var(--accent-purple); }
+.stat-card.accent-cyan { border-left: 3px solid var(--accent-cyan); }
+
+/* Step 13) Data table */
+.data-table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.data-table-container .table-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+}
+.data-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(30,45,66,0.3);
+  color: var(--text-secondary);
+}
+.data-table tr:hover td { background: rgba(59,130,246,0.04); }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Step 14) Status badges */
+.badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+.badge-drill { background: rgba(59,130,246,0.15); color: var(--accent-drill); }
+.badge-load { background: rgba(245,158,11,0.15); color: var(--accent-load); }
+.badge-blast { background: rgba(239,68,68,0.15); color: var(--accent-blast); }
+.badge-complete { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+.badge-active { background: rgba(6,182,212,0.15); color: var(--accent-cyan); }
+.badge-presplit { background: rgba(167,139,250,0.15); color: var(--presplit); }
+.badge-buffer { background: rgba(56,189,248,0.15); color: var(--buffer); }
+.badge-production { background: rgba(249,115,22,0.15); color: var(--production); }
+
+/* Step 15) Pattern cards */
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pattern-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: border-color 0.15s;
+}
+.pattern-card:hover { border-color: var(--border-active); }
+.pattern-card .pattern-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 8px;
+}
+.pattern-card .pattern-detail {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 11px;
+}
+.pattern-card .pattern-detail .label { color: var(--text-muted); }
+.pattern-card .pattern-detail .value { color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+
+/* Step 16) File drop zone */
+.drop-zone {
+  border: 2px dashed var(--border-active);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  margin-bottom: 16px;
+  background: rgba(59,130,246,0.02);
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent-drill);
+  background: rgba(59,130,246,0.06);
+}
+.drop-zone .drop-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.drop-zone .drop-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.drop-zone .drop-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.drop-zone input[type="file"] { display: none; }
+
+/* Step 17) Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+.modal-body { padding: 20px; }
+.modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Step 18) Form fields */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.form-field label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.form-field input, .form-field select {
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+}
+.form-field input:focus, .form-field select:focus {
+  outline: none;
+  border-color: var(--accent-drill);
+}
+
+/* Step 19) Import log */
+.import-log {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.import-log .log-ok { color: var(--accent-green); }
+.import-log .log-warn { color: var(--accent-load); }
+.import-log .log-err { color: var(--accent-blast); }
+.import-log .log-info { color: var(--accent-cyan); }
+
+/* Step 20) Conformance bar */
+.conformance-bar {
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.conformance-bar .fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s;
+}
+
+/* Step 21) Tooltip */
+.tooltip {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  z-index: 2000;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  max-width: 300px;
+  display: none;
+}
+.tooltip .tt-title { font-weight: 700; margin-bottom: 4px; color: var(--accent-cyan); }
+.tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; color: var(--text-secondary); }
+.tooltip .tt-row .tt-val { color: var(--text-primary); }
+
+/* Step 22) Context menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 3000;
+  min-width: 180px;
+  padding: 4px 0;
+  display: none;
+}
+.context-menu .ctx-item {
+  padding: 7px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.context-menu .ctx-item:hover {
+  background: rgba(59,130,246,0.08);
+  color: var(--text-primary);
+}
+.context-menu .ctx-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* Step 23) Utility helpers */
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.gap-8 { gap: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mt-8 { margin-top: 8px; }
+
+/* Step 24) Blinking indicator */
+@keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+.live-dot {
+  width: 6px; height: 6px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 2s infinite;
+  margin-right: 6px;
+}
+
+/* Step 25) Forecast table */
+.forecast-table { margin-top: 12px; }
+
+/* Step 26) Gantt drag-to-move */
+.gantt-bar.drill {
+  cursor: grab;
+}
+.gantt-bar.drill:active,
+.gantt-bar-dragging {
+  cursor: grabbing;
+  box-shadow: 0 2px 12px rgba(59,130,246,0.4);
+}
+.gantt-bar.drill.planned {
+  cursor: grab;
+}
+
+/* Step 27) Equipment table multi-select */
+select[multiple] {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  padding: 4px;
+}
+select[multiple] option {
+  padding: 3px 6px;
+}
+select[multiple] option:checked {
+  background: var(--accent-drill);
+  color: #fff;
+}
+
+/* Step 28) Maintenance overlap cells in Gantt */
+.gantt-cell.maint-overlap {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(239,68,68,0.08) 3px,
+    rgba(239,68,68,0.08) 6px
+  );
+}

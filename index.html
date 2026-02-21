@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minesite Drill & Blast Scheduler</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Step 1) Header -->
+<header class="app-header">
+  <div class="app-logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <rect x="2" y="2" width="28" height="28" rx="6" fill="#1a2332" stroke="#3b82f6" stroke-width="1.5"/>
+      <path d="M16 6L16 18" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M12 18L20 18" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="16" cy="22" r="3" fill="#ef4444" opacity="0.8"/>
+      <path d="M13 22L19 22" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="22" cy="10" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="10" cy="14" r="1.5" fill="#3b82f6" opacity="0.4"/>
+      <circle cx="22" cy="14" r="1.5" fill="#3b82f6" opacity="0.4"/>
+    </svg>
+    <div>
+      <h1>BLAST SCHEDULER</h1>
+      <div class="subtitle">Minesite Drill & Blast Planning</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn" id="btnExport">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button class="btn btn-primary" id="btnAddBlast">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Blast
+    </button>
+  </div>
+</header>
+
+<!-- Step 2) Tab bar -->
+<nav class="tab-bar">
+  <div class="tab active" data-tab="gantt">GANTT SCHEDULE</div>
+  <div class="tab" data-tab="blasts">BLAST OVERVIEW</div>
+  <div class="tab" data-tab="patterns">PATTERN LIBRARY</div>
+  <div class="tab" data-tab="forecast">EXPLOSIVE FORECAST</div>
+  <div class="tab" data-tab="conformance">CONFORMANCE</div>
+  <div class="tab" data-tab="equipment">EQUIPMENT</div>
+  <div class="tab" data-tab="import">IMPORT / DXF</div>
+</nav>
+
+<!-- Step 3) Main content area -->
+<main class="main-content">
+
+  <!-- GANTT TAB -->
+  <div id="tab-gantt" class="tab-panel active">
+    <div class="settings-bar">
+      <div class="setting-group">
+        <label>Plan Start</label>
+        <input type="date" id="planStartDate" value="2026-02-25">
+      </div>
+      <div class="setting-group">
+        <label>Weeks</label>
+        <input type="number" id="ganttWeeks" value="8" min="2" max="26" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Rig Hours</label>
+        <input type="number" id="rigHours" value="24" min="1" max="24" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Availability</label>
+        <input type="number" id="rigAvail" value="0.85" min="0" max="1" step="0.05" style="width:60px">
+      </div>
+      <div class="setting-group">
+        <label>Utilisation</label>
+        <input type="number" id="rigUtil" value="0.75" min="0" max="1" step="0.05" style="width:60px">
+      </div>
+      <button class="btn btn-primary" id="btnRefreshGantt" style="margin-left:auto">Refresh Gantt</button>
+    </div>
+
+    <!-- Dependency settings bar -->
+    <div class="settings-bar" style="border-left:3px solid var(--accent-purple);">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:8px;">Dependencies</div>
+      <div class="setting-group">
+        <label>Drill % to Load</label>
+        <input type="number" id="depDrillForLoad" value="0.5" min="0" max="1" step="0.05" style="width:60px" title="Loading can start once drilling reaches this % complete">
+      </div>
+      <div class="setting-group">
+        <label>Drill % to Blast</label>
+        <input type="number" id="depDrillForBlast" value="1.0" min="0" max="1" step="0.05" style="width:60px" title="Blast requires drilling at this % complete">
+      </div>
+      <div class="setting-group" style="opacity:0.6;" title="Loading must be 100% complete before blasting — this is a hard constraint">
+        <label>Load % to Blast</label>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-blast);font-weight:700;padding:5px 8px;">100% (fixed)</span>
+      </div>
+      <div class="setting-group">
+        <label>Lead Days</label>
+        <input type="number" id="depMinLead" value="0" min="0" max="14" style="width:50px" title="Minimum days between load complete and blast">
+      </div>
+      <div class="setting-group">
+        <label style="display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="depEnforceSeq" checked style="width:auto;min-width:auto;accent-color:var(--accent-purple);">
+          Enforce Sequence
+        </label>
+      </div>
+      <button class="btn" id="btnRecalcDates" style="margin-left:auto;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        Recalc Dates
+      </button>
+    </div>
+
+    <div class="stats-row" id="ganttStats"></div>
+    <div class="gantt-container">
+      <div class="gantt-scroll" id="ganttScroll">
+        <table class="gantt-table" id="ganttTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLAST OVERVIEW TAB -->
+  <div id="tab-blasts" class="tab-panel">
+    <div class="stats-row" id="blastStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">
+        <span class="live-dot"></span> Active Blasts
+      </div>
+      <div style="overflow-x:auto; max-height: calc(100vh - 320px);">
+        <table class="data-table" id="blastTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PATTERN LIBRARY TAB -->
+  <div id="tab-patterns" class="tab-panel">
+    <div class="flex-between mb-16">
+      <h2 style="font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--text-secondary);">Production Drill & Blast Patterns</h2>
+      <button class="btn" id="btnAddPattern">Add Pattern</button>
+    </div>
+    <div class="pattern-grid" id="patternGrid"></div>
+  </div>
+
+  <!-- EXPLOSIVE FORECAST TAB -->
+  <div id="tab-forecast" class="tab-panel">
+    <div class="settings-bar">
+      <div class="setting-group">
+        <label>Loading Rate (kg/day)</label>
+        <input type="number" id="loadingRate" value="100000" style="width:100px">
+      </div>
+      <div class="setting-group">
+        <label>Charge Config Source</label>
+        <select id="chargeSource">
+          <option value="designed">Designed (from Gantt data)</option>
+          <option value="kirra">Kirra Charge Config</option>
+        </select>
+      </div>
+    </div>
+    <div class="stats-row" id="forecastStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">Weekly Explosive Forecast</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="forecastTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFORMANCE TAB -->
+  <div id="tab-conformance" class="tab-panel">
+    <div class="stats-row" id="confStats"></div>
+    <div class="data-table-container">
+      <div class="table-title">Monthly Drill & Blast Conformance</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="confTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EQUIPMENT TAB -->
+  <div id="tab-equipment" class="tab-panel">
+    <div class="stats-row" id="equipStats"></div>
+
+    <!-- Drill Rigs Section -->
+    <div class="data-table-container">
+      <div class="table-title" style="justify-content:space-between;">
+        <span>Drill Rigs</span>
+        <button class="btn" id="btnAddDrill">+ Add Drill</button>
+      </div>
+      <div style="overflow-x:auto; max-height:300px;">
+        <table class="data-table" id="drillTable"></table>
+      </div>
+    </div>
+
+    <!-- Mobile Processing Units Section -->
+    <div class="data-table-container">
+      <div class="table-title" style="justify-content:space-between;">
+        <span>Mobile Processing Units (MPUs)</span>
+        <button class="btn" id="btnAddMPU">+ Add MPU</button>
+      </div>
+      <div style="overflow-x:auto; max-height:250px;">
+        <table class="data-table" id="mpuTable"></table>
+      </div>
+    </div>
+
+    <!-- People Section -->
+    <div class="data-table-container">
+      <div class="table-title" style="justify-content:space-between;">
+        <span>Personnel</span>
+        <button class="btn" id="btnAddPerson">+ Add Person</button>
+      </div>
+      <div style="overflow-x:auto; max-height:300px;">
+        <table class="data-table" id="peopleTable"></table>
+      </div>
+    </div>
+
+    <!-- Maintenance Schedule Section -->
+    <div class="data-table-container">
+      <div class="table-title" style="justify-content:space-between;">
+        <span style="color:var(--accent-blast)">Maintenance Schedule</span>
+        <button class="btn" id="btnAddMaintenance">+ Add Maintenance</button>
+      </div>
+      <div style="overflow-x:auto; max-height:300px;">
+        <table class="data-table" id="maintenanceTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT TAB -->
+  <div id="tab-import" class="tab-panel">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+      <!-- DXF Import -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-drill); margin-bottom:12px;">DXF Polygon Import</h3>
+        <div class="drop-zone" id="dxfDropZone">
+          <div class="drop-icon">&#x1F4D0;</div>
+          <div class="drop-text">Drop DXF file here</div>
+          <div class="drop-sub">Format: BLASTNAME-HOLETYPE{[Burden][Spacing][BenchHt][Subdrill][Diameter]}</div>
+          <input type="file" id="dxfFileInput" accept=".dxf">
+        </div>
+        <div class="import-log" id="dxfLog">
+          <span class="log-info">Ready for DXF import...</span>
+        </div>
+      </div>
+
+      <!-- Kirra Config Import -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-purple); margin-bottom:12px;">Kirra Charge Config Import</h3>
+        <div class="drop-zone" id="kirraDropZone">
+          <div class="drop-icon">&#x26A1;</div>
+          <div class="drop-text">Drop Kirra Charge Config Export</div>
+          <div class="drop-sub">JSON export from Kirra App for site-based charging</div>
+          <input type="file" id="kirraFileInput" accept=".json,.kirra">
+        </div>
+        <div class="import-log" id="kirraLog">
+          <span class="log-info">Ready for Kirra config import...</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <h3 style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent-green); margin-bottom:12px;">Kirra Project File Import</h3>
+      <div class="drop-zone" id="kirraProjectDropZone" style="padding:24px;">
+        <div class="drop-icon">&#x1F5C2;</div>
+        <div class="drop-text">Drop Kirra Project File (.kirra / .json)</div>
+        <div class="drop-sub">May include Solids, Blast Boundaries, Hole Data, and Charge Configs</div>
+        <input type="file" id="kirraProjectInput" accept=".json,.kirra">
+      </div>
+      <div class="import-log" id="kirraProjectLog">
+        <span class="log-info">Ready for Kirra project import...</span>
+      </div>
+    </div>
+
+    <!-- Imported blasts preview -->
+    <div class="data-table-container mt-8" id="importPreview" style="display:none;">
+      <div class="table-title">Imported Blast Definitions</div>
+      <div style="overflow-x:auto; max-height:300px;">
+        <table class="data-table" id="importTable"></table>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <button class="btn btn-success" id="btnMergeImported">Merge into Schedule</button>
+        <button class="btn" id="btnClearImported" style="margin-left:8px;">Discard</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Step 4) Tooltip -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Step 5) Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <div class="ctx-item" id="ctxEdit">&#x270F;&#xFE0F; Edit Blast</div>
+  <div class="ctx-item" id="ctxDrilling">&#x1F535; Set Drilling</div>
+  <div class="ctx-item" id="ctxLoading">&#x1F7E1; Set Loading</div>
+  <div class="ctx-item" id="ctxFired">&#x1F534; Set Fired</div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item" id="ctxDuplicate">&#x1F4CB; Duplicate</div>
+  <div class="ctx-item" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove</div>
+</div>
+
+<!-- Step 6) Add/Edit Blast Modal -->
+<div class="modal-overlay" id="blastModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="blastModalTitle">Add Blast</h3>
+      <button class="modal-close" id="btnCloseBlastModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Blast Name</label>
+          <input type="text" id="fBlastName" placeholder="e.g. S4_226_413">
+        </div>
+        <div class="form-field">
+          <label>Mode</label>
+          <select id="fBlastMode">
+            <option value="Manual">Manual</option>
+            <option value="Auto">Auto</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Surface Area (m2)</label>
+          <input type="number" id="fSurfaceArea" placeholder="0">
+        </div>
+        <div class="form-field">
+          <label>Pattern Selection</label>
+          <select id="fPattern"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Drill Start Date</label>
+          <input type="date" id="fDrillStart">
+        </div>
+        <div class="form-field">
+          <label>% D65 / % PV271</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="fPctD65" value="0" min="0" max="1" step="0.1" style="width:50%">
+            <input type="number" id="fPctPV" value="1" min="0" max="1" step="0.1" style="width:50%">
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Loading Rate (kg/day)</label>
+          <input type="number" id="fLoadRate" value="100000">
+        </div>
+        <div class="form-field">
+          <label>Volume (bcm) — auto-calculated if area set</label>
+          <input type="number" id="fVolume" placeholder="Auto from pattern">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Explosive Mass (kg) — auto from PF</label>
+          <input type="number" id="fExpMass" placeholder="Auto from PF x Volume">
+        </div>
+        <div class="form-field">
+          <label>D65 Rate (m/day)</label>
+          <input type="number" id="fRateD65" value="19">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>PV271 Rate (m/day)</label>
+          <input type="number" id="fRatePV" value="20">
+        </div>
+        <div class="form-field">
+          <label># D65s / # PVs</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="fNumD65" value="0" style="width:50%">
+            <input type="number" id="fNumPV" value="4" style="width:50%">
+          </div>
+        </div>
+      </div>
+
+      <!-- Equipment Assignment -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          Equipment Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign drills and MPU to this blast</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Assigned Drills (multi-select)</label>
+            <select id="fAssignedDrills" multiple style="height:80px;"></select>
+          </div>
+          <div class="form-field">
+            <label>Assigned MPU</label>
+            <select id="fAssignedMPU"></select>
+            <div id="fDrillCompatWarning" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent-blast);margin-top:4px;display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dependency Overrides -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          Dependency Overrides <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— leave blank to use global defaults</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Drill % to Start Loading</label>
+            <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="1" step="0.05">
+          </div>
+          <div class="form-field">
+            <label>Drill % to Blast</label>
+            <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="1" step="0.05">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="opacity:0.5;" title="Loading must be 100% complete before blasting — this cannot be overridden">
+            <label>Load % to Blast</label>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-blast);font-weight:700;padding:7px 10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border);">100% — HARD CONSTRAINT</div>
+          </div>
+          <div class="form-field">
+            <label>Min Lead Days (Load to Blast)</label>
+            <input type="number" id="fDepMinLead" placeholder="Global: 0" min="0" max="30">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Predecessor Blast</label>
+            <select id="fDepPredecessor">
+              <option value="">— None —</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Predecessor Constraint</label>
+            <select id="fDepPredType">
+              <option value="blast-before-drill">Predecessor must fire before drill starts</option>
+              <option value="blast-before-load">Predecessor must fire before loading starts</option>
+              <option value="drill-before-drill">Predecessor drill done before this drill</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnCancelBlastModal">Cancel</button>
+      <button class="btn btn-primary" id="blastModalSave">Add Blast</button>
+    </div>
+  </div>
+</div>
+
+<!-- Step 7) Equipment Modal (Add/Edit Drill, MPU, Person) -->
+<div class="modal-overlay" id="equipmentModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="equipModalTitle">Add Equipment</h3>
+      <button class="modal-close" id="btnCloseEquipModal">&times;</button>
+    </div>
+    <div class="modal-body" id="equipModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn" id="btnCancelEquipModal">Cancel</button>
+      <button class="btn btn-primary" id="equipModalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Step 8) Maintenance Modal -->
+<div class="modal-overlay" id="maintenanceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="maintModalTitle">Add Maintenance Window</h3>
+      <button class="modal-close" id="btnCloseMaintModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Equipment</label>
+          <select id="fMaintEquip"></select>
+        </div>
+        <div class="form-field">
+          <label>Reason</label>
+          <input type="text" id="fMaintReason" placeholder="e.g. 5000hr Service">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Start Date</label>
+          <input type="date" id="fMaintStart">
+        </div>
+        <div class="form-field">
+          <label>End Date</label>
+          <input type="date" id="fMaintEnd">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnCancelMaintModal">Cancel</button>
+      <button class="btn btn-danger" id="maintModalSave">Add Maintenance</button>
+    </div>
+  </div>
+</div>
+
+<!-- Step 9) Application entry point -->
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
