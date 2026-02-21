@@ -15,6 +15,7 @@ import { initGanttDrag } from "./ui/ganttDrag.js";
 import { initThemeToggle } from "./ui/themeToggle.js";
 import { initBlastModal } from "./dialogs/blastModal.js";
 import { initEquipmentModals } from "./dialogs/equipmentModal.js";
+import { initBlockEditModal } from "./dialogs/blockEditModal.js";
 import { initImportPreview } from "./io/importPreview.js";
 import { initExport } from "./io/exportSchedule.js";
 import { setupDropZone } from "./io/dropZone.js";
@@ -33,6 +34,7 @@ initTabs();
 initContextMenu();
 initBlastModal();
 initEquipmentModals();
+initBlockEditModal();
 initImportPreview();
 initExport();
 

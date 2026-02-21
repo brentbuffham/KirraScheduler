@@ -1,10 +1,12 @@
 // ============================================================
 //  DEPENDENCY ENGINE
 //  Calculates load/blast dates based on dependency thresholds
+//  Block-aware: uses latest block end when blast has drillBlocks
 // ============================================================
 
 import { APP } from "../state/appState.js";
 import { drills, isDrillInMaintenance } from "../state/equipmentState.js";
+import { hasBlocks, syncBlastFromBlocks, getLatestBlockEnd } from "../engine/blockHelpers.js";
 import { addDays, isoDate, formatDate } from "../utils/dateUtils.js";
 
 // Step 1) Get effective dependency values for a blast (per-blast override or global)
@@ -14,7 +16,7 @@ function getBlastDeps(blast) {
   return {
     drillPctForLoad:  (b.drillPctForLoad  !== null && b.drillPctForLoad  !== undefined && b.drillPctForLoad  !== "") ? parseFloat(b.drillPctForLoad) : g.drillPctForLoad,
     drillPctForBlast: (b.drillPctForBlast !== null && b.drillPctForBlast !== undefined && b.drillPctForBlast !== "") ? parseFloat(b.drillPctForBlast) : g.drillPctForBlast,
-    loadPctForBlast:  1.0,  // HARD CONSTRAINT: loading must be 100% complete before blasting
+    loadPctForBlast:  1.0,
     minLeadDays:      (b.minLeadDays      !== null && b.minLeadDays      !== undefined && b.minLeadDays      !== "") ? parseInt(b.minLeadDays) : g.minLeadDays,
     predecessor:      b.predecessor || null,
     predType:         b.predType || "blast-before-drill",
@@ -26,15 +28,19 @@ function recalcDependencies() {
   // Step 2a) Read global settings from UI
   APP.deps.drillPctForLoad  = parseFloat(document.getElementById("depDrillForLoad").value) || 0;
   APP.deps.drillPctForBlast = parseFloat(document.getElementById("depDrillForBlast").value) || 1;
-  APP.deps.loadPctForBlast  = 1.0; // Hard constraint: always 100%
+  APP.deps.loadPctForBlast  = 1.0;
   APP.deps.minLeadDays      = parseInt(document.getElementById("depMinLead").value) || 0;
   APP.deps.enforceSequence  = document.getElementById("depEnforceSeq").checked;
 
   // Step 2b) Process each blast
   APP.blasts.forEach(function(blast, idx) {
+    // Step 2b-i) Sync block-level derived values if blast has blocks
+    if (hasBlocks(blast)) {
+      syncBlastFromBlocks(blast);
+    }
+
     if (!blast.drillStart || !blast.drillDays) return;
 
-    // Step 2b-i) Reset warnings before recalculating
     blast._depWarning = "";
 
     var deps = getBlastDeps(blast);
@@ -42,8 +48,17 @@ function recalcDependencies() {
     var drillDays = blast.drillDays || 1;
 
     // Step 2c) Loading start: after drill reaches threshold %
+    // For block-aware: use the overall span, not individual blocks
     var drillDaysForLoad = Math.ceil(drillDays * deps.drillPctForLoad);
     var loadEarliest = addDays(drillStartDate, drillDaysForLoad);
+
+    // Step 2c-i) For blocks, calculate based on total meters completion across all blocks
+    if (hasBlocks(blast)) {
+      var latestEnd = getLatestBlockEnd(blast);
+      if (latestEnd && deps.drillPctForLoad >= 1.0) {
+        loadEarliest = addDays(latestEnd, 1);
+      }
+    }
 
     // Step 2d) Predecessor constraint
     if (deps.predecessor) {
@@ -70,7 +85,22 @@ function recalcDependencies() {
 
     // Step 2e) Check maintenance conflicts for assigned drills
     blast._maintWarnings = [];
-    if (blast.assignedDrills && blast.assignedDrills.length > 0) {
+    if (hasBlocks(blast)) {
+      // Step 2e-i) Per-block maintenance checks
+      blast.drillBlocks.forEach(function(block) {
+        if (!block.drillStart || !block.assignedDrills) return;
+        var blockEnd = isoDate(addDays(new Date(block.drillStart), (block.drillDays || 1) - 1));
+        block.assignedDrills.forEach(function(drillId) {
+          var drill = drills.find(function(d) { return d.id === drillId; });
+          if (!drill) return;
+          (drill.maintenance || []).forEach(function(m) {
+            if (m.end >= block.drillStart && m.start <= blockEnd) {
+              blast._maintWarnings.push(drill.id + " [Block " + block.label + "] maint " + formatDate(m.start) + "-" + formatDate(m.end) + " (" + m.reason + ")");
+            }
+          });
+        });
+      });
+    } else if (blast.assignedDrills && blast.assignedDrills.length > 0) {
       var drillEndStr = isoDate(addDays(drillStartDate, drillDays - 1));
       blast.assignedDrills.forEach(function(drillId) {
         var drill = drills.find(function(d) { return d.id === drillId; });
@@ -100,6 +130,12 @@ function recalcDependencies() {
     // Step 2g) Blasting date: after both drill and load thresholds met + lead days
     var drillDaysForBlast = Math.ceil(drillDays * deps.drillPctForBlast);
     var drillReadyDate = addDays(drillStartDate, drillDaysForBlast);
+
+    // Step 2g-i) For blocks with 100% requirement, use latest block end
+    if (hasBlocks(blast) && deps.drillPctForBlast >= 1.0) {
+      var latestEnd2 = getLatestBlockEnd(blast);
+      if (latestEnd2) drillReadyDate = addDays(latestEnd2, 1);
+    }
 
     var loadStartForCalc = new Date(blast.loadStart);
     var loadDaysForBlast = Math.ceil(blast.loadDays * deps.loadPctForBlast);

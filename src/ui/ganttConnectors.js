@@ -45,13 +45,44 @@ function renderConnectors() {
   svg.appendChild(defs);
 
   // Step 6) Gather blast rows indexed by (blastIdx, section)
+  // For blocks: store array of drilling rows, pick last-ending for connector anchor
   var groups = {};
   var allRows = document.querySelectorAll(".gantt-row[data-blast]");
   allRows.forEach(function(row) {
     var key = row.dataset.blast;
     var sec = row.dataset.section;
     if (!groups[key]) groups[key] = {};
-    groups[key][sec] = row;
+
+    if (sec === "drilling" && row.dataset.block !== undefined) {
+      // Step 6a) Block row — collect all, pick the one with the furthest-right bar
+      if (!groups[key]._drillRows) groups[key]._drillRows = [];
+      groups[key]._drillRows.push(row);
+    } else {
+      groups[key][sec] = row;
+    }
+  });
+
+  // Step 6b) For block blasts, find the last-ending drilling row
+  Object.keys(groups).forEach(function(key) {
+    var g = groups[key];
+    if (g._drillRows && g._drillRows.length > 0 && !g.drilling) {
+      var lastRow = null;
+      var lastRight = -Infinity;
+      g._drillRows.forEach(function(row) {
+        var bars = row.querySelectorAll(".gantt-bar");
+        if (!bars.length) return;
+        var lastBar = bars[bars.length - 1];
+        var cell = lastBar.closest("td");
+        if (cell) {
+          var r = cell.getBoundingClientRect();
+          if (r.right > lastRight) {
+            lastRight = r.right;
+            lastRow = row;
+          }
+        }
+      });
+      if (lastRow) g.drilling = lastRow;
+    }
   });
 
   // Step 7) Draw connectors for each blast

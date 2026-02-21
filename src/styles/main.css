@@ -35,7 +35,7 @@
   --gantt-planned: #374151;
   --shadow: 0 4px 24px rgba(0,0,0,0.5);
   --radius: 4px;
-  --radius-lg: 8px;
+  --radius-lg: 4px;
   --hover-overlay: rgba(255,255,255,0.03);
   color-scheme: dark;
 }
@@ -130,7 +130,7 @@ body {
   gap: 12px;
 }
 .app-logo svg { width: 32px; height: 32px; }
-.app-logo img { width: 32px; height: 32px; border-radius: 6px; }
+.app-logo img { width: 32px; height: 32px; border-radius: var(--radius); }
 .app-logo h1 {
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
@@ -436,6 +436,42 @@ body {
     var(--gantt-load) 6px
   );
 }
+/* Step 11b) Inline edit icon on blast name cells */
+.gantt-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.gantt-edit-btn:hover {
+  opacity: 1;
+  color: var(--accent-brand);
+}
+.gantt-row td.sticky-col:hover .gantt-edit-btn {
+  opacity: 0.8;
+}
+
+/* Step 11c) Block sub-row styling */
+.gantt-block-row td.sticky-col {
+  padding-left: 26px;
+  font-size: 11px;
+}
+.block-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-drill);
+  margin-right: 2px;
+}
+
 .dep-warning {
   display: inline-block;
   width: 16px;
@@ -587,7 +623,7 @@ body {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   display: inline-block;
