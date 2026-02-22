@@ -128,7 +128,7 @@ function refreshPlayback() {
   // Step 2b-i) Collect from surfaces
   var surfaces = APP.kirraProjectSurfaces || [];
   surfaces.forEach(function(s) {
-    if (s.bounds) {
+    if (s.bounds && isFinite(s.bounds.minX) && isFinite(s.bounds.maxX)) {
       allX.push(s.bounds.minX, s.bounds.maxX);
       allY.push(s.bounds.minY, s.bounds.maxY);
       allZ.push(s.bounds.minZ, s.bounds.maxZ);
@@ -138,6 +138,18 @@ function refreshPlayback() {
         allX.push(p.x);
         allY.push(p.y);
         allZ.push(p.z || 0);
+      });
+      hasSpatial = true;
+    } else if (s.triangles && s.triangles.length > 0 && s.triangles[0].vertices) {
+      // Step 2b-i-KAP) Vertex-per-triangle format — sample first+last triangle for bounds
+      var sample = [s.triangles[0], s.triangles[Math.floor(s.triangles.length / 2)], s.triangles[s.triangles.length - 1]];
+      sample.forEach(function(tri) {
+        if (!tri.vertices) return;
+        tri.vertices.forEach(function(v) {
+          allX.push(v.x);
+          allY.push(v.y);
+          allZ.push(v.z || 0);
+        });
       });
       hasSpatial = true;
     }

@@ -25,6 +25,7 @@ import { initResetDialog } from "./dialogs/resetDialog.js";
 import { setupDropZone } from "./io/dropZone.js";
 import { parseDXFFile } from "./io/dxfImport.js";
 import { parseKirraConfig, parseKirraProject } from "./io/kirraImport.js";
+import { initKAPImport } from "./io/kapImport.js";
 import { renderGantt } from "./views/ganttView.js";
 import { renderBlasts } from "./views/blastOverview.js";
 import { renderPatterns } from "./views/patternLibrary.js";
@@ -78,5 +79,8 @@ initDelayPalette();
 
 // Step 9) Initialise 3D Playback view (lazy — scene created when tab shown)
 initPlaybackView();
+
+// Step 10) Initialise KAP file import
+initKAPImport();
 
 console.log("Kirra Scheduler initialised.");

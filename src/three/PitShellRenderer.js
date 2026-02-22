@@ -44,32 +44,61 @@ function addSurface(name, points, triangles, options) {
   var visible = opts.visible !== undefined ? opts.visible : true;
 
   // Step 3a) Find Z range for gradient
+  // Handles both indexed (points[]) and vertex-per-triangle (triangles[].vertices) formats
   var minZ = Infinity;
   var maxZ = -Infinity;
-  for (var i = 0; i < points.length; i++) {
-    var z = points[i].z || 0;
-    if (z < minZ) minZ = z;
-    if (z > maxZ) maxZ = z;
+
+  var hasVertexPerTri = triangles.length > 0 && triangles[0].vertices !== undefined;
+  if (hasVertexPerTri) {
+    for (var i = 0; i < triangles.length; i++) {
+      var verts = triangles[i].vertices;
+      if (!verts) continue;
+      for (var v = 0; v < verts.length; v++) {
+        var z = verts[v].z || 0;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+      }
+    }
+  } else {
+    for (var i = 0; i < points.length; i++) {
+      var z = points[i].z || 0;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
   }
   var zRange = maxZ - minZ;
   if (zRange < 0.01) zRange = 1;
 
   // Step 3b) Build BufferGeometry
+  // Supports two triangle formats:
+  //   Indexed: { a, b, c } referencing points[] array
+  //   Vertex-per-tri: { vertices: [{x,y,z}, {x,y,z}, {x,y,z}] } (KAP format)
+  var isVertexPerTri = triangles.length > 0 && triangles[0].vertices !== undefined;
+
   var positions = new Float32Array(triangles.length * 3 * 3);
   var colors = new Float32Array(triangles.length * 3 * 3);
   var idx = 0;
 
   for (var t = 0; t < triangles.length; t++) {
     var tri = triangles[t];
-    var ia = tri.a !== undefined ? tri.a : tri[0];
-    var ib = tri.b !== undefined ? tri.b : tri[1];
-    var ic = tri.c !== undefined ? tri.c : tri[2];
+    var pa, pb, pc;
 
-    if (ia >= points.length || ib >= points.length || ic >= points.length) continue;
-
-    var pa = points[ia];
-    var pb = points[ib];
-    var pc = points[ic];
+    if (isVertexPerTri) {
+      // Step 3b-KAP) Vertex-per-triangle format from KAP files
+      if (!tri.vertices || tri.vertices.length < 3) continue;
+      pa = tri.vertices[0];
+      pb = tri.vertices[1];
+      pc = tri.vertices[2];
+    } else {
+      // Step 3b-IDX) Indexed format with points[] array
+      var ia = tri.a !== undefined ? tri.a : tri[0];
+      var ib = tri.b !== undefined ? tri.b : tri[1];
+      var ic = tri.c !== undefined ? tri.c : tri[2];
+      if (ia >= points.length || ib >= points.length || ic >= points.length) continue;
+      pa = points[ia];
+      pb = points[ib];
+      pc = points[ic];
+    }
 
     var va = toLocal(pa.x, pa.y, pa.z || 0);
     var vb = toLocal(pb.x, pb.y, pb.z || 0);

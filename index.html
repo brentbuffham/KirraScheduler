@@ -348,16 +348,33 @@
       </div>
     </div>
 
-    <div style="margin-top:16px;">
-      <h3 style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent-green); margin-bottom:12px;">Kirra Project File Import</h3>
-      <div class="drop-zone" id="kirraProjectDropZone" style="padding:24px;">
-        <div class="drop-icon">&#x1F5C2;</div>
-        <div class="drop-text">Drop Kirra Project File (.kgp / .kirra / .json)</div>
-        <div class="drop-sub">.kgp restores full scheduler state; .kirra/.json imports Solids, Boundaries, Hole Data, Charge Configs</div>
-        <input type="file" id="kirraProjectInput" accept=".json,.kirra,.kgp">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+      <!-- Kirra Project File (.kgp / .kirra / .json) -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent-green); margin-bottom:12px;">Kirra Scheduler Project Import</h3>
+        <div class="drop-zone" id="kirraProjectDropZone" style="padding:24px;">
+          <div class="drop-icon">&#x1F5C2;</div>
+          <div class="drop-text">Drop .kgp / .kirra / .json</div>
+          <div class="drop-sub">.kgp restores full scheduler state; .kirra/.json imports Boundaries, Hole Data, Charge Configs</div>
+          <input type="file" id="kirraProjectInput" accept=".json,.kirra,.kgp">
+        </div>
+        <div class="import-log" id="kirraProjectLog">
+          <span class="log-info">Ready for project import...</span>
+        </div>
       </div>
-      <div class="import-log" id="kirraProjectLog">
-        <span class="log-info">Ready for Kirra project import...</span>
+
+      <!-- Kirra Application Project (.kap) -->
+      <div>
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent-load); margin-bottom:12px;">Kirra Application Project (.kap)</h3>
+        <div class="drop-zone" id="kapDropZone" style="padding:24px;">
+          <div class="drop-icon">&#x1F4E6;</div>
+          <div class="drop-text">Drop Kirra .kap file</div>
+          <div class="drop-sub">Imports surfaces (pit shells), blast holes, drawings, and charge configs from Kirra App</div>
+          <input type="file" id="kapFileInput" accept=".kap,.zip">
+        </div>
+        <div class="import-log" id="kapProjectLog">
+          <span class="log-info">Ready for KAP import...</span>
+        </div>
       </div>
     </div>
 
