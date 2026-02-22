@@ -49,6 +49,7 @@
   <div class="tab" data-tab="patterns">PATTERN LIBRARY</div>
   <div class="tab" data-tab="forecast">EXPLOSIVE FORECAST</div>
   <div class="tab" data-tab="conformance">CONFORMANCE</div>
+  <div class="tab" data-tab="playback">3D PLAYBACK</div>
   <div class="tab" data-tab="equipment">EQUIPMENT</div>
   <div class="tab" data-tab="import">IMPORT / DXF</div>
   <div class="tab" data-tab="help">HELP</div>
@@ -178,6 +179,90 @@
       <div class="table-title">Monthly Drill & Blast Conformance</div>
       <div style="overflow-x:auto;">
         <table class="data-table" id="confTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D PLAYBACK TAB -->
+  <div id="tab-playback" class="tab-panel">
+    <div class="playback-container">
+      <!-- Step 1) Sidebar — surface list, blast layers, display controls -->
+      <div class="playback-sidebar" id="playbackSidebar">
+        <div class="playback-sidebar-header">Scene Controls</div>
+        <div class="playback-sidebar-section">
+          <div class="playback-sidebar-label">Surfaces</div>
+          <div id="playbackSurfaceList" class="playback-surface-list">
+            <div class="playback-empty-msg">No surfaces loaded.<br>Import a Kirra Project or DXF with 3DFACE data.</div>
+          </div>
+        </div>
+        <div class="playback-sidebar-section">
+          <div class="playback-sidebar-label">Blast Layers</div>
+          <div id="playbackBlastLayers" class="playback-blast-layers">
+            <label class="playback-toggle"><input type="checkbox" id="pbShowAllBlasts" checked> Show all blasts</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbShowHoles"> Show drill holes</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbShowLabels" checked> Show blast labels</label>
+          </div>
+        </div>
+        <div class="playback-sidebar-section">
+          <div class="playback-sidebar-label">Equipment</div>
+          <div class="playback-blast-layers">
+            <label class="playback-toggle"><input type="checkbox" id="pbShowEquipment" checked> Show equipment</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbShowEquipLabels" checked> Show equipment labels</label>
+          </div>
+        </div>
+        <div class="playback-sidebar-section">
+          <div class="playback-sidebar-label">Display</div>
+          <div class="playback-blast-layers">
+            <label class="playback-toggle"><input type="checkbox" id="pbWireframe"> Wireframe overlay</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbGrid" checked> Ground grid</label>
+          </div>
+        </div>
+      </div>
+      <!-- Step 2) 3D canvas area -->
+      <div class="playback-viewport" id="playbackViewport">
+        <canvas id="playbackCanvas"></canvas>
+        <!-- Step 3) Camera preset buttons -->
+        <div class="playback-camera-presets">
+          <button class="pb-cam-btn" id="pbCamTop" title="Top-down view">Top</button>
+          <button class="pb-cam-btn" id="pbCamIso" title="Isometric view">Iso</button>
+          <button class="pb-cam-btn" id="pbCamPersp" title="Perspective view">3D</button>
+        </div>
+        <!-- Step 4) No-data overlay -->
+        <div class="playback-no-data" id="playbackNoData">
+          <div class="playback-no-data-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </div>
+          <div class="playback-no-data-title">No 3D Data Loaded</div>
+          <div class="playback-no-data-text">Import a Kirra Project (.kirra) with surfaces, or a DXF with 3DFACE pit shell data via the IMPORT / DXF tab.</div>
+        </div>
+      </div>
+    </div>
+    <!-- Step 5) Timeline scrubber bar (below the 3D view) -->
+    <div class="playback-timeline" id="playbackTimeline">
+      <div class="pb-tl-controls">
+        <button class="pb-tl-btn" id="pbTlStart" title="Jump to start">|&lt;</button>
+        <button class="pb-tl-btn" id="pbTlPrev" title="Previous day">&lt;</button>
+        <button class="pb-tl-btn pb-tl-play" id="pbTlPlay" title="Play / Pause">&#9654;</button>
+        <button class="pb-tl-btn" id="pbTlNext" title="Next day">&gt;</button>
+        <button class="pb-tl-btn" id="pbTlEnd" title="Jump to end">&gt;|</button>
+      </div>
+      <div class="pb-tl-info">
+        <span id="pbTlDay">Day 0 of 0</span>
+        <span id="pbTlDate" class="pb-tl-date"></span>
+      </div>
+      <div class="pb-tl-scrubber">
+        <input type="range" id="pbTlRange" min="0" max="0" value="0" class="pb-tl-range">
+      </div>
+      <div class="pb-tl-speed">
+        <span class="pb-tl-speed-label">Speed</span>
+        <button class="pb-speed-btn active" data-speed="1">1x</button>
+        <button class="pb-speed-btn" data-speed="2">2x</button>
+        <button class="pb-speed-btn" data-speed="5">5x</button>
+        <button class="pb-speed-btn" data-speed="10">10x</button>
       </div>
     </div>
   </div>

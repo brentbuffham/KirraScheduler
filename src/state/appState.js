@@ -169,7 +169,11 @@ var APP = {
     }
   ],
 
-  // Step 4) Conformance data
+  // Step 4) Spatial data for 3D playback
+  kirraProjectSurfaces: [],
+  kirraProjectSolids: [],
+
+  // Step 5) Conformance data
   conformance: {
     targetBCM: 600000,
     actualBCM: 426594,

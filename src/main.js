@@ -6,6 +6,7 @@
 
 // Step 1) Import styles
 import "./styles/main.css";
+import "./styles/playback.css";
 
 // Step 2) Import modules
 import { recalcDependencies } from "./engine/dependencyEngine.js";
@@ -30,6 +31,7 @@ import { renderPatterns } from "./views/patternLibrary.js";
 import { renderForecast } from "./views/forecastView.js";
 import { renderConformance } from "./views/conformanceView.js";
 import { renderEquipment } from "./views/equipmentView.js";
+import { initPlaybackView } from "./views/playbackView.js";
 
 // Step 3) Initialise UI event listeners
 initThemeToggle();
@@ -73,5 +75,8 @@ initGanttResize();
 
 // Step 8) Initialise delay palette drag-and-drop
 initDelayPalette();
+
+// Step 9) Initialise 3D Playback view (lazy — scene created when tab shown)
+initPlaybackView();
 
 console.log("Kirra Scheduler initialised.");

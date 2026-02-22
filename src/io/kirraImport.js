@@ -129,6 +129,18 @@ function parseKGPProject(file) {
         APP.importedBlasts = data.importedBlasts;
       }
 
+      // Step 2h-ii) Restore surfaces (full geometry for 3D playback)
+      if (data.kirraProjectSurfaces && Array.isArray(data.kirraProjectSurfaces)) {
+        APP.kirraProjectSurfaces = data.kirraProjectSurfaces;
+        log.innerHTML += "<div class=\"log-ok\">" + data.kirraProjectSurfaces.length + " surface(s) restored for 3D playback</div>";
+      }
+
+      // Step 2h-iii) Restore solids
+      if (data.kirraProjectSolids && Array.isArray(data.kirraProjectSolids)) {
+        APP.kirraProjectSolids = data.kirraProjectSolids;
+        log.innerHTML += "<div class=\"log-ok\">" + data.kirraProjectSolids.length + " solid(s) restored for 3D playback</div>";
+      }
+
       log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:6px;\">Project restored successfully</div>";
 
       // Step 2i) Sync toolbar inputs
@@ -249,40 +261,47 @@ function parseKirraProject(file) {
         }
       }
 
-      // Step 2d) Process SURFACES — store metadata for volume calculations
+      // Step 2d) Process SURFACES — store FULL geometry for 3D playback
       var surfaces = data.surfaces || data.loadedSurfaces || null;
       if (surfaces) {
         var surfArr = Array.isArray(surfaces) ? surfaces : Object.values(surfaces);
         APP.kirraProjectSurfaces = surfArr.map(function(s) {
           return {
             name: s.name || s.id || "Unnamed",
-            pointCount: s.points ? s.points.length : 0,
-            triangleCount: s.triangles ? s.triangles.length : 0,
+            points: s.points || [],
+            triangles: s.triangles || [],
             bounds: s.meshBounds || null,
-            gradient: s.gradient || "default"
+            gradient: s.gradient || "default",
+            visible: true,
+            opacity: 0.85
           };
         });
-        log.innerHTML += "<div class=\"log-ok\">\u2192 Surfaces: " + surfArr.length + " imported</div>";
+        log.innerHTML += "<div class=\"log-ok\">\u2192 Surfaces: " + surfArr.length + " imported (full geometry preserved for 3D)</div>";
         surfArr.forEach(function(s) {
           var name = s.name || s.id || "Unnamed";
+          var pts = s.points ? s.points.length : 0;
           var tris = s.triangles ? s.triangles.length : 0;
-          log.innerHTML += "<div class=\"log-ok\">  " + name + " (" + tris + " triangles)</div>";
+          log.innerHTML += "<div class=\"log-ok\">  " + name + " (" + pts + " pts, " + tris + " tris)</div>";
         });
       }
 
-      // Step 2e) Process SOLIDS — store metadata
+      // Step 2e) Process SOLIDS — store full geometry for 3D playback
       var solids = data.solids || data.meshes || null;
       if (solids) {
         var solArr = Array.isArray(solids) ? solids : Object.values(solids);
         APP.kirraProjectSolids = solArr.map(function(s) {
           return {
             name: s.name || s.id || "Unnamed",
+            points: s.points || [],
+            triangles: s.triangles || [],
             volume: s.volume || 0,
             bounds: s.meshBounds || null,
-            isTextured: !!s.isTexturedMesh
+            isTextured: !!s.isTexturedMesh,
+            visible: true,
+            opacity: 0.85
           };
         });
-        log.innerHTML += "<div class=\"log-ok\">\u2192 Solids: " + solArr.length + " imported</div>";
+        log.innerHTML += "<div class=\"log-ok\">\u2192 Solids: " + solArr.length + " imported (full geometry preserved)</div>";
       }
 
       // Step 2f) Import charge configs if present

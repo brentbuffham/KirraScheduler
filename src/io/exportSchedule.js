@@ -37,7 +37,11 @@ function exportKGP() {
     people: people,
 
     // Step 1e) Conformance targets
-    conformance: APP.conformance
+    conformance: APP.conformance,
+
+    // Step 1f) Spatial data — surfaces and solids (full geometry for 3D playback)
+    kirraProjectSurfaces: APP.kirraProjectSurfaces || [],
+    kirraProjectSolids: APP.kirraProjectSolids || []
   };
 
   var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
