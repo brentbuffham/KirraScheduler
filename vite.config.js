@@ -4,7 +4,7 @@ export default defineConfig({
   base: "/KirraScheduler/",
   root: ".",
   build: {
-    outDir: "dist",
+    outDir: "docs",
     emptyOutDir: true,
   },
   server: {
