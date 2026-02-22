@@ -5,18 +5,48 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, isDrillInMaintenance } from "../state/equipmentState.js";
+import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
+import { calcDrillCrewRequired, calcLoadCrewRequired, ensureCrewAllocated, buildCrewBadges } from "../state/crewRoles.js";
 import { getBlastDeps } from "../engine/dependencyEngine.js";
 import { hasBlocks } from "../engine/blockHelpers.js";
 import { formatNum, addDays, isoDate, getWeekNumber, isWeekend, isToday } from "../utils/dateUtils.js";
 import { showBarTooltip, hideTooltip } from "../ui/tooltip.js";
-import { showCtxMenu } from "../ui/contextMenu.js";
+import { showCtxMenu, showBarCtxMenu } from "../ui/contextMenu.js";
 import { initGanttDrag } from "../ui/ganttDrag.js";
+import { initGanttResize } from "../ui/ganttResize.js";
 import { renderConnectors } from "../ui/ganttConnectors.js";
 import { editBlast } from "../dialogs/blastModal.js";
+import { getDelayType } from "../state/delayTypes.js";
+import { renderDelayPalette } from "../ui/delayPalette.js";
+import { buildConflictCellSet } from "../engine/fleetConflicts.js";
 
 // Step 0) Track collapsed sections between re-renders
 var _collapsedSections = {};
+
+// Step 0c) Build draggable drill-ID chips for the info column.
+//  Each chip can be dragged back to the palette to unassign.
+function buildDrillChips(drillIds, blastIdx, blockIdx) {
+  if (!drillIds || drillIds.length === 0) return "";
+  var html = "";
+  for (var i = 0; i < drillIds.length; i++) {
+    var did = drillIds[i];
+    var blockPart = (blockIdx !== null && blockIdx !== undefined) ? ":" + blockIdx : "";
+    html += "<span class=\"gantt-drill-chip\" draggable=\"true\" " +
+      "data-drag-type=\"gantt-drill\" data-drag-id=\"" + did + "\" " +
+      "data-blast-idx=\"" + blastIdx + "\" data-block-idx=\"" + (blockIdx !== null && blockIdx !== undefined ? blockIdx : "") + "\" " +
+      "title=\"Drag back to palette to unassign " + did + "\">" + did + "</span>";
+  }
+  return html;
+}
+
+// Step 0d) Build draggable MPU chip for the info column.
+function buildMPUChip(mpuId, blastIdx) {
+  if (!mpuId) return "";
+  return "<span class=\"gantt-mpu-chip\" draggable=\"true\" " +
+    "data-drag-type=\"gantt-mpu\" data-drag-id=\"" + mpuId + "\" " +
+    "data-blast-idx=\"" + blastIdx + "\" " +
+    "title=\"Drag back to palette to unassign " + mpuId + "\">" + mpuId + "</span> ";
+}
 
 // Step 0b) Small pencil SVG for inline edit icon
 var EDIT_ICON = "<span class=\"gantt-edit-btn\" title=\"Edit\">" +
@@ -124,20 +154,34 @@ function renderGantt() {
   }
   html += "</tr></thead><tbody>";
 
+  // Step 1d-post) Build fleet conflict lookup — "blastName|date" -> [drillIds]
+  var _conflictCells = buildConflictCellSet();
+
   // ============================================================
   //  Step 1e) Helper: render bar cells for a date range
   // ============================================================
   function renderBarCells(range, blast, idx, sectionName, deps, comp, blockDrills, startTime) {
     var cellsHtml = "";
+
+    // Step 1e-pre) Pre-compute delay positions for this blast/section
+    var secKey = sectionName.toLowerCase();
+    var blastDelays = (blast.delays || []).filter(function(d) { return d.section === secKey; });
+
     for (var ci = 0; ci < dates.length; ci++) {
       var cd = dates[ci];
       var ds = isoDate(cd);
       var barClass = "";
       var barExtra = "";
+      var isFirstBar = false;
+      var isLastBar = false;
 
       if (range.start && range.end && ds >= range.start && ds <= range.end) {
         barClass = sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : "blast";
         if (blast.status === "planned" && sectionName !== "BLASTING") barClass += " planned";
+
+        // Step) Determine if this is the first or last cell of the bar for resize handles
+        isFirstBar = (ds === range.start);
+        isLastBar = (ds === range.end);
 
         // Step) Check for drill-load overlap zone on drill bars
         if (sectionName === "DRILLING" && comp.hasOverlap && comp.loadOverlapStart) {
@@ -172,6 +216,14 @@ function renderGantt() {
             }
           }
         }
+
+        // Step) Add resize handles on first and last cells
+        if (isFirstBar && sectionName !== "BLASTING") {
+          barExtra += "<div class=\"gantt-resize-handle handle-left\"></div>";
+        }
+        if (isLastBar && sectionName !== "BLASTING") {
+          barExtra += "<div class=\"gantt-resize-handle handle-right\"></div>";
+        }
       }
 
       if (sectionName === "BLASTING" && blast.blastDate && ds === blast.blastDate) {
@@ -193,7 +245,18 @@ function renderGantt() {
         }
       }
 
-      cellsHtml += "<td class=\"gantt-cell\" style=\"" + wkend + maintStyle + "\">";
+      // Step) Check for fleet conflict on this date (drill used on 2+ blasts)
+      var conflictStyle = "";
+      if (sectionName === "DRILLING" && barClass) {
+        var conflictKey = blast.name + "|" + ds;
+        if (_conflictCells[conflictKey]) {
+          conflictStyle = "background:repeating-linear-gradient(-45deg,transparent,transparent 3px,rgba(239,68,68,0.25) 3px,rgba(239,68,68,0.25) 6px);";
+        }
+      }
+
+      cellsHtml += "<td class=\"gantt-cell\" style=\"" + wkend + maintStyle + conflictStyle + "\">";
+
+      // Step) Render main bar
       if (barClass) {
         var ttData = "data-tt-blast=\"" + blast.name + "\" data-tt-section=\"" + sectionName + "\" data-tt-date=\"" + ds + "\"";
         var barStyle = "";
@@ -208,8 +271,42 @@ function renderGantt() {
           barExtra += "<span class=\"start-time-label\">" + effectiveStartTime + "</span>";
         }
 
-        cellsHtml += "<div class=\"gantt-bar " + barClass + "\"" + barStyle + " " + ttData + ">" + barExtra + "</div>";
+        // Step) Overlay a conflict indicator if this drill is double-booked
+        var conflictOverlay = "";
+        if (sectionName === "DRILLING") {
+          var cKey = blast.name + "|" + ds;
+          if (_conflictCells[cKey]) {
+            conflictOverlay = "<div class=\"fleet-conflict-indicator\" title=\"Drill conflict: " + _conflictCells[cKey].join(", ") + " double-booked\"></div>";
+          }
+        }
+        cellsHtml += "<div class=\"gantt-bar " + barClass + "\"" + barStyle + " " + ttData + ">" + barExtra + conflictOverlay + "</div>";
       }
+
+      // Step) Render delay blocks that overlap this date
+      for (var ddi = 0; ddi < blastDelays.length; ddi++) {
+        var delay = blastDelays[ddi];
+        var delayEnd = isoDate(addDays(new Date(delay.start), (delay.days || 1) - 1));
+        if (ds >= delay.start && ds <= delayEnd) {
+          var dt = getDelayType(delay.type);
+          var delayColor = dt ? dt.color : "#888";
+          var delayTextColor = dt ? dt.textColor : "#fff";
+          var isDelayFirst = (ds === delay.start);
+          var isDelayLast = (ds === delayEnd);
+          var globalDelayIdx = (blast.delays || []).indexOf(delay);
+
+          var delayHandles = "";
+          if (isDelayFirst) delayHandles += "<div class=\"gantt-resize-handle handle-left\"></div>";
+          if (isDelayLast) delayHandles += "<div class=\"gantt-resize-handle handle-right\"></div>";
+
+          var delayLabel = isDelayFirst ? ("<span class=\"delay-bar-label\">" + delay.type + "</span>") : "";
+
+          cellsHtml += "<div class=\"gantt-bar delay-bar\" data-delay-idx=\"" + globalDelayIdx + "\" " +
+            "style=\"background:" + delayColor + ";color:" + delayTextColor + ";top:16px;bottom:-3px;z-index:3;\" " +
+            "data-tt-blast=\"" + blast.name + "\" data-tt-section=\"" + sectionName + "\" data-tt-date=\"" + ds + "\">" +
+            delayLabel + delayHandles + "</div>";
+        }
+      }
+
       cellsHtml += "</td>";
     }
     return cellsHtml;
@@ -240,10 +337,12 @@ function renderGantt() {
             end: isoDate(addDays(new Date(block.drillStart), (block.drillDays || 1) - 1))
           };
 
-          // Step) Build info column for this block
-          var blockDrillIds = (block.assignedDrills || []).join(",");
-          var blockDrillTag = blockDrillIds ? "<span style=\"font-size:9px;color:var(--accent-cyan);\">" + blockDrillIds + "</span> " : "";
-          var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m";
+          // Step) Build info column for this block (including crew badges)
+          var blockDrillTag = buildDrillChips(block.assignedDrills || [], idx, blockIdx);
+          var blockCrewReq = calcDrillCrewRequired(blast, drills);
+          var blockCrewAlloc = ensureCrewAllocated(blast).drilling;
+          var blockCrewHtml = buildCrewBadges(blockCrewAlloc, blockCrewReq);
+          var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockCrewHtml;
 
           // Step) Block row with edit icon and indented name
           html += "<tr class=\"gantt-row gantt-block-row\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
@@ -276,11 +375,29 @@ function renderGantt() {
 
       var info = "";
       if (sectionName === "DRILLING") {
-        var drillIds = (blast.assignedDrills || []).join(",");
-        var drillTag = drillIds ? "<span style=\"font-size:9px;color:var(--accent-cyan);\">" + drillIds + "</span> " : "";
-        info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + depIcon + maintIcon;
+        var drillTag = buildDrillChips(blast.assignedDrills || [], idx, null);
+        // Step) Crew fill badges for drilling
+        var drillCrewReq = calcDrillCrewRequired(blast, drills);
+        var drillCrewAlloc = ensureCrewAllocated(blast).drilling;
+        var drillCrewHtml = buildCrewBadges(drillCrewAlloc, drillCrewReq);
+        // Step) Fleet conflict badge
+        var conflictBadge = "";
+        if (blast.drillStart && blast.drillDays) {
+          var hasConflict = false;
+          for (var fc = 0; fc < (blast.drillDays || 0); fc++) {
+            var fcDate = isoDate(addDays(new Date(blast.drillStart), fc));
+            if (_conflictCells[blast.name + "|" + fcDate]) { hasConflict = true; break; }
+          }
+          if (hasConflict) conflictBadge = "<span class=\"fleet-conflict-badge\" title=\"Drill rig double-booked\">\u26A0 CONFLICT</span>";
+        }
+        info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + depIcon + maintIcon + drillCrewHtml + conflictBadge;
       } else if (sectionName === "LOADING") {
-        info = formatNum(blast.expMass) + "kg" + depIcon;
+        var mpuTag = buildMPUChip(blast.assignedMPU, idx);
+        // Step) Crew fill badges for loading
+        var loadCrewReq = calcLoadCrewRequired(blast, mpus);
+        var loadCrewAlloc = ensureCrewAllocated(blast).loading;
+        var loadCrewHtml = buildCrewBadges(loadCrewAlloc, loadCrewReq);
+        info = mpuTag + formatNum(blast.expMass) + "kg" + depIcon + loadCrewHtml;
       } else {
         info = formatNum(blast.volume) + " bcm";
       }
@@ -333,6 +450,27 @@ function renderGantt() {
     });
   });
 
+  // Step 1i-c) Attach context menu to Gantt bars themselves
+  document.querySelectorAll(".gantt-bar").forEach(function(bar) {
+    bar.addEventListener("contextmenu", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var row = bar.closest(".gantt-row");
+      if (!row) return;
+      var blastIdx = parseInt(row.dataset.blast);
+      var section = row.dataset.section;
+      var blockIdx = row.dataset.block !== undefined ? parseInt(row.dataset.block) : null;
+      var delayIdx = bar.dataset.delayIdx !== undefined ? parseInt(bar.dataset.delayIdx) : null;
+      var clickDate = bar.dataset.ttDate || null;
+
+      if (delayIdx !== null) {
+        showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate);
+      } else {
+        showBarCtxMenu(e, blastIdx, section, blockIdx, null, clickDate);
+      }
+    });
+  });
+
   // Step 1i-b) Attach inline edit icon click handlers
   document.querySelectorAll(".gantt-edit-btn").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
@@ -350,8 +488,27 @@ function renderGantt() {
     });
   });
 
-  // Step 1j) Re-initialise drag handlers after re-render
+  // Step 1j) Re-initialise drag and resize handlers after re-render
   initGanttDrag();
+  initGanttResize();
+
+  // Step 1j-b) Attach drag events to inline drill/mpu chips in the info column
+  document.querySelectorAll(".gantt-drill-chip, .gantt-mpu-chip").forEach(function(chip) {
+    chip.addEventListener("dragstart", function(e) {
+      e.stopPropagation();
+      var dragType = chip.dataset.dragType;
+      var dragId = chip.dataset.dragId;
+      var blastIdx = chip.dataset.blastIdx;
+      var blockIdx = chip.dataset.blockIdx;
+      var payload = dragType + ":" + dragId + ":" + blastIdx + (blockIdx !== "" ? ":" + blockIdx : "");
+      e.dataTransfer.setData("text/plain", payload);
+      e.dataTransfer.effectAllowed = "move";
+      chip.classList.add("chip-dragging");
+    });
+    chip.addEventListener("dragend", function() {
+      chip.classList.remove("chip-dragging");
+    });
+  });
 
   // Step 1k) Attach section collapse/expand toggle
   document.querySelectorAll(".gantt-section-header[data-section-toggle]").forEach(function(hdr) {
@@ -400,6 +557,9 @@ function renderGantt() {
   requestAnimationFrame(function() {
     renderConnectors();
   });
+
+  // Step 1n) Re-render equipment palette to reflect any status changes
+  renderDelayPalette();
 }
 
 export { renderGantt };

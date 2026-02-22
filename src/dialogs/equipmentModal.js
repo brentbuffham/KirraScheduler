@@ -35,6 +35,10 @@ function showAddDrillModal() {
   body += "  <div class=\"form-field\"><label>Min Diameter (mm)</label><input type=\"number\" id=\"fEqMinDiam\" value=\"127\"></div>";
   body += "  <div class=\"form-field\"><label>Max Diameter (mm)</label><input type=\"number\" id=\"fEqMaxDiam\" value=\"229\"></div>";
   body += "</div>";
+  body += "<div class=\"form-row\">";
+  body += "  <div class=\"form-field\"><label>Crew Required — OP</label><input type=\"number\" id=\"fEqCrewOP\" value=\"1\" min=\"0\" max=\"10\" step=\"1\"></div>";
+  body += "  <div class=\"form-field\"><label>Crew Required — FT</label><input type=\"number\" id=\"fEqCrewFT\" value=\"0\" min=\"0\" max=\"10\" step=\"1\"></div>";
+  body += "</div>";
   document.getElementById("equipModalBody").innerHTML = body;
   openModal("equipmentModal");
 }
@@ -58,6 +62,10 @@ function showAddMPUModal() {
   body += "<div class=\"form-row\">";
   body += "  <div class=\"form-field\"><label>Capacity (kg)</label><input type=\"number\" id=\"fEqMinDiam\" value=\"20000\"></div>";
   body += "  <div class=\"form-field\"></div>";
+  body += "</div>";
+  body += "<div class=\"form-row\">";
+  body += "  <div class=\"form-field\"><label>Crew Required — OP</label><input type=\"number\" id=\"fEqCrewOP\" value=\"1\" min=\"0\" max=\"10\" step=\"1\"></div>";
+  body += "  <div class=\"form-field\"><label>Crew Required — SF</label><input type=\"number\" id=\"fEqCrewSF\" value=\"1\" min=\"0\" max=\"10\" step=\"1\"></div>";
   body += "</div>";
   document.getElementById("equipModalBody").innerHTML = body;
   openModal("equipmentModal");
@@ -95,20 +103,36 @@ function saveEquipment() {
   var maxDiamField = document.getElementById("fEqMaxDiam");
 
   if (editingEquipType === "drill") {
+    // Step 4a) Build crewRequired from form fields
+    var drillCrewOP = parseInt((document.getElementById("fEqCrewOP") || {}).value) || 0;
+    var drillCrewFT = parseInt((document.getElementById("fEqCrewFT") || {}).value) || 0;
+    var drillCrew = {};
+    if (drillCrewOP > 0) drillCrew.OP = drillCrewOP;
+    if (drillCrewFT > 0) drillCrew.FT = drillCrewFT;
+
     drills.push({
       id: id, name: name, type: type,
       minDiam: parseInt(diamField.value) || 127,
       maxDiam: parseInt(maxDiamField.value) || 229,
       rateM_per_day: parseFloat(rateField.value) || 20,
       status: "available",
+      crewRequired: drillCrew,
       maintenance: []
     });
   } else if (editingEquipType === "mpu") {
+    // Step 4b) Build crewRequired for MPU
+    var mpuCrewOP = parseInt((document.getElementById("fEqCrewOP") || {}).value) || 0;
+    var mpuCrewSF = parseInt((document.getElementById("fEqCrewSF") || {}).value) || 0;
+    var mpuCrew = {};
+    if (mpuCrewOP > 0) mpuCrew.OP = mpuCrewOP;
+    if (mpuCrewSF > 0) mpuCrew.SF = mpuCrewSF;
+
     mpus.push({
       id: id, name: name, type: type,
       capacity_kg: parseInt(diamField.value) || 20000,
       rateKg_per_day: parseFloat(rateField.value) || 100000,
       status: "available",
+      crewRequired: mpuCrew,
       maintenance: []
     });
   } else if (editingEquipType === "person") {

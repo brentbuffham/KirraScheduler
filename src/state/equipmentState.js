@@ -11,6 +11,7 @@ var drills = [
     minDiam: 127, maxDiam: 229,
     rateM_per_day: 19,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: [
       { start: "2026-03-10", end: "2026-03-12", reason: "5000hr Service" }
     ]
@@ -20,6 +21,7 @@ var drills = [
     minDiam: 127, maxDiam: 229,
     rateM_per_day: 19,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: []
   },
   {
@@ -27,6 +29,7 @@ var drills = [
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: [
       { start: "2026-03-15", end: "2026-03-17", reason: "Track replacement" }
     ]
@@ -36,6 +39,7 @@ var drills = [
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: []
   },
   {
@@ -43,6 +47,7 @@ var drills = [
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: [
       { start: "2026-03-20", end: "2026-03-22", reason: "Engine overhaul" }
     ]
@@ -52,6 +57,7 @@ var drills = [
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
+    crewRequired: { OP: 1 },
     maintenance: []
   }
 ];
@@ -62,12 +68,14 @@ var mpus = [
     id: "MPU-01", name: "MPU #1", type: "Emulsion",
     capacity_kg: 20000, rateKg_per_day: 100000,
     status: "available",
+    crewRequired: { OP: 1, SF: 1 },
     maintenance: []
   },
   {
     id: "MPU-02", name: "MPU #2", type: "Emulsion",
     capacity_kg: 20000, rateKg_per_day: 80000,
     status: "available",
+    crewRequired: { OP: 1, SF: 1 },
     maintenance: [
       { start: "2026-03-08", end: "2026-03-09", reason: "Pump service" }
     ]
@@ -89,6 +97,34 @@ var people = [
 // Step 4) Helper — check if a drill can handle a given diameter (mm)
 function canDrillDiameter(drill, diamMm) {
   return diamMm >= drill.minDiam && diamMm <= drill.maxDiam;
+}
+
+// Step 4b) Equipment status management — valid statuses: "available", "mobilised", "demobilised"
+function mobiliseEquipment(collection, equipId) {
+  var equip = collection.find(function(e) { return e.id === equipId; });
+  if (equip) equip.status = "mobilised";
+  return equip;
+}
+
+function demobiliseEquipment(collection, equipId) {
+  var equip = collection.find(function(e) { return e.id === equipId; });
+  if (equip) equip.status = "demobilised";
+  return equip;
+}
+
+function removeEquipment(collection, equipId) {
+  var idx = -1;
+  for (var i = 0; i < collection.length; i++) {
+    if (collection[i].id === equipId) { idx = i; break; }
+  }
+  if (idx !== -1) return collection.splice(idx, 1)[0];
+  return null;
+}
+
+function setEquipmentStatus(collection, equipId, status) {
+  var equip = collection.find(function(e) { return e.id === equipId; });
+  if (equip) equip.status = status;
+  return equip;
 }
 
 // Step 5) Helper — check if a drill is in maintenance on a given date
@@ -162,5 +198,9 @@ export {
   isDrillInMaintenance,
   getMaintenanceDays,
   getCompatibleDrills,
-  effectiveDrillDays
+  effectiveDrillDays,
+  mobiliseEquipment,
+  demobiliseEquipment,
+  removeEquipment,
+  setEquipmentStatus
 };

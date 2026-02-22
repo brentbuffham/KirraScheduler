@@ -37,8 +37,14 @@ function initGanttDrag() {
 
 // Step 2) Start drag — works for drill, load, blast, and block bars
 function onDragStart(e) {
+  // Step 2-pre) Ignore if click is on a resize handle (handled by ganttResize)
+  if (e.target.closest(".gantt-resize-handle")) return;
+
   var bar = e.target.closest(".gantt-bar");
   if (!bar) return;
+
+  // Step 2-pre-b) Ignore delay bars for drag-to-move (they use resize only)
+  if (bar.classList.contains("delay-bar")) return;
 
   var row = bar.closest(".gantt-row");
   if (!row) return;

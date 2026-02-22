@@ -6,7 +6,14 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
+import { drills, mpus, people } from "../state/equipmentState.js";
+import { recalcDependencies } from "../engine/dependencyEngine.js";
+import { renderGantt } from "../views/ganttView.js";
+import { renderBlasts } from "../views/blastOverview.js";
+import { renderPatterns } from "../views/patternLibrary.js";
 import { renderForecast } from "../views/forecastView.js";
+import { renderConformance } from "../views/conformanceView.js";
+import { renderEquipment } from "../views/equipmentView.js";
 import { showImportPreview } from "./importPreview.js";
 
 // Step 1) Parse Kirra charge configuration file
@@ -45,8 +52,118 @@ function parseKirraConfig(file) {
   reader.readAsText(file);
 }
 
-// Step 2) Parse Kirra project file (JSON export from Kirra app IndexedDB)
+// Step 2) Parse Kirra Gantt Project (.kgp) file — restores full scheduler state
+function parseKGPProject(file) {
+  var log = document.getElementById("kirraProjectLog");
+  log.innerHTML = "<div class=\"log-info\">Reading " + file.name + "...</div>";
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+
+      // Step 2a) Verify format
+      if (data.format !== "KirraGanttProject") {
+        log.innerHTML += "<div class=\"log-warn\">Not a Kirra Gantt Project file. Trying standard import...</div>";
+        parseKirraProjectFromData(data, log);
+        return;
+      }
+
+      log.innerHTML += "<div class=\"log-ok\">Kirra Gantt Project v" + (data.version || "?") + " (" + Math.round(file.size / 1024) + " KB)</div>";
+      log.innerHTML += "<div class=\"log-info\">Exported: " + (data.exportDate || "unknown") + "</div>";
+
+      // Step 2b) Restore global settings
+      if (data.settings) {
+        var s = data.settings;
+        if (s.planStart) APP.planStart = new Date(s.planStart);
+        if (s.ganttWeeks !== undefined) APP.ganttWeeks = s.ganttWeeks;
+        if (s.rigHours !== undefined) APP.rigHours = s.rigHours;
+        if (s.availability !== undefined) APP.availability = s.availability;
+        if (s.utilisation !== undefined) APP.utilisation = s.utilisation;
+        if (s.deps) APP.deps = s.deps;
+        log.innerHTML += "<div class=\"log-ok\">Settings restored</div>";
+      }
+
+      // Step 2c) Restore blasts
+      if (data.blasts && Array.isArray(data.blasts)) {
+        APP.blasts = data.blasts;
+        log.innerHTML += "<div class=\"log-ok\">" + data.blasts.length + " blast(s) restored</div>";
+      }
+
+      // Step 2d) Restore patterns
+      if (data.patterns && Array.isArray(data.patterns)) {
+        APP.patterns = data.patterns;
+        log.innerHTML += "<div class=\"log-ok\">" + data.patterns.length + " pattern(s) restored</div>";
+      }
+
+      // Step 2e) Restore charge configs
+      if (data.chargeConfigs) {
+        APP.chargeConfigs = Array.isArray(data.chargeConfigs) ? data.chargeConfigs : [];
+      }
+
+      // Step 2f) Restore equipment
+      if (data.drills && Array.isArray(data.drills)) {
+        drills.length = 0;
+        data.drills.forEach(function(d) { drills.push(d); });
+        log.innerHTML += "<div class=\"log-ok\">" + data.drills.length + " drill(s) restored</div>";
+      }
+      if (data.mpus && Array.isArray(data.mpus)) {
+        mpus.length = 0;
+        data.mpus.forEach(function(m) { mpus.push(m); });
+        log.innerHTML += "<div class=\"log-ok\">" + data.mpus.length + " MPU(s) restored</div>";
+      }
+      if (data.people && Array.isArray(data.people)) {
+        people.length = 0;
+        data.people.forEach(function(p) { people.push(p); });
+        log.innerHTML += "<div class=\"log-ok\">" + data.people.length + " personnel restored</div>";
+      }
+
+      // Step 2g) Restore conformance
+      if (data.conformance) {
+        APP.conformance = data.conformance;
+        log.innerHTML += "<div class=\"log-ok\">Conformance targets restored</div>";
+      }
+
+      // Step 2h) Restore imported blasts
+      if (data.importedBlasts) {
+        APP.importedBlasts = data.importedBlasts;
+      }
+
+      log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:6px;\">Project restored successfully</div>";
+
+      // Step 2i) Sync toolbar inputs
+      var elWeeks = document.getElementById("ganttWeeks");
+      var elRigHours = document.getElementById("rigHours");
+      var elAvail = document.getElementById("availability");
+      var elUtil = document.getElementById("utilisation");
+      if (elWeeks) elWeeks.value = APP.ganttWeeks;
+      if (elRigHours) elRigHours.value = APP.rigHours;
+      if (elAvail) elAvail.value = APP.availability;
+      if (elUtil) elUtil.value = APP.utilisation;
+
+      // Step 2j) Re-render everything
+      recalcDependencies();
+      renderGantt();
+      renderBlasts();
+      renderPatterns();
+      renderForecast();
+      renderConformance();
+      renderEquipment();
+
+    } catch (err) {
+      log.innerHTML += "<div class=\"log-err\">Parse error: " + err.message + "</div>";
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Step 3) Parse Kirra project file (JSON export from Kirra app IndexedDB)
 function parseKirraProject(file) {
+  // Step 3a) Route .kgp files to the dedicated handler
+  if (file.name && file.name.toLowerCase().indexOf(".kgp") !== -1) {
+    parseKGPProject(file);
+    return;
+  }
   var log = document.getElementById("kirraProjectLog");
   log.innerHTML = "<div class=\"log-info\">Reading " + file.name + "...</div>";
 

@@ -189,6 +189,165 @@ function addBlock(blast) {
   });
 }
 
+// Step 9) Split a blast (or block) at a specific date and remove a drill from the
+//  second part.  The remaining meters in the second block are recalculated with
+//  fewer drills, which extends the timeline naturally.
+//
+//  Scenario: Blast has 4 drills drilling for 6 days.  On day 3, one drill
+//  goes to maintenance.  User right-clicks the bar on day 3, selects
+//  "Pull PV271-02 from 2026-03-05".
+//
+//  Result:  Block A — days 1-2, all 4 drills, proportional meters
+//           Block B — day 3 onward, 3 drills, remaining meters (recalculated → longer)
+function splitAndRemoveDrill(blast, drillId, fromDate, blockIdx) {
+  var effectiveHrs = getEffectiveHours();
+
+  if (hasBlocks(blast) && blockIdx !== null && blast.drillBlocks[blockIdx]) {
+    // Step 9a) Already in blocks — split the target block
+    var block = blast.drillBlocks[blockIdx];
+    var blockStart = new Date(block.drillStart);
+    var splitDate = new Date(fromDate);
+    var daysBefore = Math.round((splitDate - blockStart) / 86400000);
+
+    if (daysBefore <= 0) {
+      // Step 9a-i) Removing from the very start — just remove the drill
+      var idx = (block.assignedDrills || []).indexOf(drillId);
+      if (idx !== -1) block.assignedDrills.splice(idx, 1);
+      if (block.drillRates) delete block.drillRates[drillId];
+      block.drillDays = calcBlockDays(block);
+      syncBlastFromBlocks(blast);
+      return;
+    }
+
+    // Step 9a-ii) Calculate meters drilled in the "before" period
+    var totalMPerDay = 0;
+    (block.assignedDrills || []).forEach(function(did) {
+      var penRate = 0;
+      if (block.drillRates && block.drillRates[did] !== undefined) {
+        penRate = block.drillRates[did];
+      } else {
+        var drill = drillFleet.find(function(d) { return d.id === did; });
+        if (drill) penRate = drill.rateM_per_day;
+      }
+      totalMPerDay += penRate * effectiveHrs;
+    });
+
+    var metersBefore = totalMPerDay * daysBefore;
+    metersBefore = Math.min(metersBefore, block.meters || 0);
+    var metersAfter = Math.max(0, (block.meters || 0) - metersBefore);
+
+    // Step 9a-iii) Shrink the existing block to the "before" period
+    var origLabel = block.label;
+    block.drillDays = daysBefore;
+    block.meters = Math.round(metersBefore * 10) / 10;
+
+    // Step 9a-iv) Create a new block for the "after" period without the removed drill
+    var newDrills = (block.assignedDrills || []).filter(function(did) {
+      return did !== drillId;
+    });
+
+    var newRates = {};
+    newDrills.forEach(function(did) {
+      if (block.drillRates && block.drillRates[did] !== undefined) {
+        newRates[did] = block.drillRates[did];
+      } else {
+        var drill = drillFleet.find(function(d) { return d.id === did; });
+        if (drill) newRates[did] = drill.rateM_per_day;
+      }
+    });
+
+    var labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    var newIdx = blast.drillBlocks.length;
+    var newLabel = newIdx < labels.length ? labels[newIdx] : "B" + newIdx;
+
+    var newBlock = {
+      id: "block-" + newIdx,
+      label: newLabel,
+      drillStart: isoDate(splitDate),
+      drillStartTime: block.drillStartTime || "06:00",
+      drillDays: 1,
+      meters: Math.round(metersAfter * 10) / 10,
+      assignedDrills: newDrills,
+      drillRates: newRates
+    };
+
+    // Step 9a-v) Calculate how long the remaining meters will take with fewer drills
+    newBlock.drillDays = calcBlockDays(newBlock);
+
+    // Step 9a-vi) Insert the new block after the original
+    blast.drillBlocks.splice(blockIdx + 1, 0, newBlock);
+
+    syncBlastFromBlocks(blast);
+    return;
+  }
+
+  // Step 9b) Blast is NOT yet in blocks — create two blocks from it
+  var drillStart = new Date(blast.drillStart);
+  var splitDate2 = new Date(fromDate);
+  var daysBefore2 = Math.round((splitDate2 - drillStart) / 86400000);
+  var currentDrills = blast.assignedDrills || [];
+  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
+
+  if (daysBefore2 <= 0) {
+    // Step 9b-i) Removing from the very start — just remove the drill
+    var idx2 = currentDrills.indexOf(drillId);
+    if (idx2 !== -1) currentDrills.splice(idx2, 1);
+    return;
+  }
+
+  // Step 9b-ii) Calculate daily production with all drills
+  var totalMPerDay2 = 0;
+  currentDrills.forEach(function(did) {
+    var drill = drillFleet.find(function(d) { return d.id === did; });
+    if (drill) totalMPerDay2 += drill.rateM_per_day * effectiveHrs;
+  });
+
+  var metersBefore2 = totalMPerDay2 * daysBefore2;
+  metersBefore2 = Math.min(metersBefore2, totalMeters);
+  var metersAfter2 = Math.max(0, totalMeters - metersBefore2);
+
+  // Step 9b-iii) Build block A — all drills, meters drilled so far
+  var blockA = {
+    id: "block-0",
+    label: "A",
+    drillStart: blast.drillStart,
+    drillStartTime: blast.drillStartTime || "06:00",
+    drillDays: daysBefore2,
+    meters: Math.round(metersBefore2 * 10) / 10,
+    assignedDrills: currentDrills.slice(),
+    drillRates: {}
+  };
+
+  currentDrills.forEach(function(did) {
+    var drill = drillFleet.find(function(d) { return d.id === did; });
+    if (drill) blockA.drillRates[did] = drill.rateM_per_day;
+  });
+
+  // Step 9b-iv) Build block B — minus the removed drill, remaining meters
+  var afterDrills = currentDrills.filter(function(did) { return did !== drillId; });
+  var blockB = {
+    id: "block-1",
+    label: "B",
+    drillStart: isoDate(splitDate2),
+    drillStartTime: "06:00",
+    drillDays: 1,
+    meters: Math.round(metersAfter2 * 10) / 10,
+    assignedDrills: afterDrills,
+    drillRates: {}
+  };
+
+  afterDrills.forEach(function(did) {
+    var drill = drillFleet.find(function(d) { return d.id === did; });
+    if (drill) blockB.drillRates[did] = drill.rateM_per_day;
+  });
+
+  blockB.drillDays = calcBlockDays(blockB);
+
+  // Step 9b-v) Apply blocks to the blast
+  blast.drillBlocks = [blockA, blockB];
+  syncBlastFromBlocks(blast);
+}
+
 export {
   hasBlocks,
   calcBlockDays,
@@ -197,5 +356,6 @@ export {
   splitBlast,
   mergeBlocks,
   getLatestBlockEnd,
-  addBlock
+  addBlock,
+  splitAndRemoveDrill
 };

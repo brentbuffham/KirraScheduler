@@ -27,6 +27,10 @@
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
+    <button class="btn btn-danger" id="btnResetGantt" title="Reset scheduler data">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Reset
+    </button>
     <button class="btn" id="btnExport">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export
@@ -111,10 +115,13 @@
     </div>
 
     <div class="stats-row" id="ganttStats"></div>
-    <div class="gantt-container">
-      <div class="gantt-scroll" id="ganttScroll">
-        <table class="gantt-table" id="ganttTable"></table>
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div class="gantt-container" style="flex:1;min-width:0;">
+        <div class="gantt-scroll" id="ganttScroll">
+          <table class="gantt-table" id="ganttTable"></table>
+        </div>
       </div>
+      <div class="delay-palette" id="delayPalette"></div>
     </div>
   </div>
 
@@ -260,9 +267,9 @@
       <h3 style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent-green); margin-bottom:12px;">Kirra Project File Import</h3>
       <div class="drop-zone" id="kirraProjectDropZone" style="padding:24px;">
         <div class="drop-icon">&#x1F5C2;</div>
-        <div class="drop-text">Drop Kirra Project File (.kirra / .json)</div>
-        <div class="drop-sub">May include Solids, Blast Boundaries, Hole Data, and Charge Configs</div>
-        <input type="file" id="kirraProjectInput" accept=".json,.kirra">
+        <div class="drop-text">Drop Kirra Project File (.kgp / .kirra / .json)</div>
+        <div class="drop-sub">.kgp restores full scheduler state; .kirra/.json imports Solids, Boundaries, Hole Data, Charge Configs</div>
+        <input type="file" id="kirraProjectInput" accept=".json,.kirra,.kgp">
       </div>
       <div class="import-log" id="kirraProjectLog">
         <span class="log-info">Ready for Kirra project import...</span>
@@ -445,17 +452,24 @@
 
 <!-- Step 5) Context Menu -->
 <div class="context-menu" id="contextMenu">
-  <div class="ctx-item" id="ctxEdit">&#x270F;&#xFE0F; Edit Blast</div>
-  <div class="ctx-item" id="ctxDrilling">&#x1F535; Set Drilling</div>
-  <div class="ctx-item" id="ctxLoading">&#x1F7E1; Set Loading</div>
-  <div class="ctx-item" id="ctxFired">&#x1F534; Set Fired</div>
-  <div class="ctx-divider"></div>
-  <div class="ctx-item ctx-drill-only" id="ctxSplitDrill">&#x2702; Split Drill</div>
-  <div class="ctx-item ctx-drill-only ctx-block-only" id="ctxEditBlock">&#x2699; Edit Block</div>
-  <div class="ctx-item ctx-drill-only ctx-block-only" id="ctxMergeBlocks">&#x1F517; Merge Blocks</div>
-  <div class="ctx-divider"></div>
-  <div class="ctx-item" id="ctxDuplicate">&#x1F4CB; Duplicate</div>
-  <div class="ctx-item" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove</div>
+  <!-- General blast items (hidden when right-clicking a delay bar) -->
+  <div class="ctx-item ctx-general" id="ctxEdit">&#x270F;&#xFE0F; Edit Blast</div>
+  <div class="ctx-item ctx-general" id="ctxDrilling">&#x1F535; Set Drilling</div>
+  <div class="ctx-item ctx-general" id="ctxLoading">&#x1F7E1; Set Loading</div>
+  <div class="ctx-item ctx-general" id="ctxFired">&#x1F534; Set Fired</div>
+  <div class="ctx-divider ctx-general"></div>
+  <div class="ctx-item ctx-drill-only ctx-general" id="ctxSplitDrill">&#x2702; Split Drill</div>
+  <div class="ctx-item ctx-drill-only ctx-block-only ctx-general" id="ctxEditBlock">&#x2699; Edit Block</div>
+  <div class="ctx-item ctx-drill-only ctx-block-only ctx-general" id="ctxMergeBlocks">&#x1F517; Merge Blocks</div>
+  <div class="ctx-divider ctx-general"></div>
+  <div class="ctx-item ctx-general" id="ctxDuplicate">&#x1F4CB; Duplicate</div>
+  <div class="ctx-item ctx-general" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove</div>
+
+  <!-- Delay-specific items (shown only when right-clicking a delay bar) -->
+  <div class="ctx-item ctx-delay-only" id="ctxExtendDelay" style="display:none;">&#x2795; Extend +1 Day</div>
+  <div class="ctx-item ctx-delay-only" id="ctxShrinkDelay" style="display:none;">&#x2796; Shrink -1 Day</div>
+  <div class="ctx-divider ctx-delay-only" style="display:none;"></div>
+  <div class="ctx-item ctx-delay-only" id="ctxRemoveDelay" style="color:var(--accent-blast);display:none;">&#x1F5D1; Remove Delay</div>
 </div>
 
 <!-- Step 6) Add/Edit Blast Modal -->

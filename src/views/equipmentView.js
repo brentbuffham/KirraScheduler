@@ -4,7 +4,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus, people } from "../state/equipmentState.js";
+import { drills, mpus, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 
 // Step 1) Render the full equipment tab
@@ -62,20 +62,22 @@ function renderDrillTable() {
   var html = "<thead><tr>";
   html += "<th>ID</th><th>Name</th><th>Type</th>";
   html += "<th class=\"num\">Min Diam (mm)</th><th class=\"num\">Max Diam (mm)</th>";
-  html += "<th class=\"num\">Rate (m/day)</th><th>Status</th><th>Assigned To</th><th>Maintenance</th>";
+  html += "<th class=\"num\">Rate (m/day)</th><th>Crew Req</th><th>Status</th><th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
   drills.forEach(function(drill) {
-    // Find which blasts this drill is assigned to
     var assignments = APP.blasts.filter(function(b) {
       return (b.assignedDrills || []).indexOf(drill.id) !== -1;
     }).map(function(b) { return b.name; });
 
-    var statusBadge = drill.status === "available" ? "badge-active" : "badge-blast";
+    var statusBadge = getStatusBadgeClass(drill.status);
     var maintCount = drill.maintenance.length;
     var maintBadge = maintCount > 0
       ? "<span class=\"badge badge-blast\">" + maintCount + " window(s)</span>"
       : "<span class=\"badge badge-complete\">Clear</span>";
+
+    // Step 3a) Build action buttons based on current status
+    var actions = buildEquipActions(drill.status, drill.id, "drill");
 
     html += "<tr data-drill-id=\"" + drill.id + "\">";
     html += "<td style=\"color:var(--accent-cyan);font-weight:600;\">" + drill.id + "</td>";
@@ -84,14 +86,19 @@ function renderDrillTable() {
     html += "<td class=\"num\">" + drill.minDiam + "</td>";
     html += "<td class=\"num\">" + drill.maxDiam + "</td>";
     html += "<td class=\"num\">" + formatNum(drill.rateM_per_day) + "</td>";
+    html += "<td style=\"font-size:11px;\">" + formatCrewRequired(drill.crewRequired) + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + drill.status + "</span></td>";
     html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td>" + maintBadge + "</td>";
+    html += "<td class=\"equip-actions\">" + actions + "</td>";
     html += "</tr>";
   });
 
   html += "</tbody>";
   document.getElementById("drillTable").innerHTML = html;
+
+  // Step 3b) Attach drill action event listeners
+  attachEquipActionListeners("drill");
 }
 
 // Step 4) MPU table
@@ -99,7 +106,7 @@ function renderMPUTable() {
   var html = "<thead><tr>";
   html += "<th>ID</th><th>Name</th><th>Type</th>";
   html += "<th class=\"num\">Capacity (kg)</th><th class=\"num\">Rate (kg/day)</th>";
-  html += "<th>Status</th><th>Assigned To</th><th>Maintenance</th>";
+  html += "<th>Crew Req</th><th>Status</th><th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
   mpus.forEach(function(mpu) {
@@ -107,11 +114,13 @@ function renderMPUTable() {
       return b.assignedMPU === mpu.id;
     }).map(function(b) { return b.name; });
 
-    var statusBadge = mpu.status === "available" ? "badge-active" : "badge-blast";
+    var statusBadge = getStatusBadgeClass(mpu.status);
     var maintCount = mpu.maintenance.length;
     var maintBadge = maintCount > 0
       ? "<span class=\"badge badge-blast\">" + maintCount + " window(s)</span>"
       : "<span class=\"badge badge-complete\">Clear</span>";
+
+    var actions = buildEquipActions(mpu.status, mpu.id, "mpu");
 
     html += "<tr data-mpu-id=\"" + mpu.id + "\">";
     html += "<td style=\"color:var(--accent-load);font-weight:600;\">" + mpu.id + "</td>";
@@ -119,14 +128,18 @@ function renderMPUTable() {
     html += "<td><span class=\"badge badge-load\">" + mpu.type + "</span></td>";
     html += "<td class=\"num\">" + formatNum(mpu.capacity_kg) + "</td>";
     html += "<td class=\"num\">" + formatNum(mpu.rateKg_per_day) + "</td>";
+    html += "<td style=\"font-size:11px;\">" + formatCrewRequired(mpu.crewRequired) + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + mpu.status + "</span></td>";
     html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td>" + maintBadge + "</td>";
+    html += "<td class=\"equip-actions\">" + actions + "</td>";
     html += "</tr>";
   });
 
   html += "</tbody>";
   document.getElementById("mpuTable").innerHTML = html;
+
+  attachEquipActionListeners("mpu");
 }
 
 // Step 5) People table
@@ -228,6 +241,82 @@ function renderMaintenanceTable() {
 
   html += "</tbody>";
   document.getElementById("maintenanceTable").innerHTML = html;
+}
+
+// Step 6b) Format crewRequired object as badge string (e.g. "OP:1 SF:1")
+function formatCrewRequired(crewReq) {
+  if (!crewReq) return "<span style=\"color:var(--text-muted)\">\u2014</span>";
+  var parts = [];
+  var keys = Object.keys(crewReq);
+  for (var i = 0; i < keys.length; i++) {
+    if (crewReq[keys[i]] > 0) {
+      parts.push("<span class=\"badge badge-drill\" style=\"font-size:10px;padding:1px 5px;\">" + keys[i] + ":" + crewReq[keys[i]] + "</span>");
+    }
+  }
+  return parts.length > 0 ? parts.join(" ") : "<span style=\"color:var(--text-muted)\">\u2014</span>";
+}
+
+// Step 7) Status badge class helper
+function getStatusBadgeClass(status) {
+  if (status === "available" || status === "mobilised") return "badge-active";
+  if (status === "demobilised") return "badge-demobilised";
+  return "badge-blast";
+}
+
+// Step 8) Build action buttons for equipment rows
+function buildEquipActions(status, equipId, equipType) {
+  var html = "<div class=\"equip-action-btns\">";
+
+  if (status === "demobilised") {
+    html += "<button class=\"btn-equip-action btn-mobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Mobilise\">";
+    html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 2v12M2 8l6-6 6 6\"/></svg> Mob</button>";
+  } else {
+    html += "<button class=\"btn-equip-action btn-demobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Demobilise\">";
+    html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 14V2M2 8l6 6 6-6\"/></svg> Demob</button>";
+  }
+
+  html += "<button class=\"btn-equip-action btn-remove-equip\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Remove\">";
+  html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10\"/></svg></button>";
+
+  html += "</div>";
+  return html;
+}
+
+// Step 9) Attach action button event listeners
+function attachEquipActionListeners(equipType) {
+  var collection = equipType === "drill" ? drills : mpus;
+
+  // Step 9a) Mobilise buttons
+  document.querySelectorAll(".btn-mobilise[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var equipId = btn.dataset.equipId;
+      mobiliseEquipment(collection, equipId);
+      renderEquipment();
+    });
+  });
+
+  // Step 9b) Demobilise buttons
+  document.querySelectorAll(".btn-demobilise[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var equipId = btn.dataset.equipId;
+      demobiliseEquipment(collection, equipId);
+      renderEquipment();
+    });
+  });
+
+  // Step 9c) Remove buttons
+  document.querySelectorAll(".btn-remove-equip[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var equipId = btn.dataset.equipId;
+      if (confirm("Remove " + equipId + "? This cannot be undone.")) {
+        removeEquipment(collection, equipId);
+        renderEquipment();
+      }
+    });
+  });
 }
 
 export { renderEquipment };

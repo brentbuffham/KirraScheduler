@@ -12,12 +12,15 @@ import { recalcDependencies } from "./engine/dependencyEngine.js";
 import { initTabs } from "./ui/tabs.js";
 import { initContextMenu } from "./ui/contextMenu.js";
 import { initGanttDrag } from "./ui/ganttDrag.js";
+import { initGanttResize } from "./ui/ganttResize.js";
+import { initDelayPalette } from "./ui/delayPalette.js";
 import { initThemeToggle } from "./ui/themeToggle.js";
 import { initBlastModal } from "./dialogs/blastModal.js";
 import { initEquipmentModals } from "./dialogs/equipmentModal.js";
 import { initBlockEditModal } from "./dialogs/blockEditModal.js";
 import { initImportPreview } from "./io/importPreview.js";
 import { initExport } from "./io/exportSchedule.js";
+import { initResetDialog } from "./dialogs/resetDialog.js";
 import { setupDropZone } from "./io/dropZone.js";
 import { parseDXFFile } from "./io/dxfImport.js";
 import { parseKirraConfig, parseKirraProject } from "./io/kirraImport.js";
@@ -37,6 +40,7 @@ initEquipmentModals();
 initBlockEditModal();
 initImportPreview();
 initExport();
+initResetDialog();
 
 // Step 4) Wire up Gantt toolbar buttons
 document.getElementById("btnRefreshGantt").addEventListener("click", function() {
@@ -63,7 +67,11 @@ renderForecast();
 renderConformance();
 renderEquipment();
 
-// Step 7) Initialise Gantt drag-to-move after initial render
+// Step 7) Initialise Gantt drag-to-move and resize after initial render
 initGanttDrag();
+initGanttResize();
+
+// Step 8) Initialise delay palette drag-and-drop
+initDelayPalette();
 
 console.log("Kirra Scheduler initialised.");
