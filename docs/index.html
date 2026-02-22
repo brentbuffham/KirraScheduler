@@ -6,8 +6,8 @@
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/KirraScheduler/icons/kirra-32.png">
-  <script type="module" crossorigin src="/KirraScheduler/assets/index-DaQ2-pl3.js"></script>
-  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-v0Sl97h3.css">
+  <script type="module" crossorigin src="/KirraScheduler/assets/index-DIXpUG47.js"></script>
+  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-C2rjfyqe.css">
 </head>
 <body>
 
@@ -49,6 +49,7 @@
   <div class="tab" data-tab="conformance">CONFORMANCE</div>
   <div class="tab" data-tab="equipment">EQUIPMENT</div>
   <div class="tab" data-tab="import">IMPORT / DXF</div>
+  <div class="tab" data-tab="help">HELP</div>
 </nav>
 
 <!-- Step 3) Main content area -->
@@ -280,6 +281,162 @@
         <button class="btn btn-success" id="btnMergeImported">Merge into Schedule</button>
         <button class="btn" id="btnClearImported" style="margin-left:8px;">Discard</button>
       </div>
+    </div>
+  </div>
+
+  <!-- HELP TAB -->
+  <div id="tab-help" class="tab-panel">
+    <div class="help-container">
+
+      <!-- Step 1) Welcome -->
+      <div class="help-hero">
+        <h2>Welcome to Kirra Scheduler</h2>
+        <p>Drill &amp; Blast Open Cut Planning &mdash; interactive Gantt scheduling for mine sites.</p>
+      </div>
+
+      <!-- Step 2) Quick Start -->
+      <div class="help-section">
+        <h3>Quick Start</h3>
+        <div class="help-steps">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div>
+              <strong>Set up your drill fleet</strong>
+              <p>Go to the <span class="help-tab-ref">EQUIPMENT</span> tab and add your drill rigs, MPUs, and personnel. Each rig needs a name, type, and drill rate.</p>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div>
+              <strong>Define blast patterns</strong>
+              <p>Open <span class="help-tab-ref">PATTERN LIBRARY</span> and click <strong>Add Pattern</strong>. Set burden, spacing, bench height, subdrill, and hole diameter for each pattern you use on site.</p>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div>
+              <strong>Add blasts to the schedule</strong>
+              <p>Click <strong>Add Blast</strong> in the header. Give it a name, select a pattern, set the surface area and drill start date. Assign rigs and an MPU.</p>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">4</div>
+            <div>
+              <strong>Configure dependencies</strong>
+              <p>On the <span class="help-tab-ref">GANTT SCHEDULE</span> tab, set global dependency rules (drill % to load, drill % to blast, lead days). Per-blast overrides are available in the blast edit dialog.</p>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">5</div>
+            <div>
+              <strong>Review &amp; export</strong>
+              <p>Use <span class="help-tab-ref">BLAST OVERVIEW</span>, <span class="help-tab-ref">EXPLOSIVE FORECAST</span>, and <span class="help-tab-ref">CONFORMANCE</span> to review your plan, then hit <strong>Export</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3) Tab Guide -->
+      <div class="help-section">
+        <h3>Tab Guide</h3>
+        <div class="help-grid">
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-brand);">GANTT SCHEDULE</div>
+            <p>The interactive Gantt chart. Each blast shows drill, load, and blast phases as colour-coded bars. Drag bars to reschedule. Right-click for context actions (edit, split, duplicate, set status). The top settings bar controls plan start, rig hours, availability, utilisation, and dependency thresholds.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-drill);">BLAST OVERVIEW</div>
+            <p>A tabular summary of every blast in the schedule with key metrics: volume, explosive mass, drill metres, dates, and current status. Use this for a quick audit of the full plan.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-cyan);">PATTERN LIBRARY</div>
+            <p>Store your site drill &amp; blast pattern templates. Each card shows burden, spacing, bench height, subdrill, diameter, and calculated powder factor. Patterns are referenced when adding blasts.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-load);">EXPLOSIVE FORECAST</div>
+            <p>Weekly explosive demand forecast derived from the Gantt schedule. Shows total kilograms per week, split by blast. Change the loading rate and charge config source at the top.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-green);">CONFORMANCE</div>
+            <p>Monthly drill &amp; blast conformance tracking. Compares planned vs actual volumes and explosives to help identify schedule slippage early.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-purple);">EQUIPMENT</div>
+            <p>Manage drill rigs, MPUs, personnel, and maintenance windows. Equipment defined here appears in the blast assignment dropdowns and drives rig-hour calculations on the Gantt.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-fire);">IMPORT / DXF</div>
+            <p>Import blast boundaries from DXF polygon files, charge configurations from Kirra App exports, or full project files. Imported blasts appear in a preview table before being merged into the schedule.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4) Gantt Interactions -->
+      <div class="help-section">
+        <h3>Gantt Interactions</h3>
+        <div class="help-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Action</th><th>How</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Move a blast</td><td>Drag the drill or load bar left/right on the Gantt</td></tr>
+              <tr><td>Edit a blast</td><td>Right-click the bar &rarr; Edit Blast, or click the pencil icon on the blast name</td></tr>
+              <tr><td>Set status</td><td>Right-click &rarr; Set Drilling / Loading / Fired</td></tr>
+              <tr><td>Split drill blocks</td><td>Right-click a drill bar &rarr; Split Drill to assign different rigs to sections</td></tr>
+              <tr><td>Merge blocks</td><td>Right-click a block &rarr; Merge Blocks to rejoin split sections</td></tr>
+              <tr><td>Duplicate a blast</td><td>Right-click &rarr; Duplicate</td></tr>
+              <tr><td>Remove a blast</td><td>Right-click &rarr; Remove</td></tr>
+              <tr><td>Recalculate dates</td><td>Click <strong>Recalc Dates</strong> to apply dependency rules to all blasts</td></tr>
+              <tr><td>Hover for detail</td><td>Hover over any Gantt bar for a tooltip with dates, metres, and status</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Step 5) Key Concepts -->
+      <div class="help-section">
+        <h3>Key Concepts</h3>
+        <div class="help-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-purple);">Dependencies</div>
+            <p><strong>Drill % to Load</strong> &mdash; loading can begin once drilling hits this percentage.<br>
+            <strong>Drill % to Blast</strong> &mdash; all drilling must reach this level before the blast fires.<br>
+            <strong>Load % to Blast</strong> &mdash; always 100% (hard constraint, cannot be overridden).<br>
+            <strong>Lead Days</strong> &mdash; minimum gap between load completion and blast date.<br>
+            <strong>Enforce Sequence</strong> &mdash; blasts must follow the order they appear in the schedule.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-title" style="color:var(--accent-drill);">Rig Calculations</div>
+            <p><strong>Rig Hours</strong> &mdash; operating hours per day (default 24).<br>
+            <strong>Availability</strong> &mdash; fraction of time the rig is mechanically available.<br>
+            <strong>Utilisation</strong> &mdash; fraction of available time spent actually drilling.<br>
+            Effective daily metres = Rate &times; (Hours/24) &times; Availability &times; Utilisation.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6) DXF Import Format -->
+      <div class="help-section">
+        <h3>DXF Import Naming Convention</h3>
+        <p>When importing DXF polygon files, layer or block names should follow:</p>
+        <div class="help-code">BLASTNAME-HOLETYPE{[Burden][Spacing][BenchHt][Subdrill][Diameter]}</div>
+        <p style="margin-top:8px;">Example: <span class="help-code" style="display:inline;padding:4px 8px;">S4_226_413-PRODUCTION{[4.5][5.2][12][1.5][0.311]}</span></p>
+      </div>
+
+      <!-- Step 7) Keyboard Shortcuts -->
+      <div class="help-section">
+        <h3>Tips</h3>
+        <ul class="help-tips">
+          <li>Use the <strong>CB</strong> button in the header to toggle a colourblind-friendly palette.</li>
+          <li>Switch between light and dark mode with the sun/moon toggle.</li>
+          <li>Blasts set to <strong>Auto</strong> mode will have dates recalculated when you click Recalc Dates.</li>
+          <li>Per-blast dependency overrides take precedence over the global defaults.</li>
+          <li>Maintenance windows block rig availability on the Gantt (hatched cells).</li>
+          <li>Kirra project imports (.kirra / .json) can include solids, boundaries, hole data, and charge configs.</li>
+        </ul>
+      </div>
+
     </div>
   </div>
 

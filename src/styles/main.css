@@ -1011,7 +1011,153 @@ select[multiple] option:checked {
   text-shadow: 0 0 4px var(--bg-primary);
 }
 
-/* Step 32) Breach warning pulse */
+/* Step 32) Help tab */
+.help-container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+.help-hero {
+  text-align: center;
+  padding: 32px 16px 24px;
+}
+.help-hero h2 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-brand), var(--accent-fire));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+}
+.help-hero p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.help-section {
+  margin-bottom: 28px;
+}
+.help-section h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.help-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.help-step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent-drill);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+}
+.help-step strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 4px;
+}
+.help-step p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.help-tab-ref {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-brand);
+  letter-spacing: 0.5px;
+}
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.help-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.help-card-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.help-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.help-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.help-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--accent-cyan);
+  display: block;
+}
+.help-tips {
+  list-style: none;
+  padding: 0;
+}
+.help-tips li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-drill);
+  background: var(--bg-card);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+.help-tips li:nth-child(even) {
+  border-left-color: var(--accent-purple);
+}
+.help-section p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Step 33) Breach warning pulse */
 @keyframes breachPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
