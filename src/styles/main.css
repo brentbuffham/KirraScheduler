@@ -22,12 +22,14 @@
   --accent-purple: #8b5cf6;
   --accent-cyan: #06b6d4;
   --accent-brand: #e53935;
+  --accent-prep: #14b8a6;
   --presplit: #a78bfa;
   --buffer: #38bdf8;
   --production: #f97316;
   --waste: #6b7280;
   --ore: #fbbf24;
   --yellow-zone: #eab308;
+  --gantt-prep: #14b8a6;
   --gantt-drill: #3b82f6;
   --gantt-load: #f59e0b;
   --gantt-blast: #ef4444;
@@ -392,6 +394,7 @@ body {
   transition: opacity 0.15s;
 }
 .gantt-bar:hover { opacity: 0.85; filter: brightness(1.15); }
+.gantt-bar.prep { background: var(--gantt-prep); }
 .gantt-bar.drill { background: var(--gantt-drill); }
 .gantt-bar.load { background: var(--gantt-load); }
 .gantt-bar.blast { background: var(--gantt-blast); }
@@ -885,10 +888,12 @@ body {
 .forecast-table { margin-top: 12px; }
 
 /* Step 26) Gantt drag-to-move (all bar types) */
+.gantt-bar.prep,
 .gantt-bar.drill,
 .gantt-bar.load {
   cursor: grab;
 }
+.gantt-bar.prep:active,
 .gantt-bar.drill:active,
 .gantt-bar.load:active,
 .gantt-bar.milestone:active,
@@ -896,6 +901,7 @@ body {
   cursor: grabbing;
   box-shadow: 0 2px 12px rgba(59,130,246,0.4);
 }
+.gantt-bar.prep.planned,
 .gantt-bar.drill.planned,
 .gantt-bar.load.planned {
   cursor: grab;
@@ -1781,4 +1787,118 @@ select[multiple] option:checked {
   color: var(--text-muted);
   padding-left: 22px;
   margin-top: -2px;
+}
+
+/* ========== STARTUP DIALOG ========== */
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 14, 0.96);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.startup-overlay.visible {
+  opacity: 1;
+}
+.startup-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 48px;
+  max-width: 560px;
+  width: 90vw;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  transform: translateY(12px);
+  transition: transform 0.3s ease;
+}
+.startup-overlay.visible .startup-dialog {
+  transform: translateY(0);
+}
+.startup-logo {
+  margin-bottom: 12px;
+}
+.startup-logo img {
+  border-radius: 12px;
+}
+.startup-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  background: linear-gradient(135deg, var(--accent-brand), #ff6f61);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.startup-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+.startup-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 0 20px;
+}
+.startup-prompt {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 20px;
+}
+.startup-options {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.startup-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.startup-btn:hover {
+  transform: translateY(-2px);
+}
+.startup-btn-examples:hover {
+  border-color: var(--accent-drill);
+  background: rgba(59, 130, 246, 0.08);
+}
+.startup-btn-fresh:hover {
+  border-color: var(--accent-green);
+  background: rgba(16, 185, 129, 0.08);
+}
+.startup-btn-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+.startup-btn-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.startup-btn-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.startup-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
 }

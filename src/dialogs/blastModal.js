@@ -4,7 +4,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus, canDrillDiameter } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, canDrillDiameter } from "../state/equipmentState.js";
 import { openModal, closeModal } from "../ui/modal.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
@@ -59,15 +59,29 @@ function populateDrillDropdown(selectedIds) {
   });
 }
 
-// Step 2c) Populate MPU assignment dropdown
-function populateMPUDropdown(selectedId) {
-  var sel = document.getElementById("fAssignedMPU");
-  sel.innerHTML = "<option value=\"\">\u2014 None \u2014</option>";
+// Step 2c) Populate MPU assignment multi-select (migrated from single-select to array)
+function populateMPUDropdown(selectedIds) {
+  var sel = document.getElementById("fAssignedMPUs");
+  sel.innerHTML = "";
   mpus.forEach(function(m) {
     var opt = document.createElement("option");
     opt.value = m.id;
     opt.textContent = m.id + " (" + m.type + ", " + m.rateKg_per_day + " kg/day)";
-    if (selectedId === m.id) opt.selected = true;
+    if (selectedIds && selectedIds.indexOf(m.id) !== -1) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// Step 2d-i) Populate ancillary equipment multi-select for pattern preparation
+function populateAncillaryDropdown(selectedIds) {
+  var sel = document.getElementById("fAssignedAncillary");
+  if (!sel) return;
+  sel.innerHTML = "";
+  ancillary.forEach(function(a) {
+    var opt = document.createElement("option");
+    opt.value = a.id;
+    opt.textContent = a.id + " (" + a.type + ")";
+    if (selectedIds && selectedIds.indexOf(a.id) !== -1) opt.selected = true;
     sel.appendChild(opt);
   });
 }
@@ -129,7 +143,14 @@ function showAddBlastModal() {
   document.getElementById("fDepMinLead").placeholder = "Global: " + APP.deps.minLeadDays;
   populatePatternDropdown();
   populateDrillDropdown([]);
-  populateMPUDropdown("");
+  // Step 3a) MPU multi-select — empty array for new blast
+  populateMPUDropdown([]);
+  // Step 3b) Pattern Preparation fields — default empty
+  var prepStartEl = document.getElementById("fPrepStart");
+  var prepDaysEl = document.getElementById("fPrepDays");
+  if (prepStartEl) prepStartEl.value = "";
+  if (prepDaysEl) prepDaysEl.value = "";
+  populateAncillaryDropdown([]);
   openModal("blastModal");
 }
 
@@ -168,7 +189,14 @@ function editBlast(idx) {
   populatePatternDropdown();
   document.getElementById("fPattern").value = b.pattern || "";
   populateDrillDropdown(b.assignedDrills || []);
-  populateMPUDropdown(b.assignedMPU || "");
+  // Step 4a) MPU multi-select — backward compat: read assignedMPUs or legacy assignedMPU
+  populateMPUDropdown(b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : []));
+  // Step 4b) Pattern Preparation fields
+  var prepStartEl = document.getElementById("fPrepStart");
+  var prepDaysEl = document.getElementById("fPrepDays");
+  if (prepStartEl) prepStartEl.value = b.prepStart || "";
+  if (prepDaysEl) prepDaysEl.value = b.prepDays || "";
+  populateAncillaryDropdown(b.assignedAncillary || []);
   openModal("blastModal");
 }
 
@@ -259,13 +287,33 @@ function saveBlast() {
     });
   }
 
+  // Step 5e-ii) Read pattern preparation fields
+  var prepStartEl = document.getElementById("fPrepStart");
+  var prepDaysEl = document.getElementById("fPrepDays");
+  var prepStart = prepStartEl ? prepStartEl.value : "";
+  var prepDays = prepDaysEl ? (parseInt(prepDaysEl.value) || 0) : 0;
+
+  // Step 5e-iii) Read assigned ancillary equipment
+  var assignedAncillary = [];
+  var ancSelect = document.getElementById("fAssignedAncillary");
+  if (ancSelect) {
+    for (var ai = 0; ai < ancSelect.selectedOptions.length; ai++) {
+      assignedAncillary.push(ancSelect.selectedOptions[ai].value);
+    }
+  }
+
   // Step 5f) Read assigned equipment
   var assignedDrills = [];
   var drillSelect = document.getElementById("fAssignedDrills");
   for (var si = 0; si < drillSelect.selectedOptions.length; si++) {
     assignedDrills.push(drillSelect.selectedOptions[si].value);
   }
-  var assignedMPU = document.getElementById("fAssignedMPU").value || "";
+  // Step 5f-ii) Read assigned MPUs from multi-select (array)
+  var assignedMPUs = [];
+  var mpuSelect = document.getElementById("fAssignedMPUs");
+  for (var mi = 0; mi < mpuSelect.selectedOptions.length; mi++) {
+    assignedMPUs.push(mpuSelect.selectedOptions[mi].value);
+  }
 
   // Step 5g) Build blast object
   var blastData = {
@@ -293,7 +341,12 @@ function saveBlast() {
     status: "planned",
     deps: blastDeps,
     assignedDrills: assignedDrills,
-    assignedMPU: assignedMPU,
+    // Step 5g-i) Store as array (migrated from single assignedMPU)
+    assignedMPUs: assignedMPUs,
+    // Step 5g-ii) Pattern preparation phase
+    prepStart: prepStart || null,
+    prepDays: prepDays || 0,
+    assignedAncillary: assignedAncillary,
     holeTypes: holeTypes,
     solidBounds: matchedSolid ? matchedSolid.bounds : null,
     solidBenchHt: matchedSolid ? matchedSolid.benchHt : null
@@ -305,6 +358,10 @@ function saveBlast() {
     blastData.status = prev.status;
     if (!blastData.solidBounds && prev.solidBounds) blastData.solidBounds = prev.solidBounds;
     if (!blastData.solidBenchHt && prev.solidBenchHt) blastData.solidBenchHt = prev.solidBenchHt;
+    // Step 5h-i) Preserve prep phase data from previous if not overwritten
+    if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
+    if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
+    if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
     APP.blasts[APP.editingBlastIdx] = blastData;
   } else {
     APP.blasts.push(blastData);

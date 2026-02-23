@@ -8,7 +8,7 @@
 
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
 import { CREW_ROLES, ensureCrewAllocated } from "../state/crewRoles.js";
-import { drills, mpus } from "../state/equipmentState.js";
+import { drills, mpus, ancillary } from "../state/equipmentState.js";
 import { APP } from "../state/appState.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks } from "../engine/blockHelpers.js";
@@ -18,7 +18,7 @@ import { renderGantt } from "../views/ganttView.js";
 var CELL_WIDTH = 32;
 
 // Step 1) Track collapsed palette sections between renders
-var _paletteCollapsed = { drills: false, mpus: false, crew: false, delays: false };
+var _paletteCollapsed = { drills: false, mpus: false, ancillary: true, crew: false, delays: false };
 
 // Step 2) Render the full palette into its container
 function renderDelayPalette() {
@@ -60,6 +60,25 @@ function renderDelayPalette() {
         "title=\"" + mpu.name + " (" + mpu.type + ") — " + mpu.rateKg_per_day + " kg/day\">";
       html += "<span class=\"palette-chip-icon\" style=\"background:" + statusColor + ";\">" + mpu.type.charAt(0) + "</span>";
       html += "<span class=\"palette-chip-text\">" + mpu.id + "</span>";
+      html += "</div>";
+    });
+    html += "</div>";
+  }
+
+  // ---- ANCILLARY SECTION ----
+  html += buildPaletteSectionHeader("ancillary", "ANCILLARY", "var(--accent-prep)");
+  if (!_paletteCollapsed.ancillary) {
+    html += "<div class=\"palette-chips\">";
+    ancillary.forEach(function(unit) {
+      var statusColor = unit.status === "demobilised" ? "var(--text-muted)" : "var(--accent-prep)";
+      var opacity = unit.status === "demobilised" ? "opacity:0.4;" : "";
+      var draggable = unit.status !== "demobilised" ? "true" : "false";
+      html += "<div class=\"palette-chip ancillary-chip\" draggable=\"" + draggable + "\" " +
+        "data-drag-type=\"ancillary\" data-drag-id=\"" + unit.id + "\" " +
+        "style=\"border-color:" + statusColor + ";" + opacity + "\" " +
+        "title=\"" + unit.name + " (" + unit.type + ")\">";
+      html += "<span class=\"palette-chip-icon\" style=\"background:" + statusColor + ";\">" + unit.type.charAt(0) + "</span>";
+      html += "<span class=\"palette-chip-text\">" + unit.id + "</span>";
       html += "</div>";
     });
     html += "</div>";
@@ -212,6 +231,8 @@ function initGanttDropTarget() {
       handleDrillDrop(blast, dragId, section, row);
     } else if (dragType === "mpu") {
       handleMPUDrop(blast, dragId, section);
+    } else if (dragType === "ancillary") {
+      handleAncillaryDrop(blast, dragId, section);
     } else if (dragType === "crew") {
       handleCrewDrop(blast, dragId, section);
     } else if (dragType === "gantt-drill") {
@@ -280,7 +301,7 @@ function handleDrillDrop(blast, drillId, section, row) {
   showDropFeedback(drillId + " assigned to " + blast.name, true);
 }
 
-// Step 7) Handle MPU drop — assign MPU to blast
+// Step 7) Handle MPU drop — assign MPU to blast (migrated to assignedMPUs array)
 function handleMPUDrop(blast, mpuId, section) {
   // Step 7a) Only valid on loading rows
   if (section !== "loading") {
@@ -288,18 +309,37 @@ function handleMPUDrop(blast, mpuId, section) {
     return;
   }
 
-  // Step 7b) Assign the MPU
-  var prev = blast.assignedMPU;
-  blast.assignedMPU = mpuId;
+  // Step 7b) Assign the MPU to the array (add if not already present)
+  if (!blast.assignedMPUs) blast.assignedMPUs = [];
+  if (blast.assignedMPUs.indexOf(mpuId) !== -1) {
+    showDropFeedback(mpuId + " already assigned to " + blast.name);
+    return;
+  }
+  blast.assignedMPUs.push(mpuId);
 
   recalcDependencies();
   renderGantt();
+  showDropFeedback(mpuId + " assigned to " + blast.name, true);
+}
 
-  if (prev && prev !== mpuId) {
-    showDropFeedback("Changed " + blast.name + " MPU: " + prev + " \u2192 " + mpuId, true);
-  } else {
-    showDropFeedback(mpuId + " assigned to " + blast.name, true);
+// Step 7a-ii) Handle ancillary drop — assign ancillary equipment to pattern prep
+function handleAncillaryDrop(blast, unitId, section) {
+  // Step 7a-ii-a) Only valid on pattern prep rows
+  if (section !== "pattern prep") {
+    showDropFeedback("Ancillary can only be dropped on PATTERN PREP rows");
+    return;
   }
+
+  // Step 7a-ii-b) Add to array if not already assigned
+  if (!blast.assignedAncillary) blast.assignedAncillary = [];
+  if (blast.assignedAncillary.indexOf(unitId) !== -1) {
+    showDropFeedback(unitId + " already assigned to " + blast.name);
+    return;
+  }
+  blast.assignedAncillary.push(unitId);
+
+  renderGantt();
+  showDropFeedback(unitId + " assigned to " + blast.name + " prep", true);
 }
 
 // Step 7b) Handle crew drop — increment crew allocation on a blast section
@@ -405,7 +445,7 @@ function handleDrillReassign(targetBlast, drillId, sourceBlastIdx, section, row)
   showDropFeedback(drillId + ": " + sourceBlast.name + " \u2192 " + targetBlast.name, true);
 }
 
-// Step 10c) Handle dragging an MPU chip from one blast to another loading row
+// Step 10c) Handle dragging an MPU chip from one blast to another loading row (migrated to array)
 function handleMPUReassign(targetBlast, mpuId, sourceBlastIdx, section) {
   if (section !== "loading") {
     showDropFeedback("MPUs can only be dropped on LOADING rows");
@@ -417,8 +457,17 @@ function handleMPUReassign(targetBlast, mpuId, sourceBlastIdx, section) {
 
   if (sourceBlast === targetBlast) return;
 
-  sourceBlast.assignedMPU = "";
-  targetBlast.assignedMPU = mpuId;
+  // Step 10c-i) Remove from source array
+  var srcMpus = sourceBlast.assignedMPUs || [];
+  var srcIdx = srcMpus.indexOf(mpuId);
+  if (srcIdx !== -1) srcMpus.splice(srcIdx, 1);
+  sourceBlast.assignedMPUs = srcMpus;
+
+  // Step 10c-ii) Add to target array
+  if (!targetBlast.assignedMPUs) targetBlast.assignedMPUs = [];
+  if (targetBlast.assignedMPUs.indexOf(mpuId) === -1) {
+    targetBlast.assignedMPUs.push(mpuId);
+  }
 
   recalcDependencies();
   renderGantt();
@@ -495,11 +544,12 @@ function handleDrillReturn(blast, drillId, blockIdx) {
   showDropFeedback(drillId + " removed from " + blast.name, true);
 }
 
-// Step 13) Remove an MPU from a blast when dropped back on palette
+// Step 13) Remove an MPU from a blast when dropped back on palette (migrated to array)
 function handleMPUReturn(blast, mpuId) {
-  if (blast.assignedMPU === mpuId) {
-    blast.assignedMPU = "";
-  }
+  var mpuArr = blast.assignedMPUs || [];
+  var idx = mpuArr.indexOf(mpuId);
+  if (idx !== -1) mpuArr.splice(idx, 1);
+  blast.assignedMPUs = mpuArr;
 
   recalcDependencies();
   renderGantt();

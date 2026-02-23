@@ -6,8 +6,8 @@
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/KirraScheduler/icons/kirra-32.png">
-  <script type="module" crossorigin src="/KirraScheduler/assets/index-DPo9A30d.js"></script>
-  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-BRrFIReW.css">
+  <script type="module" crossorigin src="/KirraScheduler/assets/index-OpU6_WOt.js"></script>
+  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-CXfaSkZR.css">
 </head>
 <body>
 
@@ -144,8 +144,30 @@
   <!-- PATTERN LIBRARY TAB -->
   <div id="tab-patterns" class="tab-panel">
     <div class="flex-between mb-16">
-      <h2 style="font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text-secondary);">Production Drill &amp; Blast Patterns</h2>
-      <button class="btn" id="btnAddPattern">Add Pattern</button>
+      <div>
+        <h2 style="font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text-secondary); margin:0;">Production Drill &amp; Blast Patterns</h2>
+        <span id="patternCount" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">0 pattern(s)</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <!-- Step 1) Export blank template for people to fill in -->
+        <button class="btn" id="btnExportPatternTemplate" title="Download a blank CSV template to fill in with your site patterns">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Export Template
+        </button>
+        <!-- Step 2) Export current patterns as filled CSV -->
+        <button class="btn" id="btnExportPatternLib" title="Export the current pattern library as CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Library
+        </button>
+        <!-- Step 3) Import a filled CSV -->
+        <button class="btn btn-primary" id="btnImportPatterns" title="Import a filled-in pattern CSV to replace the current library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import Patterns
+        </button>
+        <input type="file" id="patternFileInput" accept=".csv" style="display:none;">
+        <!-- Step 4) Add single pattern manually -->
+        <button class="btn" id="btnAddPattern">Add Pattern</button>
+      </div>
     </div>
     <div class="pattern-grid" id="patternGrid"></div>
   </div>
@@ -292,6 +314,17 @@
       </div>
       <div style="overflow-x:auto; max-height:250px;">
         <table class="data-table" id="mpuTable"></table>
+      </div>
+    </div>
+
+    <!-- Ancillary Equipment Section -->
+    <div class="data-table-container">
+      <div class="table-title" style="justify-content:space-between;">
+        <span style="color:var(--accent-prep)">Ancillary Equipment</span>
+        <button class="btn" id="btnAddAncillary">+ Add Ancillary</button>
+      </div>
+      <div style="overflow-x:auto; max-height:250px;">
+        <table class="data-table" id="ancillaryTable"></table>
       </div>
     </div>
 
@@ -658,10 +691,34 @@
         </div>
       </div>
 
+      <!-- Pattern Preparation -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-prep);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          Pattern Preparation <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— floor prep before drilling (optional)</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Prep Start Date</label>
+            <input type="date" id="fPrepStart">
+          </div>
+          <div class="form-field">
+            <label>Prep Duration (days)</label>
+            <input type="number" id="fPrepDays" min="0" step="1" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="flex:1;">
+            <label>Assigned Ancillary Equipment (multi-select)</label>
+            <select id="fAssignedAncillary" multiple style="height:80px;"></select>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:4px;">Excavator &rarr; Loader &rarr; Dozer &rarr; Grader &rarr; Roller</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Equipment Assignment -->
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
         <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-          Equipment Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign drills and MPU to this blast</span>
+          Equipment Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign drills and MPUs to this blast</span>
         </div>
         <div class="form-row">
           <div class="form-field">
@@ -669,8 +726,8 @@
             <select id="fAssignedDrills" multiple style="height:80px;"></select>
           </div>
           <div class="form-field">
-            <label>Assigned MPU</label>
-            <select id="fAssignedMPU"></select>
+            <label>Assigned MPUs (multi-select)</label>
+            <select id="fAssignedMPUs" multiple style="height:80px;"></select>
             <div id="fDrillCompatWarning" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent-blast);margin-top:4px;display:none;"></div>
           </div>
         </div>

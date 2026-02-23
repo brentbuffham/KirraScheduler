@@ -72,6 +72,9 @@ function onResizeStart(e) {
   if (delayIdx !== null && blast.delays && blast.delays[delayIdx]) {
     originalDays = blast.delays[delayIdx].days || 1;
     originalStart = blast.delays[delayIdx].start;
+  } else if (section === "pattern prep") {
+    originalDays = blast.prepDays || 1;
+    originalStart = blast.prepStart;
   } else if (section === "drilling" && blockIdx !== null) {
     var block = blast.drillBlocks && blast.drillBlocks[blockIdx];
     if (block) {
@@ -151,6 +154,14 @@ function onResizeEnd(e) {
             delay.start = isoDate(newStart);
             delay.days = newDays;
           }
+        }
+
+      // Step 5c-ii) Pattern Prep resize — adjust prepDays and prepStart
+      } else if (resizeState.section === "pattern prep") {
+        var newPrepDays = Math.max(resizeState.originalDays + (resizeState.edge === "right" ? dayOffset : -dayOffset), 1);
+        blast.prepDays = newPrepDays;
+        if (resizeState.edge === "left") {
+          blast.prepStart = isoDate(addDays(new Date(resizeState.originalStart), dayOffset));
         }
 
       // Step 5d) Drill block resize — adjust pen rates

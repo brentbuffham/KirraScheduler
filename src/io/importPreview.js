@@ -121,7 +121,8 @@ function mergeImported() {
         status: "planned",
         deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
         assignedDrills: imp.assignedDrills || [],
-        assignedMPU: imp.assignedMPU || "",
+        // Step 3b-i) Store as array (migrated from single assignedMPU)
+        assignedMPUs: imp.assignedMPUs || (imp.assignedMPU ? [imp.assignedMPU] : []),
         holeTypes: (imp.holeTypes || []).map(function(ht) {
           return {
             type: ht.type,

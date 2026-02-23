@@ -68,6 +68,7 @@ function onDragStart(e) {
       return;
     }
   }
+  if (section === "pattern prep" && !blast.prepStart) return;
   if (section === "loading" && !blast.loadStart) return;
   if (section === "blasting" && !blast.blastDate) return;
 
@@ -160,6 +161,11 @@ function onDragEnd(e) {
             }
           });
         }
+
+      } else if (section === "pattern prep" && blast.prepStart) {
+        // Step 4d-ii) Shift prep start date
+        var newPrep = addDays(new Date(blast.prepStart), dayOffset);
+        blast.prepStart = isoDate(newPrep);
 
       } else if (section === "loading" && blast.loadStart) {
         var newLoad = addDays(new Date(blast.loadStart), dayOffset);

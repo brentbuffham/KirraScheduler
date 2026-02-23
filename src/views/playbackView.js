@@ -284,16 +284,18 @@ function updateSceneForDay(day) {
       });
     }
 
-    // Step 4b-ii) Place MPU at loading blasts
-    if (state.phase === "loading" && state.mpu) {
-      var mpuId = state.mpu;
-      if (placed[mpuId]) return;
-      var centroid = getBlastCentroid(b.name);
-      if (!centroid) return;
-      var pos = centroid.clone();
-      pos.x -= 15;
-      placeEquipment(mpuId, "MPU", pos);
-      placed[mpuId] = true;
+    // Step 4b-ii) Place MPUs at loading blasts (migrated from single mpu to mpus array)
+    if (state.phase === "loading" && state.mpus && state.mpus.length > 0) {
+      for (var mi = 0; mi < state.mpus.length; mi++) {
+        var mpuId = state.mpus[mi];
+        if (placed[mpuId]) continue;
+        var centroid = getBlastCentroid(b.name);
+        if (!centroid) continue;
+        var pos = centroid.clone();
+        pos.x -= 15 + (mi * 10);
+        placeEquipment(mpuId, "MPU", pos);
+        placed[mpuId] = true;
+      }
     }
   });
 }

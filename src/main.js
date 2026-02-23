@@ -33,8 +33,9 @@ import { renderForecast } from "./views/forecastView.js";
 import { renderConformance } from "./views/conformanceView.js";
 import { renderEquipment } from "./views/equipmentView.js";
 import { initPlaybackView } from "./views/playbackView.js";
+import { shouldShowStartup, showStartupDialog, clearSeedData, markStartupComplete } from "./dialogs/startupDialog.js";
 
-// Step 3) Initialise UI event listeners
+// Step 3) Initialise UI event listeners (safe before data decisions)
 initThemeToggle();
 initTabs();
 initContextMenu();
@@ -62,26 +63,51 @@ setupDropZone("dxfDropZone", "dxfFileInput", parseDXFFile);
 setupDropZone("kirraDropZone", "kirraFileInput", parseKirraConfig);
 setupDropZone("kirraProjectDropZone", "kirraProjectInput", parseKirraProject);
 
-// Step 6) Initial calculations and render
-recalcDependencies();
-renderGantt();
-renderBlasts();
-renderPatterns();
-renderForecast();
-renderConformance();
-renderEquipment();
+// Step 6) Startup gate — ask user on first run, then render
+//         On subsequent loads, re-apply the stored choice (ES modules
+//         reinitialise seed data on every page load)
+(function boot() {
+  if (shouldShowStartup()) {
+    // Step 6a) First visit — show the welcome dialog
+    showStartupDialog().then(function(choice) {
+      if (choice === "fresh") {
+        clearSeedData();
+      }
+      markStartupComplete(choice);
+      firstRender();
+    });
+  } else {
+    // Step 6b) Returning visit — honour the stored choice
+    var stored = localStorage.getItem("kirra-scheduler-setup");
+    if (stored === "fresh") {
+      clearSeedData();
+    }
+    firstRender();
+  }
+})();
 
-// Step 7) Initialise Gantt drag-to-move and resize after initial render
-initGanttDrag();
-initGanttResize();
+function firstRender() {
+  // Step 7) Initial calculations and render
+  recalcDependencies();
+  renderGantt();
+  renderBlasts();
+  renderPatterns();
+  renderForecast();
+  renderConformance();
+  renderEquipment();
 
-// Step 8) Initialise delay palette drag-and-drop
-initDelayPalette();
+  // Step 8) Initialise Gantt drag-to-move and resize after initial render
+  initGanttDrag();
+  initGanttResize();
 
-// Step 9) Initialise 3D Playback view (lazy — scene created when tab shown)
-initPlaybackView();
+  // Step 9) Initialise delay palette drag-and-drop
+  initDelayPalette();
 
-// Step 10) Initialise KAP file import
-initKAPImport();
+  // Step 10) Initialise 3D Playback view (lazy — scene created when tab shown)
+  initPlaybackView();
 
-console.log("Kirra Scheduler initialised.");
+  // Step 11) Initialise KAP file import
+  initKAPImport();
+
+  console.log("Kirra Scheduler initialised.");
+}

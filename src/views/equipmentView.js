@@ -4,7 +4,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 
 // Step 1) Render the full equipment tab
@@ -12,6 +12,7 @@ function renderEquipment() {
   renderEquipmentStats();
   renderDrillTable();
   renderMPUTable();
+  renderAncillaryTable();
   renderPeopleTable();
   renderMaintenanceTable();
 }
@@ -48,6 +49,13 @@ function renderEquipmentStats() {
   html += "  <div class=\"stat-label\">Personnel</div>";
   html += "  <div class=\"stat-value\">" + totalPeople + "</div>";
   html += "  <div class=\"stat-sub\">" + operators + " drill operators</div>";
+  html += "</div>";
+  var availAnc = ancillary.filter(function(a) { return a.status === "available"; }).length;
+  var totalAnc = ancillary.length;
+  html += "<div class=\"stat-card\" style=\"border-left-color:var(--accent-prep);\">";
+  html += "  <div class=\"stat-label\">Ancillary Fleet</div>";
+  html += "  <div class=\"stat-value\">" + availAnc + " / " + totalAnc + "</div>";
+  html += "  <div class=\"stat-sub\">" + availAnc + " available</div>";
   html += "</div>";
   html += "<div class=\"stat-card accent-red\">";
   html += "  <div class=\"stat-label\">Upcoming Maintenance</div>";
@@ -110,8 +118,9 @@ function renderMPUTable() {
   html += "</tr></thead><tbody>";
 
   mpus.forEach(function(mpu) {
+    // Step 4a) Filter blasts assigned to this MPU (backward compat with legacy assignedMPU)
     var assignments = APP.blasts.filter(function(b) {
-      return b.assignedMPU === mpu.id;
+      return (b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : [])).indexOf(mpu.id) !== -1;
     }).map(function(b) { return b.name; });
 
     var statusBadge = getStatusBadgeClass(mpu.status);
@@ -140,6 +149,40 @@ function renderMPUTable() {
   document.getElementById("mpuTable").innerHTML = html;
 
   attachEquipActionListeners("mpu");
+}
+
+// Step 4b) Ancillary equipment table (Dozers, Graders, Loaders, Excavators, Rollers)
+function renderAncillaryTable() {
+  var html = "<thead><tr>";
+  html += "<th>ID</th><th>Name</th><th>Type</th>";
+  html += "<th class=\"num\">Rate (m\u00B2/day)</th>";
+  html += "<th>Status</th><th>Assigned To</th><th>Actions</th>";
+  html += "</tr></thead><tbody>";
+
+  ancillary.forEach(function(unit) {
+    var assignments = APP.blasts.filter(function(b) {
+      return (b.assignedAncillary || []).indexOf(unit.id) !== -1;
+    }).map(function(b) { return b.name; });
+
+    var statusBadge = getStatusBadgeClass(unit.status);
+    var actions = buildEquipActions(unit.status, unit.id, "ancillary");
+
+    html += "<tr data-ancillary-id=\"" + unit.id + "\">";
+    html += "<td style=\"color:var(--accent-prep);font-weight:600;\">" + unit.id + "</td>";
+    html += "<td>" + unit.name + "</td>";
+    html += "<td><span class=\"badge\" style=\"background:rgba(20,184,166,0.15);color:var(--accent-prep);\">" + unit.type + "</span></td>";
+    html += "<td class=\"num\">" + formatNum(unit.rateM2_per_day) + "</td>";
+    html += "<td><span class=\"badge " + statusBadge + "\">" + unit.status + "</span></td>";
+    html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td class=\"equip-actions\">" + actions + "</td>";
+    html += "</tr>";
+  });
+
+  html += "</tbody>";
+  var el = document.getElementById("ancillaryTable");
+  if (el) el.innerHTML = html;
+
+  attachEquipActionListeners("ancillary");
 }
 
 // Step 5) People table
@@ -207,7 +250,8 @@ function renderMaintenanceTable() {
     var conflicts = [];
     APP.blasts.forEach(function(b) {
       if (!b.drillStart) return;
-      var assigned = (b.assignedDrills || []).concat(b.assignedMPU ? [b.assignedMPU] : []);
+      // Step 6a) Concat drills + MPUs array (backward compat with legacy assignedMPU)
+      var assigned = (b.assignedDrills || []).concat(b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : []));
       if (assigned.indexOf(m.equipId) === -1) return;
       var bEnd = new Date(b.drillStart);
       bEnd.setDate(bEnd.getDate() + (b.drillDays || 1) - 1);
@@ -284,7 +328,7 @@ function buildEquipActions(status, equipId, equipType) {
 
 // Step 9) Attach action button event listeners
 function attachEquipActionListeners(equipType) {
-  var collection = equipType === "drill" ? drills : mpus;
+  var collection = equipType === "drill" ? drills : equipType === "ancillary" ? ancillary : mpus;
 
   // Step 9a) Mobilise buttons
   document.querySelectorAll(".btn-mobilise[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {

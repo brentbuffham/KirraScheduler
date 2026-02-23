@@ -57,7 +57,7 @@ var APP = {
       drillStart: "2026-02-21", drillStartTime: "06:00", drillDays: 1, loadStart: "2026-02-21", loadDays: 1,
       blastDate: "2026-02-22", status: "active",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["D65-01"], assignedMPU: "MPU-01",
+      assignedDrills: ["D65-01"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 138, drillMeters: 3496.4, expMass: 3168 }
       ]
@@ -69,7 +69,8 @@ var APP = {
       drillStart: "2026-02-21", drillStartTime: "06:00", drillDays: 3, loadStart: "2026-02-23", loadDays: 3,
       blastDate: "2026-02-26", status: "active",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["PV271-01", "PV271-02", "PV271-03"], assignedMPU: "MPU-01",
+      assignedDrills: ["PV271-01", "PV271-02", "PV271-03"], assignedMPUs: ["MPU-01"],
+      prepStart: "2026-02-19", prepDays: 2, assignedAncillary: ["EX-01", "DZ-01", "GR-01"],
       holeTypes: [
         { type: "BUFFER", diam: 0.127, burden: 3.8, spacing: 2.3, holes: 65, drillMeters: 882.9, expMass: 6416 },
         { type: "PRODUCTION", diam: 0.165, burden: 3.5, spacing: 4.7, holes: 19, drillMeters: 266.1, expMass: 5403 },
@@ -83,7 +84,8 @@ var APP = {
       drillStart: "2026-02-23", drillStartTime: "10:00", drillDays: 7, loadStart: "2026-02-27", loadDays: 4,
       blastDate: "2026-03-02", status: "active",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["PV271-01", "PV271-02", "PV271-03"], assignedMPU: "MPU-02",
+      assignedDrills: ["PV271-01", "PV271-02", "PV271-03"], assignedMPUs: ["MPU-02"],
+      prepStart: "2026-02-21", prepDays: 2, assignedAncillary: ["EX-01", "LD-01", "DZ-02"],
       drillBlocks: [
         {
           id: "block-0", label: "A",
@@ -114,7 +116,7 @@ var APP = {
       drillStart: "2026-03-01", drillStartTime: "06:00", drillDays: 2, loadStart: "2026-03-05", loadDays: 1,
       blastDate: "2026-03-06", status: "planned",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["D65-01", "D65-02"], assignedMPU: "",
+      assignedDrills: ["D65-01", "D65-02"], assignedMPUs: [],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 0, drillMeters: 1350, expMass: 1440 }
       ]
@@ -126,7 +128,7 @@ var APP = {
       drillStart: "2026-03-02", drillDays: 6, loadStart: "2026-03-07", loadDays: 3,
       blastDate: "2026-03-10", status: "planned",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPU: "MPU-01",
+      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 6459.4, expMass: 245760 }
       ]
@@ -138,7 +140,7 @@ var APP = {
       drillStart: "2026-03-04", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["D65-01", "D65-02"], assignedMPU: "",
+      assignedDrills: ["D65-01", "D65-02"], assignedMPUs: [],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 0, drillMeters: 2970, expMass: 3168 }
       ]
@@ -150,7 +152,7 @@ var APP = {
       drillStart: "2026-03-07", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPU: "MPU-01",
+      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 3154, expMass: 120000 }
       ]
@@ -162,7 +164,7 @@ var APP = {
       drillStart: "2026-03-09", drillDays: 6, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
       deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPU: "MPU-02",
+      assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01", "MPU-02"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 7497.7, expMass: 285264 }
       ]

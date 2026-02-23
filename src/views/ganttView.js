@@ -39,13 +39,23 @@ function buildDrillChips(drillIds, blastIdx, blockIdx) {
   return html;
 }
 
-// Step 0d) Build draggable MPU chip for the info column.
+// Step 0d) Build a single draggable MPU chip for the info column.
 function buildMPUChip(mpuId, blastIdx) {
   if (!mpuId) return "";
   return "<span class=\"gantt-mpu-chip\" draggable=\"true\" " +
     "data-drag-type=\"gantt-mpu\" data-drag-id=\"" + mpuId + "\" " +
     "data-blast-idx=\"" + blastIdx + "\" " +
     "title=\"Drag back to palette to unassign " + mpuId + "\">" + mpuId + "</span> ";
+}
+
+// Step 0d-ii) Build draggable MPU chips for an array of MPU IDs (multi-MPU support).
+function buildMPUChips(mpuIds, blastIdx) {
+  if (!mpuIds || mpuIds.length === 0) return "";
+  var html = "";
+  for (var i = 0; i < mpuIds.length; i++) {
+    html += buildMPUChip(mpuIds[i], blastIdx);
+  }
+  return html;
 }
 
 // Step 0b) Small pencil SVG for inline edit icon
@@ -176,7 +186,7 @@ function renderGantt() {
       var isLastBar = false;
 
       if (range.start && range.end && ds >= range.start && ds <= range.end) {
-        barClass = sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : "blast";
+        barClass = sectionName === "PATTERN PREP" ? "prep" : sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : "blast";
         if (blast.status === "planned" && sectionName !== "BLASTING") barClass += " planned";
 
         // Step) Determine if this is the first or last cell of the bar for resize handles
@@ -374,7 +384,12 @@ function renderGantt() {
       }
 
       var info = "";
-      if (sectionName === "DRILLING") {
+      if (sectionName === "PATTERN PREP") {
+        // Step 1f-ii-prep) Show assigned ancillary equipment
+        var ancIds = blast.assignedAncillary || [];
+        info = ancIds.length > 0 ? ancIds.join(", ") : "";
+        if (blast.prepDays) info += (info ? " " : "") + blast.prepDays + "d";
+      } else if (sectionName === "DRILLING") {
         var drillTag = buildDrillChips(blast.assignedDrills || [], idx, null);
         // Step) Crew fill badges for drilling
         var drillCrewReq = calcDrillCrewRequired(blast, drills);
@@ -392,7 +407,9 @@ function renderGantt() {
         }
         info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + depIcon + maintIcon + drillCrewHtml + conflictBadge;
       } else if (sectionName === "LOADING") {
-        var mpuTag = buildMPUChip(blast.assignedMPU, idx);
+        // Step 1f-ii-mpu) Build MPU chips from array (backward compat with legacy single assignedMPU)
+        var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+        var mpuTag = buildMPUChips(mpuList, idx);
         // Step) Crew fill badges for loading
         var loadCrewReq = calcLoadCrewRequired(blast, mpus);
         var loadCrewAlloc = ensureCrewAllocated(blast).loading;
@@ -412,7 +429,14 @@ function renderGantt() {
     });
   }
 
-  // Step 1g) Render each section
+  // Step 1g) Render each section — Pattern Prep, Drilling, Loading, Blasting
+  renderSection("PATTERN PREP", "var(--accent-prep)", function(b) {
+    if (!b.prepStart || !b.prepDays) return null;
+    var start = b.prepStart;
+    var end = isoDate(addDays(new Date(b.prepStart), Math.max((b.prepDays || 1) - 1, 0)));
+    return { start: start, end: end };
+  });
+
   renderSection("DRILLING", "var(--accent-drill)", function(b) {
     if (!b.drillStart) return null;
     var start = b.drillStart;

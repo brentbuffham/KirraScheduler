@@ -87,7 +87,8 @@ function buildTimeline() {
 function getBlastPhase(blast, dateStr) {
   // Step 3a) Blast day
   if (blast.blastDate && dateStr === blast.blastDate) {
-    return { phase: "blastDay", drills: blast.assignedDrills || [], mpu: blast.assignedMPU || "" };
+    // Step 3a-i) Migrated mpu to mpus array (backward compat with legacy assignedMPU)
+    return { phase: "blastDay", drills: blast.assignedDrills || [], mpus: blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []) };
   }
 
   // Step 3b) Loading phase
@@ -96,7 +97,8 @@ function getBlastPhase(blast, dateStr) {
     loadEnd.setDate(loadEnd.getDate() + blast.loadDays - 1);
     var loadEndStr = isoDate(loadEnd);
     if (dateStr >= blast.loadStart && dateStr <= loadEndStr) {
-      return { phase: "loading", drills: [], mpu: blast.assignedMPU || "" };
+      // Step 3b-i) Migrated mpu to mpus array
+      return { phase: "loading", drills: [], mpus: blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []) };
     }
   }
 
@@ -109,7 +111,7 @@ function getBlastPhase(blast, dateStr) {
         blockEnd.setDate(blockEnd.getDate() + block.drillDays - 1);
         var blockEndStr = isoDate(blockEnd);
         if (dateStr >= block.drillStart && dateStr <= blockEndStr) {
-          return { phase: "drilling", drills: block.assignedDrills || [], mpu: "" };
+          return { phase: "drilling", drills: block.assignedDrills || [], mpus: [] };
         }
       }
     }
@@ -118,18 +120,18 @@ function getBlastPhase(blast, dateStr) {
     drillEnd.setDate(drillEnd.getDate() + blast.drillDays - 1);
     var drillEndStr = isoDate(drillEnd);
     if (dateStr >= blast.drillStart && dateStr <= drillEndStr) {
-      return { phase: "drilling", drills: blast.assignedDrills || [], mpu: "" };
+      return { phase: "drilling", drills: blast.assignedDrills || [], mpus: [] };
     }
   }
 
   // Step 3d) Past blast date = completed
   if (blast.blastDate && dateStr > blast.blastDate) {
-    return { phase: "completed", drills: [], mpu: "" };
+    return { phase: "completed", drills: [], mpus: [] };
   }
 
   // Step 3e) Has a drill start but date is before = planned
   if (blast.drillStart && dateStr >= blast.drillStart) {
-    return { phase: "planned", drills: [], mpu: "" };
+    return { phase: "planned", drills: [], mpus: [] };
   }
 
   return null;

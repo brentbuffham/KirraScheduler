@@ -228,7 +228,8 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
         status: "planned",
         deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
         assignedDrills: [],
-        assignedMPU: "",
+        // Step 3d-i) Use array for MPU assignments (migrated from single assignedMPU)
+        assignedMPUs: [],
         holeTypes: [],
         solidBounds: bounds,
         solidBenchHt: benchHt,

@@ -82,6 +82,16 @@ var mpus = [
   }
 ];
 
+// Step 2b) Ancillary fleet — dozers, graders, loaders, excavators, rollers
+var ancillary = [
+  { id: "DZ-01", name: "D9 Dozer #1", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
+  { id: "DZ-02", name: "D9 Dozer #2", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
+  { id: "GR-01", name: "Grader #1", type: "Grader", rateM2_per_day: 12000, status: "available", maintenance: [] },
+  { id: "EX-01", name: "Excavator #1", type: "Excavator", rateM2_per_day: 5000, status: "available", maintenance: [] },
+  { id: "LD-01", name: "Loader #1", type: "Loader", rateM2_per_day: 6000, status: "available", maintenance: [] },
+  { id: "RL-01", name: "Roller #1", type: "Roller", rateM2_per_day: 15000, status: "available", maintenance: [] }
+];
+
 // Step 3) Personnel list
 var people = [
   { id: "P001", name: "John Smith",     role: "Drill Operator",     certifiedTypes: ["D65", "PV271"] },
@@ -193,6 +203,7 @@ function effectiveDrillDays(drill, startStr, numDays) {
 export {
   drills,
   mpus,
+  ancillary,
   people,
   canDrillDiameter,
   isDrillInMaintenance,

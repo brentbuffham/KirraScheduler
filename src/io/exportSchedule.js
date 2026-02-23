@@ -63,7 +63,7 @@ function exportCSV() {
     "D65 Meters", "PV Meters", "Total Drill Meters",
     "Drill Start", "Start Time", "Drill Days",
     "Load Start", "Load Days", "Blast Date",
-    "Assigned Drills", "Assigned MPU",
+    "Assigned Drills", "Assigned MPUs",
     "Rate D65 (m/day)", "Rate PV (m/day)",
     "Num D65", "Num PV", "Load Rate (kg/day)",
     "Drill % to Load", "Drill % to Blast", "Lead Days",
@@ -97,7 +97,8 @@ function exportCSV() {
       b.loadDays || 0,
       b.blastDate || "",
       csvEscape((b.assignedDrills || []).join(" | ")),
-      b.assignedMPU || "",
+      // Step 2b-i) Export assignedMPUs array (backward compat with legacy assignedMPU)
+      csvEscape((b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : [])).join(" | ")),
       b.rateD65 || 0,
       b.ratePV || 0,
       b.numD65 || 0,

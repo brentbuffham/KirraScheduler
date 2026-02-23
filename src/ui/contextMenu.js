@@ -182,22 +182,34 @@ function buildDynamicEquipItems(menu, blast, section, blockIdx) {
     }
   }
 
-  // Step 1g-iii) For LOADING section, show "Remove MPU" if one is assigned
-  if (section === "loading" && blast.assignedMPU) {
+  // Step 1g-iii) For LOADING section, show "Remove MPU" for each assigned MPU (migrated to array)
+  var assignedMPUList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+  if (section === "loading" && assignedMPUList.length > 0) {
     var sep2 = document.createElement("div");
     sep2.className = "ctx-divider ctx-dynamic";
     menu.insertBefore(sep2, dividerRef);
 
-    var mpuItem = document.createElement("div");
-    mpuItem.className = "ctx-item ctx-dynamic";
-    mpuItem.style.color = "var(--accent-blast)";
-    mpuItem.innerHTML = "\u2716 Remove " + blast.assignedMPU;
-    mpuItem.addEventListener("click", function() {
-      blast.assignedMPU = "";
-      recalcDependencies();
-      renderGantt();
+    var mpuLabel = document.createElement("div");
+    mpuLabel.className = "ctx-label ctx-dynamic";
+    mpuLabel.textContent = "Assigned MPUs";
+    menu.insertBefore(mpuLabel, dividerRef);
+
+    assignedMPUList.forEach(function(mpuId) {
+      var mpuItem = document.createElement("div");
+      mpuItem.className = "ctx-item ctx-dynamic";
+      mpuItem.style.color = "var(--accent-blast)";
+      mpuItem.innerHTML = "\u2716 Remove " + mpuId;
+      mpuItem.addEventListener("click", function() {
+        // Step 1g-iii-a) Remove this MPU from the array
+        var arr = blast.assignedMPUs || [];
+        var ri = arr.indexOf(mpuId);
+        if (ri !== -1) arr.splice(ri, 1);
+        blast.assignedMPUs = arr;
+        recalcDependencies();
+        renderGantt();
+      });
+      menu.insertBefore(mpuItem, dividerRef);
     });
-    menu.insertBefore(mpuItem, dividerRef);
   }
 
   // Step 1g-iv) Show crew removal items for this section

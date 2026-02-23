@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, isDrillInMaintenance } from "../state/equipmentState.js";
+import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
 import { hasBlocks, syncBlastFromBlocks, getLatestBlockEnd } from "../engine/blockHelpers.js";
 import { addDays, isoDate, formatDate } from "../utils/dateUtils.js";
 
@@ -124,7 +124,17 @@ function recalcDependencies() {
       blast.loadStart = autoLoadStart;
     }
 
-    var loadDays = blast.loadRate > 0 ? Math.ceil((blast.expMass || 0) / blast.loadRate) : 1;
+    // Step 2f-i) Multi-MPU loading: sum the daily rates of all assigned MPUs
+    var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+    var combinedLoadRate = 0;
+    if (mpuList.length > 0) {
+      for (var mi = 0; mi < mpuList.length; mi++) {
+        var mpu = mpus.find(function(m) { return m.id === mpuList[mi]; });
+        if (mpu) combinedLoadRate += (mpu.rateKg_per_day || 0);
+      }
+    }
+    var effectiveLoadRate = combinedLoadRate > 0 ? combinedLoadRate : (blast.loadRate || 100000);
+    var loadDays = effectiveLoadRate > 0 ? Math.ceil((blast.expMass || 0) / effectiveLoadRate) : 1;
     blast.loadDays = Math.max(loadDays, 1);
 
     // Step 2g) Blasting date: after both drill and load thresholds met + lead days

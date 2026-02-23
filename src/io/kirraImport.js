@@ -423,7 +423,8 @@ function buildBlastFromHoles(entityName, holes) {
     status: "planned",
     deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
     assignedDrills: [],
-    assignedMPU: "",
+    // Step C-i) Use array for MPU assignments (migrated from single assignedMPU)
+    assignedMPUs: [],
     holeTypes: holeTypes,
     polygons: [],
     _sourceHoleCount: holes.length

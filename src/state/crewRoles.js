@@ -41,20 +41,24 @@ function calcDrillCrewRequired(blast, drillsArr) {
 }
 
 // Step 4) Compute crew required for a blast's loading phase
-//  Uses crewRequired from the assigned MPU
+//  Sums crewRequired from all assigned MPUs (migrated from single assignedMPU to array)
 function calcLoadCrewRequired(blast, mpusArr) {
   var needed = { OP: 0, FT: 0, SF: 0 };
-  if (!blast.assignedMPU) return needed;
+  // Step 4a) Backward compat: read assignedMPUs array or legacy single assignedMPU
+  var assignedIds = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+  if (assignedIds.length === 0) return needed;
 
-  var mpu = null;
-  for (var i = 0; i < mpusArr.length; i++) {
-    if (mpusArr[i].id === blast.assignedMPU) { mpu = mpusArr[i]; break; }
-  }
-  if (mpu && mpu.crewRequired) {
-    var cr = mpu.crewRequired;
-    needed.OP += cr.OP || 0;
-    needed.FT += cr.FT || 0;
-    needed.SF += cr.SF || 0;
+  for (var i = 0; i < assignedIds.length; i++) {
+    var mpu = null;
+    for (var j = 0; j < mpusArr.length; j++) {
+      if (mpusArr[j].id === assignedIds[i]) { mpu = mpusArr[j]; break; }
+    }
+    if (mpu && mpu.crewRequired) {
+      var cr = mpu.crewRequired;
+      needed.OP += cr.OP || 0;
+      needed.FT += cr.FT || 0;
+      needed.SF += cr.SF || 0;
+    }
   }
   return needed;
 }

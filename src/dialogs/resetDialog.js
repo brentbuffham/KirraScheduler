@@ -14,6 +14,7 @@ import { renderPatterns } from "../views/patternLibrary.js";
 import { renderForecast } from "../views/forecastView.js";
 import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
+import { clearStartupKey } from "./startupDialog.js";
 
 // Step 1) Show the reset dialog as a modal overlay
 function showResetDialog() {
@@ -293,8 +294,9 @@ function performReset() {
   // Step 7f) Equipment — Remove loading fleet
   if (isAll || document.getElementById("resetLoadFleet").checked) {
     mpus.length = 0;
+    // Step 7f-i) Clear MPU assignments (migrated to array)
     APP.blasts.forEach(function(b) {
-      b.assignedMPU = "";
+      b.assignedMPUs = [];
     });
   }
 
@@ -378,6 +380,12 @@ function performReset() {
     if (elRigHours) elRigHours.value = APP.rigHours;
     if (elAvail) elAvail.value = APP.availability;
     if (elUtil) elUtil.value = APP.utilisation;
+  }
+
+  // Step 7n) If Reset All was selected, clear the startup key so the
+  //          welcome dialog reappears on next page load
+  if (isAll) {
+    clearStartupKey();
   }
 
   // Step 8) Recalculate and re-render everything
