@@ -5,10 +5,18 @@
 //    manifest.json, holes.json, drawings.json, surfaces.json,
 //    products.json, charging.json, configs.json, layers.json
 //  Uses JSZip for decompression.
+//
+//  Blast solids (extruded polygons) are detected and converted
+//  into importedBlasts with computed volume for scheduling.
 // ============================================================
 
 import JSZip from "jszip";
 import { APP } from "../state/appState.js";
+import { showImportPreview } from "./importPreview.js";
+import { renderPatterns } from "../views/patternLibrary.js";
+import { renderBlasts } from "../views/blastOverview.js";
+import { renderGantt } from "../views/ganttView.js";
+import { recalcDependencies } from "../engine/dependencyEngine.js";
 
 // Step 1) Main entry point — parse a .kap file
 function parseKAPFile(file) {
@@ -56,38 +64,68 @@ async function processKAPZip(arrayBuffer, fileName, log) {
       (counts.surfaces || 0) + " surfaces, " +
       (counts.configs || 0) + " charge configs</div>";
 
-    // Step 2c) Parse surfaces (for 3D playback)
+    // Step 2c) Parse layers first to identify blast-solid layers
+    var blastSolidLayerIds = {};
+    var layersFile = zip.file("layers.json");
+    if (layersFile) {
+      var layersData = JSON.parse(await layersFile.async("string"));
+      var surfaceLayers = layersData.surfaceLayers || [];
+      for (var li = 0; li < surfaceLayers.length; li++) {
+        var layerName = (surfaceLayers[li].layerName || "").toUpperCase();
+        if (layerName.indexOf("BLAST") !== -1 || layerName.indexOf("SOLID") !== -1) {
+          blastSolidLayerIds[surfaceLayers[li].layerId] = surfaceLayers[li].layerName;
+          log.innerHTML += "<div class=\"log-info\">Blast solid layer detected: " + surfaceLayers[li].layerName + "</div>";
+        }
+      }
+    }
+
+    // Step 2d) Parse surfaces (pit surfaces AND blast solids)
     var surfacesFile = zip.file("surfaces.json");
     if (surfacesFile) {
       log.innerHTML += "<div class=\"log-info\">Parsing surfaces (may take a moment for large data)...</div>";
       var surfacesRaw = JSON.parse(await surfacesFile.async("string"));
-      processSurfaces(surfacesRaw, log);
+      processSurfaces(surfacesRaw, blastSolidLayerIds, log);
     }
 
-    // Step 2d) Parse holes
+    // Step 2e) Parse holes
     var holesFile = zip.file("holes.json");
     if (holesFile) {
       var holesRaw = JSON.parse(await holesFile.async("string"));
       processHoles(holesRaw, log);
     }
 
-    // Step 2e) Parse drawings (polygons → blast boundaries)
+    // Step 2f) Parse drawings (polygons -> blast boundaries)
     var drawingsFile = zip.file("drawings.json");
     if (drawingsFile) {
       var drawingsRaw = JSON.parse(await drawingsFile.async("string"));
       processDrawings(drawingsRaw, log);
     }
 
-    // Step 2f) Parse charge configs
+    // Step 2g) Parse charging data for explosive mass per entity
+    var chargingFile = zip.file("charging.json");
+    if (chargingFile) {
+      var chargingRaw = JSON.parse(await chargingFile.async("string"));
+      processCharging(chargingRaw, log);
+    }
+
+    // Step 2h) Parse charge configs
     var configsFile = zip.file("configs.json");
     if (configsFile) {
       var configsRaw = JSON.parse(await configsFile.async("string"));
       processConfigs(configsRaw, log);
     }
 
-    // Step 2g) Summary
+    // Step 2i) Summary and import preview
     log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:8px;\">KAP import complete</div>";
-    log.innerHTML += "<div class=\"log-info\">Switch to 3D PLAYBACK tab to view surfaces.</div>";
+
+    if (APP.importedBlasts.length > 0) {
+      log.innerHTML += "<div class=\"log-ok\">" + APP.importedBlasts.length + " blast(s) ready to merge into schedule</div>";
+      showImportPreview();
+    }
+
+    if (APP.kirraProjectSurfaces.length > 0) {
+      log.innerHTML += "<div class=\"log-info\">Switch to 3D PLAYBACK tab to view surfaces.</div>";
+    }
 
   } catch (err) {
     log.innerHTML += "<div class=\"log-err\">Error: " + err.message + "</div>";
@@ -95,50 +133,145 @@ async function processKAPZip(arrayBuffer, fileName, log) {
   }
 }
 
-// Step 3) Process surfaces — store full geometry for 3D playback
-function processSurfaces(surfacesRaw, log) {
+// ============================================================
+//  Step 3) Process surfaces — separate pit surfaces from
+//  blast solids. Compute volume for solids and create
+//  importedBlasts entries.
+// ============================================================
+function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
   if (!Array.isArray(surfacesRaw) || surfacesRaw.length === 0) {
     log.innerHTML += "<div class=\"log-info\">No surfaces in KAP file</div>";
     return;
   }
 
-  // Step 3a) Convert KAP surface format to APP.kirraProjectSurfaces
-  var surfaces = [];
+  var pitSurfaces = [];
+  var blastSolids = [];
 
   for (var i = 0; i < surfacesRaw.length; i++) {
     var s = surfacesRaw[i];
     var name = s.name || s.id || "Surface_" + i;
     var pts = s.points || [];
     var tris = s.triangles || [];
+    var isVertexPerTri = tris.length > 0 && tris[0] && tris[0].vertices !== undefined;
 
-    // Step 3b) Compute bounds from data
-    var minX = Infinity, maxX = -Infinity;
-    var minY = Infinity, maxY = -Infinity;
-    var minZ = Infinity, maxZ = -Infinity;
+    // Step 3a) Compute bounds
+    var bounds = computeBounds(pts, tris, isVertexPerTri, s.meshBounds);
 
-    // Step 3b-i) Check if triangles use vertex-per-tri format (KAP native)
-    var isVertexPerTri = tris.length > 0 && tris[0].vertices !== undefined;
+    // Step 3b) Detect if this is a blast solid
+    var isBlastSolid = false;
+    var solidId = s.id || "";
 
-    if (isVertexPerTri) {
-      // Step 3b-ii) Bounds from triangle vertices
-      for (var t = 0; t < tris.length; t++) {
-        var verts = tris[t].vertices;
-        if (!verts) continue;
-        for (var v = 0; v < verts.length; v++) {
-          var p = verts[v];
-          if (p.x < minX) minX = p.x;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y < minY) minY = p.y;
-          if (p.y > maxY) maxY = p.y;
-          var pz = p.z || 0;
-          if (pz < minZ) minZ = pz;
-          if (pz > maxZ) maxZ = pz;
-        }
-      }
-    } else if (pts.length > 0) {
-      // Step 3b-iii) Bounds from points array
-      for (var j = 0; j < pts.length; j++) {
-        var p = pts[j];
+    // Detection method 1: layer membership
+    if (s.layerId && blastSolidLayerIds[s.layerId]) {
+      isBlastSolid = true;
+    }
+    // Detection method 2: ID starts with EXTRUDED_
+    if (solidId.indexOf("EXTRUDED_") === 0) {
+      isBlastSolid = true;
+    }
+
+    var surfObj = {
+      name: name,
+      points: pts,
+      triangles: tris,
+      bounds: bounds,
+      gradient: s.gradient || "default",
+      visible: s.visible !== false,
+      opacity: s.transparency !== undefined ? s.transparency : 0.85,
+      hillshadeColor: s.hillshadeColor || null,
+      layerId: s.layerId || null
+    };
+
+    if (isBlastSolid) {
+      // Step 3c) Compute volume from closed triangulated mesh
+      var volume = computeMeshVolume(tris, isVertexPerTri, pts, bounds);
+      var benchHt = Math.abs(bounds.maxZ - bounds.minZ);
+      // Surface area estimate from volume / bench height
+      var surfaceArea = benchHt > 0 ? Math.round(volume / benchHt) : 0;
+
+      surfObj.volume = volume;
+      surfObj.benchHt = benchHt;
+      surfObj.surfaceArea = surfaceArea;
+      surfObj.isBlastSolid = true;
+
+      blastSolids.push(surfObj);
+
+      log.innerHTML += "<div class=\"log-ok\">  Blast solid: " + name +
+        " | vol: " + Math.round(volume).toLocaleString() + " m3" +
+        " | bench: " + benchHt.toFixed(1) + " m" +
+        " | area: " + surfaceArea.toLocaleString() + " m2" +
+        " (" + tris.length + " tris)</div>";
+
+      // Step 3d) Create importedBlast entry
+      var blastEntry = {
+        name: name,
+        mode: "Manual",
+        surfaceArea: surfaceArea,
+        pattern: "",
+        pctD65: 0,
+        pctPV: 1,
+        rateD65: 19,
+        ratePV: 20,
+        numD65: 0,
+        numPV: 4,
+        loadRate: 100000,
+        d65Meters: 0,
+        pvMeters: 0,
+        volume: Math.round(volume),
+        expMass: 0,
+        drillStart: null,
+        drillStartTime: "06:00",
+        drillDays: 0,
+        loadStart: null,
+        loadDays: 0,
+        blastDate: null,
+        status: "planned",
+        deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
+        assignedDrills: [],
+        assignedMPU: "",
+        holeTypes: [],
+        solidBounds: bounds,
+        solidBenchHt: benchHt,
+        _sourceType: "solid"
+      };
+
+      APP.importedBlasts.push(blastEntry);
+    } else {
+      // Step 3e) Regular pit surface
+      pitSurfaces.push(surfObj);
+
+      log.innerHTML += "<div class=\"log-ok\">  Surface: " + name +
+        " (" + pts.length + " pts, " + tris.length + " tris" +
+        (isVertexPerTri ? ", vertex-per-tri" : ", indexed") + ")</div>";
+    }
+  }
+
+  APP.kirraProjectSurfaces = pitSurfaces;
+  APP.kirraProjectSolids = (APP.kirraProjectSolids || []).concat(blastSolids);
+
+  log.innerHTML += "<div class=\"log-ok\">" + pitSurfaces.length + " surface(s) + " +
+    blastSolids.length + " blast solid(s) loaded</div>";
+}
+
+// ============================================================
+//  Step 3-UTIL) Compute bounds from points or triangles
+// ============================================================
+function computeBounds(pts, tris, isVertexPerTri, existingBounds) {
+  // Use existing bounds if provided
+  if (existingBounds && existingBounds.minX !== undefined) {
+    return existingBounds;
+  }
+
+  var minX = Infinity, maxX = -Infinity;
+  var minY = Infinity, maxY = -Infinity;
+  var minZ = Infinity, maxZ = -Infinity;
+
+  if (isVertexPerTri) {
+    for (var t = 0; t < tris.length; t++) {
+      var verts = tris[t].vertices;
+      if (!verts) continue;
+      for (var v = 0; v < verts.length; v++) {
+        var p = verts[v];
         if (p.x < minX) minX = p.x;
         if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y;
@@ -148,28 +281,79 @@ function processSurfaces(surfacesRaw, log) {
         if (pz > maxZ) maxZ = pz;
       }
     }
-
-    surfaces.push({
-      name: name,
-      points: pts,
-      triangles: tris,
-      bounds: {
-        minX: minX, maxX: maxX,
-        minY: minY, maxY: maxY,
-        minZ: minZ, maxZ: maxZ
-      },
-      gradient: s.gradient || "default",
-      visible: s.visible !== false,
-      opacity: s.transparency !== undefined ? s.transparency : 0.85
-    });
-
-    log.innerHTML += "<div class=\"log-ok\">  Surface: " + name +
-      " (" + pts.length + " pts, " + tris.length + " tris" +
-      (isVertexPerTri ? ", vertex-per-tri" : ", indexed") + ")</div>";
+  } else if (pts.length > 0) {
+    for (var j = 0; j < pts.length; j++) {
+      var p = pts[j];
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+      var pz = p.z || 0;
+      if (pz < minZ) minZ = pz;
+      if (pz > maxZ) maxZ = pz;
+    }
   }
 
-  APP.kirraProjectSurfaces = surfaces;
-  log.innerHTML += "<div class=\"log-ok\">" + surfaces.length + " surface(s) loaded for 3D playback</div>";
+  return { minX: minX, maxX: maxX, minY: minY, maxY: maxY, minZ: minZ, maxZ: maxZ };
+}
+
+// ============================================================
+//  Step 3-VOL) Compute mesh volume using signed tetrahedron
+//  method (divergence theorem). Translates to local origin
+//  first to maintain float precision with large UTM coords.
+// ============================================================
+function computeMeshVolume(tris, isVertexPerTri, pts, bounds) {
+  if (!tris || tris.length === 0) return 0;
+
+  // Step VOL-a) Local origin at bounds centroid for float precision
+  var ox = (bounds.minX + bounds.maxX) / 2;
+  var oy = (bounds.minY + bounds.maxY) / 2;
+  var oz = (bounds.minZ + bounds.maxZ) / 2;
+
+  var volume = 0;
+
+  if (isVertexPerTri) {
+    // Step VOL-b) Vertex-per-triangle format
+    for (var i = 0; i < tris.length; i++) {
+      var verts = tris[i].vertices;
+      if (!verts || verts.length < 3) continue;
+
+      var x0 = verts[0].x - ox, y0 = verts[0].y - oy, z0 = (verts[0].z || 0) - oz;
+      var x1 = verts[1].x - ox, y1 = verts[1].y - oy, z1 = (verts[1].z || 0) - oz;
+      var x2 = verts[2].x - ox, y2 = verts[2].y - oy, z2 = (verts[2].z || 0) - oz;
+
+      // Signed volume of tetrahedron formed with origin
+      volume += (x0 * (y1 * z2 - y2 * z1) -
+                 x1 * (y0 * z2 - y2 * z0) +
+                 x2 * (y0 * z1 - y1 * z0)) / 6.0;
+    }
+  } else {
+    // Step VOL-c) Indexed triangle format
+    for (var i = 0; i < tris.length; i++) {
+      var tri = tris[i];
+      var i0, i1, i2;
+
+      if (Array.isArray(tri)) {
+        i0 = tri[0]; i1 = tri[1]; i2 = tri[2];
+      } else if (tri.a !== undefined) {
+        i0 = tri.a; i1 = tri.b; i2 = tri.c;
+      } else {
+        continue;
+      }
+
+      if (i0 >= pts.length || i1 >= pts.length || i2 >= pts.length) continue;
+
+      var x0 = pts[i0].x - ox, y0 = pts[i0].y - oy, z0 = (pts[i0].z || 0) - oz;
+      var x1 = pts[i1].x - ox, y1 = pts[i1].y - oy, z1 = (pts[i1].z || 0) - oz;
+      var x2 = pts[i2].x - ox, y2 = pts[i2].y - oy, z2 = (pts[i2].z || 0) - oz;
+
+      volume += (x0 * (y1 * z2 - y2 * z1) -
+                 x1 * (y0 * z2 - y2 * z0) +
+                 x2 * (y0 * z1 - y1 * z0)) / 6.0;
+    }
+  }
+
+  return Math.abs(volume);
 }
 
 // Step 4) Process holes — extract blast entity names and hole data
@@ -195,21 +379,29 @@ function processHoles(holesRaw, log) {
     APP.kapHoleData[entityNames[i]] = entMap[entityNames[i]];
   }
 
-  // Step 4c) Try to match to existing blasts or create importedBlasts entries
+  // Step 4c) Try to match to existing blasts or imported blasts
   var matched = 0;
   var unmatched = 0;
   for (var i = 0; i < entityNames.length; i++) {
     var eName = entityNames[i];
     var holes = entMap[eName];
 
-    // Step 4c-i) Check if a blast with this name exists
+    // Check existing schedule blasts
     var existing = APP.blasts.find(function(b) { return b.name === eName; });
     if (existing) {
-      // Step 4c-ii) Attach polygon data from hole collar positions
       if (!existing.polygons || existing.polygons.length === 0) {
         existing.kapHoles = holes;
         existing.holeCount = holes.length;
       }
+      matched++;
+      continue;
+    }
+
+    // Check imported blasts (from solids)
+    var imported = APP.importedBlasts.find(function(b) { return b.name === eName; });
+    if (imported) {
+      imported.kapHoles = holes;
+      imported._sourceHoleCount = holes.length;
       matched++;
     } else {
       unmatched++;
@@ -217,7 +409,7 @@ function processHoles(holesRaw, log) {
   }
 
   log.innerHTML += "<div class=\"log-ok\">" + holesRaw.length + " holes in " + entityNames.length +
-    " blast entities (" + matched + " matched to schedule, " + unmatched + " unmatched)</div>";
+    " blast entities (" + matched + " matched, " + unmatched + " unmatched)</div>";
 
   entityNames.forEach(function(name) {
     log.innerHTML += "<div class=\"log-info\">  " + name + ": " + entMap[name].length + " holes</div>";
@@ -255,7 +447,7 @@ function processDrawings(drawingsRaw, log) {
           });
         }
 
-        // Step 5b) Try to match polygon to a blast by name similarity
+        // Step 5b) Try to match polygon to a blast or imported blast
         var matchBlast = APP.blasts.find(function(b) {
           return entityName.indexOf(b.name) !== -1 || b.name.indexOf(entityName) !== -1;
         });
@@ -284,6 +476,95 @@ function processDrawings(drawingsRaw, log) {
     polyCount + " polygons, " + lineCount + " lines, " + otherCount + " other</div>";
 }
 
+// ============================================================
+//  Step 5B) Process charging data — compute explosive mass
+//  per entity from hole-by-hole charge deck data
+// ============================================================
+function processCharging(chargingRaw, log) {
+  if (!Array.isArray(chargingRaw) || chargingRaw.length === 0) {
+    log.innerHTML += "<div class=\"log-info\">No charging data in KAP file</div>";
+    return;
+  }
+
+  // Step 5B-a) Group by entityName and sum explosive mass
+  var entityMass = {};
+  var entityHoles = {};
+
+  for (var i = 0; i < chargingRaw.length; i++) {
+    var entry = chargingRaw[i];
+    // KAP charging is [key, object] tuple format
+    var holeData = Array.isArray(entry) ? entry[1] : entry;
+    var eName = holeData.entityName || "Unknown";
+
+    if (!entityMass[eName]) { entityMass[eName] = 0; entityHoles[eName] = 0; }
+    entityHoles[eName]++;
+
+    // Step 5B-b) Sum mass from all explosive decks in this hole
+    var decks = holeData.decks || [];
+    for (var d = 0; d < decks.length; d++) {
+      var deck = decks[d];
+      var product = deck.product || {};
+      var category = product.productCategory || "";
+
+      // Only count explosives (bulk, high explosive), not inerts or initiators
+      if (category === "BulkExplosive" || category === "HighExplosive") {
+        if (deck.massKg) {
+          entityMass[eName] += deck.massKg;
+        } else {
+          // Estimate mass from deck geometry: pi * r^2 * length * density
+          var topDepth = deck.topDepth || 0;
+          var baseDepth = deck.baseDepth || 0;
+          var deckLength = Math.abs(baseDepth - topDepth);
+          var density = product.density || 0;
+
+          if (deck.deckType === "DECOUPLED") {
+            // Decoupled: use product diameter, not hole diameter
+            var prodDiamM = (product.diameterMm || 32) / 1000;
+            var prodR = prodDiamM / 2;
+            var massPerUnit = (product.massGrams || 0) / 1000;
+            var unitLen = (product.lengthMm || 400) / 1000;
+            if (massPerUnit > 0 && unitLen > 0) {
+              var numUnits = Math.floor(deckLength / unitLen);
+              entityMass[eName] += numUnits * massPerUnit;
+            } else if (density > 0) {
+              entityMass[eName] += Math.PI * prodR * prodR * deckLength * density * 1000;
+            }
+          } else if (deck.deckType === "COUPLED" && density > 0) {
+            // Coupled: use hole diameter
+            var holeDiamMm = holeData.holeDiameterMm || 229;
+            var holeR = (holeDiamMm / 1000) / 2;
+            entityMass[eName] += Math.PI * holeR * holeR * deckLength * density * 1000;
+          }
+        }
+      }
+    }
+  }
+
+  // Step 5B-c) Apply computed mass to importedBlasts
+  var entityNames = Object.keys(entityMass);
+  for (var i = 0; i < entityNames.length; i++) {
+    var eName = entityNames[i];
+    var mass = Math.round(entityMass[eName]);
+    var holeCount = entityHoles[eName];
+
+    // Match to imported blast
+    var imported = APP.importedBlasts.find(function(b) { return b.name === eName; });
+    if (imported) {
+      imported.expMass = mass;
+      imported._sourceHoleCount = holeCount;
+    }
+
+    // Match to existing scheduled blast
+    var existing = APP.blasts.find(function(b) { return b.name === eName; });
+    if (existing && mass > 0) {
+      existing.expMass = mass;
+    }
+
+    log.innerHTML += "<div class=\"log-ok\">  Charging: " + eName + " = " +
+      holeCount + " holes, " + mass.toLocaleString() + " kg explosive</div>";
+  }
+}
+
 // Step 6) Process charge configs
 function processConfigs(configsRaw, log) {
   if (!Array.isArray(configsRaw) || configsRaw.length === 0) {
@@ -299,7 +580,8 @@ function processConfigs(configsRaw, log) {
     var configData = entry[1];
     configs.push({
       id: configName,
-      name: configData.name || configName,
+      name: configData.configName || configData.name || configName,
+      code: configData.configCode || "",
       data: configData
     });
   }
@@ -308,6 +590,9 @@ function processConfigs(configsRaw, log) {
   if (configs.length > 0) {
     APP.chargeConfigs = APP.chargeConfigs.concat(configs);
     log.innerHTML += "<div class=\"log-ok\">" + configs.length + " charge config(s) imported</div>";
+    configs.forEach(function(c) {
+      log.innerHTML += "<div class=\"log-info\">  " + c.code + " - " + c.name + "</div>";
+    });
   }
 }
 

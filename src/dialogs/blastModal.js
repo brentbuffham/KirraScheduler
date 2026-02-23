@@ -11,6 +11,15 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
 
+// Step 0) Find a matching solid in APP.kirraProjectSolids by blast name
+function findMatchingSolid(blastName) {
+  var solids = APP.kirraProjectSolids || [];
+  for (var i = 0; i < solids.length; i++) {
+    if (solids[i].name === blastName) return solids[i];
+  }
+  return null;
+}
+
 // Step 1) Populate the pattern dropdown from APP.patterns
 function populatePatternDropdown() {
   var sel = document.getElementById("fPattern");
@@ -174,7 +183,16 @@ function saveBlast() {
   var volume = parseFloat(document.getElementById("fVolume").value) || 0;
   var expMass = parseFloat(document.getElementById("fExpMass").value) || 0;
 
-  // Step 5a) Auto-calc from pattern
+  // Step 5a) Try to auto-fill volume from matched solid if not set
+  var matchedSolid = findMatchingSolid(name);
+  if (!volume && matchedSolid) {
+    volume = matchedSolid.volume || 0;
+    if (!area && matchedSolid.surfaceArea) {
+      area = matchedSolid.surfaceArea;
+    }
+  }
+
+  // Step 5a-ii) Auto-calc from pattern if still empty
   if (pattern && area > 0 && !volume) {
     volume = area * pattern.benchHt;
   }
@@ -276,12 +294,17 @@ function saveBlast() {
     deps: blastDeps,
     assignedDrills: assignedDrills,
     assignedMPU: assignedMPU,
-    holeTypes: holeTypes
+    holeTypes: holeTypes,
+    solidBounds: matchedSolid ? matchedSolid.bounds : null,
+    solidBenchHt: matchedSolid ? matchedSolid.benchHt : null
   };
 
-  // Step 5g) Save or update
+  // Step 5h) Save or update — preserve existing solid/spatial data
   if (APP.editingBlastIdx !== null) {
-    blastData.status = APP.blasts[APP.editingBlastIdx].status;
+    var prev = APP.blasts[APP.editingBlastIdx];
+    blastData.status = prev.status;
+    if (!blastData.solidBounds && prev.solidBounds) blastData.solidBounds = prev.solidBounds;
+    if (!blastData.solidBenchHt && prev.solidBenchHt) blastData.solidBenchHt = prev.solidBenchHt;
     APP.blasts[APP.editingBlastIdx] = blastData;
   } else {
     APP.blasts.push(blastData);

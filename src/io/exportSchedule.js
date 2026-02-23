@@ -6,6 +6,7 @@
 import { APP } from "../state/appState.js";
 import { drills, mpus, people } from "../state/equipmentState.js";
 import { isoDate } from "../utils/dateUtils.js";
+import { exportPatternTemplate, exportPatternLibrary } from "../views/patternLibrary.js";
 
 // Step 1) Export full project as .kgp (JSON with all state)
 function exportKGP() {
@@ -164,6 +165,27 @@ function showExportMenu(e) {
   html += "<span class=\"export-menu-hint\">Blast list for Excel / Google Sheets</span>";
   html += "</div>";
 
+  // Step 4b-ii) Pattern Library export options
+  html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;\"></div>";
+
+  html += "<div class=\"export-menu-item\" id=\"exportPatternTemplate\">";
+  html += "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"14\" height=\"14\">";
+  html += "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/>";
+  html += "<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>";
+  html += "</svg>";
+  html += " Pattern Library Template (.csv)";
+  html += "<span class=\"export-menu-hint\">Blank template for people to fill in</span>";
+  html += "</div>";
+
+  html += "<div class=\"export-menu-item\" id=\"exportPatternLib\">";
+  html += "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"14\" height=\"14\">";
+  html += "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/>";
+  html += "<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>";
+  html += "</svg>";
+  html += " Pattern Library (.csv)";
+  html += "<span class=\"export-menu-hint\">Export current patterns as CSV</span>";
+  html += "</div>";
+
   menu.innerHTML = html;
   document.body.appendChild(menu);
 
@@ -175,6 +197,14 @@ function showExportMenu(e) {
   document.getElementById("exportCSV").addEventListener("click", function() {
     menu.remove();
     exportCSV();
+  });
+  document.getElementById("exportPatternTemplate").addEventListener("click", function() {
+    menu.remove();
+    exportPatternTemplate();
+  });
+  document.getElementById("exportPatternLib").addEventListener("click", function() {
+    menu.remove();
+    exportPatternLibrary();
   });
 
   // Step 4d) Close menu on outside click

@@ -28,7 +28,7 @@ import { parseKirraConfig, parseKirraProject } from "./io/kirraImport.js";
 import { initKAPImport } from "./io/kapImport.js";
 import { renderGantt } from "./views/ganttView.js";
 import { renderBlasts } from "./views/blastOverview.js";
-import { renderPatterns } from "./views/patternLibrary.js";
+import { renderPatterns, initPatternLibrary } from "./views/patternLibrary.js";
 import { renderForecast } from "./views/forecastView.js";
 import { renderConformance } from "./views/conformanceView.js";
 import { renderEquipment } from "./views/equipmentView.js";
@@ -44,6 +44,7 @@ initBlockEditModal();
 initImportPreview();
 initExport();
 initResetDialog();
+initPatternLibrary();
 
 // Step 4) Wire up Gantt toolbar buttons
 document.getElementById("btnRefreshGantt").addEventListener("click", function() {
