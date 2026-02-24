@@ -4,9 +4,10 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus, people } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { exportPatternTemplate, exportPatternLibrary } from "../views/patternLibrary.js";
+import { exportEquipmentTemplate, exportEquipmentLibrary } from "./equipmentLibrary.js";
 
 // Step 1) Export full project as .kgp (JSON with all state)
 function exportKGP() {
@@ -35,10 +36,14 @@ function exportKGP() {
     // Step 1d) Equipment state
     drills: drills,
     mpus: mpus,
+    ancillary: ancillary,
     people: people,
 
-    // Step 1e) Conformance targets
+    // Step 1e) Conformance targets + actuals
     conformance: APP.conformance,
+
+    // Step 1e-ii) Product library
+    products: APP.products || [],
 
     // Step 1f) Spatial data — surfaces and solids (full geometry for 3D playback)
     kirraProjectSurfaces: APP.kirraProjectSurfaces || [],
@@ -64,10 +69,11 @@ function exportCSV() {
     "Drill Start", "Start Time", "Drill Days",
     "Load Start", "Load Days", "Blast Date",
     "Assigned Drills", "Assigned MPUs",
-    "Rate D65 (m/day)", "Rate PV (m/day)",
+    "Rate D65 (m/hr)", "Rate PV (m/hr)",
     "Num D65", "Num PV", "Load Rate (kg/day)",
     "Drill % to Load", "Drill % to Blast", "Lead Days",
-    "Predecessor"
+    "Predecessor",
+    "Drill Progress (%)", "Load Progress (%)"
   ];
 
   // Step 2b) Build rows
@@ -107,7 +113,9 @@ function exportCSV() {
       drillPctLoad,
       drillPctBlast,
       leadDays,
-      csvEscape(predecessor)
+      csvEscape(predecessor),
+      b.drillProgress ? Math.round(b.drillProgress * 100) : 0,
+      b.loadProgress ? Math.round(b.loadProgress * 100) : 0
     ];
     rows.push(row.join(","));
   });
@@ -187,6 +195,27 @@ function showExportMenu(e) {
   html += "<span class=\"export-menu-hint\">Export current patterns as CSV</span>";
   html += "</div>";
 
+  // Step 4b-iii) Equipment Library export options
+  html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;\"></div>";
+
+  html += "<div class=\"export-menu-item\" id=\"exportEquipTemplate\">";
+  html += "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"14\" height=\"14\">";
+  html += "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/>";
+  html += "<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>";
+  html += "</svg>";
+  html += " Equipment Library Template (.csv)";
+  html += "<span class=\"export-menu-hint\">Blank template — drills, MPUs, ancillary, personnel</span>";
+  html += "</div>";
+
+  html += "<div class=\"export-menu-item\" id=\"exportEquipLib\">";
+  html += "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"14\" height=\"14\">";
+  html += "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/>";
+  html += "<line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/>";
+  html += "</svg>";
+  html += " Equipment Library (.csv)";
+  html += "<span class=\"export-menu-hint\">Export current fleet as CSV</span>";
+  html += "</div>";
+
   menu.innerHTML = html;
   document.body.appendChild(menu);
 
@@ -206,6 +235,14 @@ function showExportMenu(e) {
   document.getElementById("exportPatternLib").addEventListener("click", function() {
     menu.remove();
     exportPatternLibrary();
+  });
+  document.getElementById("exportEquipTemplate").addEventListener("click", function() {
+    menu.remove();
+    exportEquipmentTemplate();
+  });
+  document.getElementById("exportEquipLib").addEventListener("click", function() {
+    menu.remove();
+    exportEquipmentLibrary();
   });
 
   // Step 4d) Close menu on outside click

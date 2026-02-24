@@ -60,7 +60,8 @@ var APP = {
       assignedDrills: ["D65-01"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 138, drillMeters: 3496.4, expMass: 3168 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_226_412_V1", mode: "Auto", surfaceArea: 0, pattern: "", pctD65: 0, pctPV: 1,
@@ -75,7 +76,8 @@ var APP = {
         { type: "BUFFER", diam: 0.127, burden: 3.8, spacing: 2.3, holes: 65, drillMeters: 882.9, expMass: 6416 },
         { type: "PRODUCTION", diam: 0.165, burden: 3.5, spacing: 4.7, holes: 19, drillMeters: 266.1, expMass: 5403 },
         { type: "PRODUCTION", diam: 0.229, burden: 4.7, spacing: 4.7, holes: 420, drillMeters: 5768.9, expMass: 225812 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_226_410_V1", mode: "Auto", surfaceArea: 0, pattern: "", pctD65: 0, pctPV: 1,
@@ -92,14 +94,16 @@ var APP = {
           drillStart: "2026-02-23", drillStartTime: "10:00", drillDays: 3,
           meters: 5000,
           assignedDrills: ["PV271-01", "PV271-02"],
-          drillRates: { "PV271-01": 55, "PV271-02": 55 }
+          drillRates: { "PV271-01": 55, "PV271-02": 55 },
+          drillProgress: 0
         },
         {
           id: "block-1", label: "B",
           drillStart: "2026-02-27", drillStartTime: "06:00", drillDays: 3,
           meters: 4794.8,
           assignedDrills: ["PV271-02", "PV271-03"],
-          drillRates: { "PV271-02": 55, "PV271-03": 55 }
+          drillRates: { "PV271-02": 55, "PV271-03": 55 },
+          drillProgress: 0
         }
       ],
       holeTypes: [
@@ -107,7 +111,8 @@ var APP = {
         { type: "BUFFER", diam: 0.165, burden: 3.6, spacing: 3, holes: 73, drillMeters: 896.1, expMass: 15934 },
         { type: "PRODUCTION", diam: 0.165, burden: 4.4, spacing: 2.5, holes: 89, drillMeters: 1112.8, expMass: 21559 },
         { type: "PRODUCTION", diam: 0.229, burden: 4.9, spacing: 4.4, holes: 563, drillMeters: 7461.8, expMass: 287420 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_214_411P", mode: "Manual", surfaceArea: 100, pattern: "1.1.44P24", pctD65: 1, pctPV: 0,
@@ -119,7 +124,8 @@ var APP = {
       assignedDrills: ["D65-01", "D65-02"], assignedMPUs: [],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 0, drillMeters: 1350, expMass: 1440 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_226_411", mode: "Manual", surfaceArea: 10240, pattern: "1.1.15", pctD65: 0, pctPV: 1,
@@ -131,7 +137,8 @@ var APP = {
       assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 6459.4, expMass: 245760 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_214_412P", mode: "Manual", surfaceArea: 220, pattern: "1.1.44P24", pctD65: 1, pctPV: 0,
@@ -143,7 +150,8 @@ var APP = {
       assignedDrills: ["D65-01", "D65-02"], assignedMPUs: [],
       holeTypes: [
         { type: "PRESPLIT", diam: 0.127, burden: 1, spacing: 1.8, holes: 0, drillMeters: 2970, expMass: 3168 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_226_413", mode: "Manual", surfaceArea: 5000, pattern: "1.1.15", pctD65: 0, pctPV: 1,
@@ -155,7 +163,8 @@ var APP = {
       assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 3154, expMass: 120000 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     },
     {
       name: "S4_226_407", mode: "Manual", surfaceArea: 11886, pattern: "1.1.15", pctD65: 0, pctPV: 1,
@@ -167,7 +176,8 @@ var APP = {
       assignedDrills: ["PV271-01", "PV271-02", "PV271-03", "PV271-04"], assignedMPUs: ["MPU-01", "MPU-02"],
       holeTypes: [
         { type: "PRODUCTION", diam: 0.229, burden: 4.4, spacing: 4.9, holes: 0, drillMeters: 7497.7, expMass: 285264 }
-      ]
+      ],
+      drillProgress: 0, loadProgress: 0
     }
   ],
 
@@ -180,8 +190,12 @@ var APP = {
     targetBCM: 600000,
     actualBCM: 426594,
     targetMTD: 700000,
-    monthStart: "2026-02-01"
-  }
+    monthStart: "2026-02-01",
+    actuals: []
+  },
+
+  // Step 6) Product library (from charge config ZIP or Kirra export)
+  products: []
 };
 
 export { APP };

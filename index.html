@@ -197,8 +197,105 @@
   <!-- CONFORMANCE TAB -->
   <div id="tab-conformance" class="tab-panel">
     <div class="stats-row" id="confStats"></div>
+
+    <!-- Step 1) Actuals Import Panel -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+      <!-- CSV Import -->
+      <div class="data-table-container" style="padding:16px;">
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--accent-green); margin:0 0 10px 0;">Import Actuals (CSV)</h3>
+        <div class="drop-zone" id="confCSVDropZone" style="padding:16px; min-height:auto;">
+          <div class="drop-text" style="font-size:13px;">Drop CSV with blast actuals</div>
+          <div class="drop-sub">Columns: BlastName, ActualBCM, ActualExpKg, ActualBlastDate, Status</div>
+          <input type="file" id="confCSVInput" accept=".csv">
+        </div>
+        <div style="margin-top:8px;">
+          <button class="btn" id="btnExportConfTemplate" style="font-size:12px;">Export Template</button>
+        </div>
+        <div class="import-log" id="confCSVLog" style="margin-top:8px;max-height:80px;">
+          <span class="log-info">Ready for actuals CSV...</span>
+        </div>
+      </div>
+
+      <!-- REST API / Database Query — NOT YET FUNCTIONAL -->
+      <div class="data-table-container" style="padding:16px; opacity:0.55; pointer-events:none; position:relative;">
+        <h3 style="font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--accent-cyan); margin:0 0 10px 0;">
+          Query Actuals (API / Database)
+          <span style="font-style:italic; font-size:11px; color:var(--text-muted); margin-left:8px; font-weight:400;">&#128679; Under Construction</span>
+        </h3>
+
+        <!-- Step 1a) Provider selector -->
+        <div class="form-row">
+          <div class="form-field" style="flex:0 0 180px;">
+            <label style="font-size:11px;">Provider</label>
+            <select id="confProvider" style="font-size:12px;">
+              <option value="generic">Generic REST API</option>
+              <option value="snowflake">Snowflake</option>
+              <option value="cdata">CData Connect Cloud</option>
+              <option value="odata">OData v4</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label style="font-size:11px;" id="confUrlLabel">API Endpoint URL</label>
+            <input type="text" id="confApiUrl" style="font-size:12px;" placeholder="https://your-api.com/blast-actuals">
+          </div>
+        </div>
+
+        <!-- Step 1b) Auth row -->
+        <div class="form-row">
+          <div class="form-field" style="flex:1;">
+            <label style="font-size:11px;" id="confAuthLabel">Auth Token (Bearer)</label>
+            <input type="password" id="confAuthToken" style="font-size:12px;" placeholder="Paste token here...">
+          </div>
+        </div>
+
+        <!-- Step 1c) Snowflake-specific fields -->
+        <div id="confSnowflakeFields" style="display:none;">
+          <div class="form-row">
+            <div class="form-field"><label style="font-size:11px;">Database</label><input type="text" id="confSfDatabase" style="font-size:12px;" placeholder="BLAST_DB"></div>
+            <div class="form-field"><label style="font-size:11px;">Schema</label><input type="text" id="confSfSchema" style="font-size:12px;" placeholder="PRODUCTION"></div>
+            <div class="form-field"><label style="font-size:11px;">Warehouse</label><input type="text" id="confSfWarehouse" style="font-size:12px;" placeholder="COMPUTE_WH"></div>
+          </div>
+        </div>
+
+        <!-- Step 1d) CData-specific fields -->
+        <div id="confCdataFields" style="display:none;">
+          <div class="form-row">
+            <div class="form-field"><label style="font-size:11px;">Workspace</label><input type="text" id="confCdWorkspace" style="font-size:12px;" placeholder="MyWorkspace"></div>
+            <div class="form-field"><label style="font-size:11px;">Connection / Table</label><input type="text" id="confCdTable" style="font-size:12px;" placeholder="Snowflake1.blast_actuals"></div>
+          </div>
+        </div>
+
+        <!-- Step 1d-ii) OData-specific fields -->
+        <div id="confOdataFields" style="display:none;">
+          <div class="form-row">
+            <div class="form-field"><label style="font-size:11px;">Entity Set (table)</label><input type="text" id="confOdEntity" style="font-size:12px;" placeholder="BlastActuals"></div>
+          </div>
+        </div>
+
+        <!-- Step 1e) Query -->
+        <div class="form-row">
+          <div class="form-field" style="flex:1;">
+            <label style="font-size:11px;" id="confQueryLabel">SQL Query / Filter</label>
+            <textarea id="confApiQuery" rows="5" style="font-size:12px; font-family:'JetBrains Mono',monospace; resize:vertical; width:95%;" placeholder="SELECT BlastName, ActualBCM, ActualExpKg, BlastDate, Status FROM blast_actuals WHERE period = '2026-02'"></textarea>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary" id="btnFetchActuals" style="font-size:12px;">Fetch Actuals</button>
+          <button class="btn" id="btnTestConnection" style="font-size:12px;">Test Connection</button>
+        </div>
+        <div class="import-log" id="confApiLog" style="margin-top:8px;max-height:80px;">
+          <span class="log-info">Select a provider and configure connection...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2) Conformance Table -->
     <div class="data-table-container">
-      <div class="table-title">Monthly Drill & Blast Conformance</div>
+      <div class="table-title" style="justify-content:space-between;">
+        <span>Monthly Drill & Blast Conformance</span>
+        <span id="confActualsCount" style="font-size:12px; color:var(--text-muted);"></span>
+      </div>
       <div style="overflow-x:auto;">
         <table class="data-table" id="confTable"></table>
       </div>
@@ -291,6 +388,29 @@
 
   <!-- EQUIPMENT TAB -->
   <div id="tab-equipment" class="tab-panel">
+    <!-- Equipment Library header — matches Pattern Library layout -->
+    <div class="flex-between mb-16">
+      <div>
+        <h2 style="font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text-secondary); margin:0;">Equipment Fleet</h2>
+        <span id="equipCount" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">0 item(s)</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn" id="btnExportEquipTemplate" title="Download a blank CSV template to fill in with your site fleet">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Export Template
+        </button>
+        <button class="btn" id="btnExportEquipLib" title="Export the current equipment fleet as CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Library
+        </button>
+        <button class="btn btn-primary" id="btnImportEquipment" title="Import equipment from a filled-in CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import Equipment
+        </button>
+        <input type="file" id="equipmentFileInput" accept=".csv" style="display:none;">
+      </div>
+    </div>
+
     <div class="stats-row" id="equipStats"></div>
 
     <!-- Drill Rigs Section -->
@@ -372,8 +492,8 @@
         <div class="drop-zone" id="kirraDropZone">
           <div class="drop-icon">&#x26A1;</div>
           <div class="drop-text">Drop Kirra Charge Config Export</div>
-          <div class="drop-sub">JSON export from Kirra App for site-based charging</div>
-          <input type="file" id="kirraFileInput" accept=".json,.kirra">
+          <div class="drop-sub">JSON, ZIP (KirraChargeConfig.zip), or .kirra export</div>
+          <input type="file" id="kirraFileInput" accept=".json,.kirra,.zip">
         </div>
         <div class="import-log" id="kirraLog">
           <span class="log-info">Ready for Kirra config import...</span>
@@ -671,13 +791,13 @@
           <input type="number" id="fExpMass" placeholder="Auto from PF x Volume">
         </div>
         <div class="form-field">
-          <label>D65 Rate (m/day)</label>
+          <label>D65 Rate (m/hr)</label>
           <input type="number" id="fRateD65" value="19">
         </div>
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label>PV271 Rate (m/day)</label>
+          <label>PV271 Rate (m/hr)</label>
           <input type="number" id="fRatePV" value="20">
         </div>
         <div class="form-field">
@@ -685,6 +805,23 @@
           <div style="display:flex;gap:8px;">
             <input type="number" id="fNumD65" value="0" style="width:50%">
             <input type="number" id="fNumPV" value="4" style="width:50%">
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Tracking -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          Progress <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— % complete (0-100), or imported from actuals</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Drill Progress (%)</label>
+            <input type="number" id="fDrillProgress" min="0" max="100" step="1" placeholder="0">
+          </div>
+          <div class="form-field">
+            <label>Load Progress (%)</label>
+            <input type="number" id="fLoadProgress" min="0" max="100" step="1" placeholder="0">
           </div>
         </div>
       </div>

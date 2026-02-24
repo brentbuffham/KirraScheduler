@@ -151,6 +151,9 @@ function showAddBlastModal() {
   if (prepStartEl) prepStartEl.value = "";
   if (prepDaysEl) prepDaysEl.value = "";
   populateAncillaryDropdown([]);
+  // Step 3c) Progress fields — blank for new blast
+  document.getElementById("fDrillProgress").value = "";
+  document.getElementById("fLoadProgress").value = "";
   openModal("blastModal");
 }
 
@@ -197,6 +200,9 @@ function editBlast(idx) {
   if (prepStartEl) prepStartEl.value = b.prepStart || "";
   if (prepDaysEl) prepDaysEl.value = b.prepDays || "";
   populateAncillaryDropdown(b.assignedAncillary || []);
+  // Step 4c) Progress fields
+  document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
+  document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
   openModal("blastModal");
 }
 
@@ -246,13 +252,14 @@ function saveBlast() {
   var pctD65 = parseFloat(document.getElementById("fPctD65").value) || 0;
   var pctPV = parseFloat(document.getElementById("fPctPV").value) || 0;
 
-  // Step 5c) Estimate durations
+  // Step 5c) Estimate durations — rate is m/hr per rig, multiply by effective hours
   var totalMeters = drillMeters || 0;
   var d65Meters = totalMeters * pctD65;
   var pvMeters = totalMeters * pctPV;
 
-  var d65DailyM = numD65 > 0 ? rateD65 * numD65 : 0;
-  var pvDailyM = numPV > 0 ? ratePV * numPV : 0;
+  var effectiveHrs = APP.rigHours * APP.availability * APP.utilisation;
+  var d65DailyM = numD65 > 0 ? rateD65 * numD65 * effectiveHrs : 0;
+  var pvDailyM = numPV > 0 ? ratePV * numPV * effectiveHrs : 0;
   var totalDailyM = d65DailyM + pvDailyM;
   var drillDays = totalDailyM > 0 ? Math.ceil(totalMeters / totalDailyM) : 1;
   var loadDays = loadRate > 0 ? Math.ceil(expMass / loadRate) : 1;
@@ -349,7 +356,10 @@ function saveBlast() {
     assignedAncillary: assignedAncillary,
     holeTypes: holeTypes,
     solidBounds: matchedSolid ? matchedSolid.bounds : null,
-    solidBenchHt: matchedSolid ? matchedSolid.benchHt : null
+    solidBenchHt: matchedSolid ? matchedSolid.benchHt : null,
+    // Step 5g-iii) Progress tracking (0.0 to 1.0)
+    drillProgress: parseFloat(document.getElementById("fDrillProgress").value) / 100 || 0,
+    loadProgress: parseFloat(document.getElementById("fLoadProgress").value) / 100 || 0
   };
 
   // Step 5h) Save or update — preserve existing solid/spatial data
@@ -362,6 +372,8 @@ function saveBlast() {
     if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
+    // Step 5h-ii) Preserve drillBlocks from previous
+    if (prev.drillBlocks) blastData.drillBlocks = prev.drillBlocks;
     APP.blasts[APP.editingBlastIdx] = blastData;
   } else {
     APP.blasts.push(blastData);

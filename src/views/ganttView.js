@@ -170,7 +170,7 @@ function renderGantt() {
   // ============================================================
   //  Step 1e) Helper: render bar cells for a date range
   // ============================================================
-  function renderBarCells(range, blast, idx, sectionName, deps, comp, blockDrills, startTime) {
+  function renderBarCells(range, blast, idx, sectionName, deps, comp, blockDrills, startTime, block) {
     var cellsHtml = "";
 
     // Step 1e-pre) Pre-compute delay positions for this blast/section
@@ -289,7 +289,28 @@ function renderGantt() {
             conflictOverlay = "<div class=\"fleet-conflict-indicator\" title=\"Drill conflict: " + _conflictCells[cKey].join(", ") + " double-booked\"></div>";
           }
         }
-        cellsHtml += "<div class=\"gantt-bar " + barClass + "\"" + barStyle + " " + ttData + ">" + barExtra + conflictOverlay + "</div>";
+
+        // Step) Progress fill overlay — highlight cells within the completed portion
+        var progressFill = "";
+        var progress = 0;
+        var totalBarDays = 0;
+        if (sectionName === "DRILLING") {
+          progress = block ? (block.drillProgress || 0) : (blast.drillProgress || 0);
+          totalBarDays = block ? (block.drillDays || 1) : (blast.drillDays || 1);
+        } else if (sectionName === "LOADING") {
+          progress = blast.loadProgress || 0;
+          totalBarDays = blast.loadDays || 1;
+        }
+        if (progress > 0 && range.start) {
+          var filledDays = Math.ceil(totalBarDays * progress);
+          var barStartDate = new Date(range.start);
+          var filledEndDate = isoDate(addDays(barStartDate, filledDays - 1));
+          if (ds <= filledEndDate) {
+            progressFill = "<div class=\"gantt-progress-fill\"></div>";
+          }
+        }
+
+        cellsHtml += "<div class=\"gantt-bar " + barClass + "\"" + barStyle + " " + ttData + ">" + progressFill + barExtra + conflictOverlay + "</div>";
       }
 
       // Step) Render delay blocks that overlap this date
@@ -352,7 +373,8 @@ function renderGantt() {
           var blockCrewReq = calcDrillCrewRequired(blast, drills);
           var blockCrewAlloc = ensureCrewAllocated(blast).drilling;
           var blockCrewHtml = buildCrewBadges(blockCrewAlloc, blockCrewReq);
-          var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockCrewHtml;
+          var blockPctBadge = (block.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(block.drillProgress * 100) + "%</span>" : "";
+          var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockPctBadge + blockCrewHtml;
 
           // Step) Block row with edit icon and indented name
           html += "<tr class=\"gantt-row gantt-block-row\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
@@ -360,7 +382,7 @@ function renderGantt() {
           html += EDIT_ICON + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name;
           html += "</td>";
           html += "<td class=\"sticky-col-2\">" + blockInfo + "</td>";
-          html += renderBarCells(blockRange, blast, idx, sectionName, deps, comp, block.assignedDrills, block.drillStartTime);
+          html += renderBarCells(blockRange, blast, idx, sectionName, deps, comp, block.assignedDrills, block.drillStartTime, block);
           html += "</tr>";
         });
         return;
@@ -405,7 +427,8 @@ function renderGantt() {
           }
           if (hasConflict) conflictBadge = "<span class=\"fleet-conflict-badge\" title=\"Drill rig double-booked\">\u26A0 CONFLICT</span>";
         }
-        info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + depIcon + maintIcon + drillCrewHtml + conflictBadge;
+        var drillPctBadge = (blast.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.drillProgress * 100) + "%</span>" : "";
+        info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + drillPctBadge + depIcon + maintIcon + drillCrewHtml + conflictBadge;
       } else if (sectionName === "LOADING") {
         // Step 1f-ii-mpu) Build MPU chips from array (backward compat with legacy single assignedMPU)
         var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
@@ -414,7 +437,8 @@ function renderGantt() {
         var loadCrewReq = calcLoadCrewRequired(blast, mpus);
         var loadCrewAlloc = ensureCrewAllocated(blast).loading;
         var loadCrewHtml = buildCrewBadges(loadCrewAlloc, loadCrewReq);
-        info = mpuTag + formatNum(blast.expMass) + "kg" + depIcon + loadCrewHtml;
+        var loadPctBadge = (blast.loadProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.loadProgress * 100) + "%</span>" : "";
+        info = mpuTag + formatNum(blast.expMass) + "kg" + loadPctBadge + depIcon + loadCrewHtml;
       } else {
         info = formatNum(blast.volume) + " bcm";
       }

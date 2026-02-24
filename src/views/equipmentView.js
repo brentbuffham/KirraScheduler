@@ -6,6 +6,7 @@
 import { APP } from "../state/appState.js";
 import { drills, mpus, ancillary, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
+import { showEditEquipModal, duplicateEquip } from "../dialogs/equipmentModal.js";
 
 // Step 1) Render the full equipment tab
 function renderEquipment() {
@@ -63,6 +64,11 @@ function renderEquipmentStats() {
   html += "  <div class=\"stat-sub\">scheduled windows</div>";
   html += "</div>";
   document.getElementById("equipStats").innerHTML = html;
+
+  // Step 2b) Update the equipment count badge
+  var totalCount = drills.length + mpus.length + ancillary.length + people.length;
+  var countEl = document.getElementById("equipCount");
+  if (countEl) countEl.textContent = totalCount + " item(s)";
 }
 
 // Step 3) Drill rigs table
@@ -188,7 +194,7 @@ function renderAncillaryTable() {
 // Step 5) People table
 function renderPeopleTable() {
   var html = "<thead><tr>";
-  html += "<th>ID</th><th>Name</th><th>Role</th><th>Certified Equipment Types</th>";
+  html += "<th>ID</th><th>Name</th><th>Role</th><th>Certified Equipment Types</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
   people.forEach(function(p) {
@@ -196,16 +202,21 @@ function renderPeopleTable() {
       ? p.certifiedTypes.map(function(t) { return "<span class=\"badge badge-drill\">" + t + "</span>"; }).join(" ")
       : "<span style=\"color:var(--text-muted)\">\u2014</span>";
 
+    var actions = buildEquipActions(p.status || "available", p.id, "person");
+
     html += "<tr data-person-id=\"" + p.id + "\">";
     html += "<td style=\"color:var(--accent-purple);font-weight:600;\">" + p.id + "</td>";
     html += "<td style=\"font-weight:500;\">" + p.name + "</td>";
     html += "<td>" + p.role + "</td>";
     html += "<td>" + certs + "</td>";
+    html += "<td class=\"equip-actions\">" + actions + "</td>";
     html += "</tr>";
   });
 
   html += "</tbody>";
   document.getElementById("peopleTable").innerHTML = html;
+
+  attachEquipActionListeners("person");
 }
 
 // Step 6) Maintenance schedule table (aggregated from all equipment)
@@ -311,14 +322,26 @@ function getStatusBadgeClass(status) {
 function buildEquipActions(status, equipId, equipType) {
   var html = "<div class=\"equip-action-btns\">";
 
-  if (status === "demobilised") {
-    html += "<button class=\"btn-equip-action btn-mobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Mobilise\">";
-    html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 2v12M2 8l6-6 6 6\"/></svg> Mob</button>";
-  } else {
-    html += "<button class=\"btn-equip-action btn-demobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Demobilise\">";
-    html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 14V2M2 8l6 6 6-6\"/></svg> Demob</button>";
+  // Step 8a) Edit button — pencil icon
+  html += "<button class=\"btn-equip-action btn-edit-equip\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Edit\">";
+  html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M11.5 1.5l3 3L5 14H2v-3z\"/></svg></button>";
+
+  // Step 8b) Duplicate button — copy icon
+  html += "<button class=\"btn-equip-action btn-duplicate-equip\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Duplicate\">";
+  html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"5\" y=\"5\" width=\"9\" height=\"9\" rx=\"1\"/><path d=\"M2 11V2h9\"/></svg></button>";
+
+  // Step 8c) Mobilise / Demobilise toggle (not applicable to personnel)
+  if (equipType !== "person") {
+    if (status === "demobilised") {
+      html += "<button class=\"btn-equip-action btn-mobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Mobilise\">";
+      html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 2v12M2 8l6-6 6 6\"/></svg> Mob</button>";
+    } else {
+      html += "<button class=\"btn-equip-action btn-demobilise\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Demobilise\">";
+      html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 14V2M2 8l6 6 6-6\"/></svg> Demob</button>";
+    }
   }
 
+  // Step 8d) Remove button — trash icon
   html += "<button class=\"btn-equip-action btn-remove-equip\" data-equip-id=\"" + equipId + "\" data-equip-type=\"" + equipType + "\" title=\"Remove\">";
   html += "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10\"/></svg></button>";
 
@@ -328,9 +351,25 @@ function buildEquipActions(status, equipId, equipType) {
 
 // Step 9) Attach action button event listeners
 function attachEquipActionListeners(equipType) {
-  var collection = equipType === "drill" ? drills : equipType === "ancillary" ? ancillary : mpus;
+  var collection = equipType === "drill" ? drills : equipType === "ancillary" ? ancillary : equipType === "person" ? people : mpus;
 
-  // Step 9a) Mobilise buttons
+  // Step 9a) Edit buttons
+  document.querySelectorAll(".btn-edit-equip[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      showEditEquipModal(equipType, btn.dataset.equipId);
+    });
+  });
+
+  // Step 9b) Duplicate buttons
+  document.querySelectorAll(".btn-duplicate-equip[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      duplicateEquip(equipType, btn.dataset.equipId);
+    });
+  });
+
+  // Step 9c) Mobilise buttons
   document.querySelectorAll(".btn-mobilise[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -340,7 +379,7 @@ function attachEquipActionListeners(equipType) {
     });
   });
 
-  // Step 9b) Demobilise buttons
+  // Step 9d) Demobilise buttons
   document.querySelectorAll(".btn-demobilise[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();
@@ -350,7 +389,7 @@ function attachEquipActionListeners(equipType) {
     });
   });
 
-  // Step 9c) Remove buttons
+  // Step 9e) Remove buttons
   document.querySelectorAll(".btn-remove-equip[data-equip-type=\"" + equipType + "\"]").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();

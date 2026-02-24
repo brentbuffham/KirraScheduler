@@ -409,6 +409,31 @@ body {
   left: 50%;
   transform: translate(-50%,-50%);
 }
+/* Step) Progress fill overlay inside drill/load bars */
+.gantt-progress-fill {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: rgba(16,185,129,0.7);
+  border-radius: 3px 3px 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Step) Progress % badge in info column */
+.progress-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-green);
+  background: rgba(16,185,129,0.12);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 3px;
+  vertical-align: 1px;
+}
+
 .gantt-bar .dep-marker {
   position: absolute;
   top: -2px;

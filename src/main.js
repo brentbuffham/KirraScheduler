@@ -30,8 +30,9 @@ import { renderGantt } from "./views/ganttView.js";
 import { renderBlasts } from "./views/blastOverview.js";
 import { renderPatterns, initPatternLibrary } from "./views/patternLibrary.js";
 import { renderForecast } from "./views/forecastView.js";
-import { renderConformance } from "./views/conformanceView.js";
+import { renderConformance, initConformance } from "./views/conformanceView.js";
 import { renderEquipment } from "./views/equipmentView.js";
+import { initEquipmentLibrary } from "./io/equipmentLibrary.js";
 import { initPlaybackView } from "./views/playbackView.js";
 import { shouldShowStartup, showStartupDialog, clearSeedData, markStartupComplete } from "./dialogs/startupDialog.js";
 
@@ -46,6 +47,8 @@ initImportPreview();
 initExport();
 initResetDialog();
 initPatternLibrary();
+initEquipmentLibrary();
+initConformance();
 
 // Step 4) Wire up Gantt toolbar buttons
 document.getElementById("btnRefreshGantt").addEventListener("click", function() {

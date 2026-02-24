@@ -26,6 +26,9 @@ function showBarTooltip(e, bar) {
   if (section === "DRILLING") {
     html += "<div class=\"tt-row\"><span>Drill Meters</span><span class=\"tt-val\">" + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + " m</span></div>";
     html += "<div class=\"tt-row\"><span>Duration</span><span class=\"tt-val\">" + blast.drillDays + " days</span></div>";
+    if (blast.drillProgress > 0) {
+      html += "<div class=\"tt-row\"><span style=\"color:var(--accent-green)\">Drill Progress</span><span class=\"tt-val\" style=\"color:var(--accent-green);font-weight:700\">" + Math.round(blast.drillProgress * 100) + "%</span></div>";
+    }
     html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;padding-top:4px;\">";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-purple)\">Load starts at</span><span class=\"tt-val\">" + Math.round(deps.drillPctForLoad * 100) + "% drilled</span></div>";
     if (comp.hasOverlap) {
@@ -38,6 +41,9 @@ function showBarTooltip(e, bar) {
     html += "<div class=\"tt-row\"><span>Explosive</span><span class=\"tt-val\">" + formatNum(blast.expMass) + " kg</span></div>";
     html += "<div class=\"tt-row\"><span>Load Rate</span><span class=\"tt-val\">" + formatNum(blast.loadRate) + " kg/day</span></div>";
     html += "<div class=\"tt-row\"><span>Duration</span><span class=\"tt-val\">" + blast.loadDays + " days</span></div>";
+    if (blast.loadProgress > 0) {
+      html += "<div class=\"tt-row\"><span style=\"color:var(--accent-green)\">Load Progress</span><span class=\"tt-val\" style=\"color:var(--accent-green);font-weight:700\">" + Math.round(blast.loadProgress * 100) + "%</span></div>";
+    }
     html += "<div style=\"border-top:1px solid var(--border);margin:4px 0;padding-top:4px;\">";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-purple)\">Drill was at</span><span class=\"tt-val\">" + Math.round(deps.drillPctForLoad * 100) + "% when load started</span></div>";
     html += "<div class=\"tt-row\"><span style=\"color:var(--accent-blast)\">Blast at load</span><span class=\"tt-val\">" + Math.round(deps.loadPctForBlast * 100) + "%</span></div>";

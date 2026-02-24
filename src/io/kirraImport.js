@@ -5,8 +5,9 @@
 //  Unsupported data types are warned to the user
 // ============================================================
 
+import JSZip from "jszip";
 import { APP } from "../state/appState.js";
-import { drills, mpus, people } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
@@ -16,17 +17,25 @@ import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { showImportPreview } from "./importPreview.js";
 
-// Step 1) Parse Kirra charge configuration file
+// Step 1) Parse Kirra charge configuration file (JSON, .kirra, or .zip)
 function parseKirraConfig(file) {
   var log = document.getElementById("kirraLog");
   log.innerHTML = "<div class=\"log-info\">Reading " + file.name + "...</div>";
 
+  var ext = (file.name || "").toLowerCase();
+
+  // Step 1a) Route ZIP files to the ZIP handler
+  if (ext.indexOf(".zip") !== -1) {
+    parseKirraConfigZip(file, log);
+    return;
+  }
+
+  // Step 1b) Handle JSON / .kirra files
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
       var data = JSON.parse(e.target.result);
 
-      // Step 1a) Handle various Kirra export formats
       if (data.chargeConfigs || data.charge_configs) {
         var configs = data.chargeConfigs || data.charge_configs;
         APP.chargeConfigs = Array.isArray(configs) ? configs : [configs];
@@ -50,6 +59,216 @@ function parseKirraConfig(file) {
     }
   };
   reader.readAsText(file);
+}
+
+// ============================================================
+//  ZIP CHARGE CONFIG IMPORT
+//  Accepts KirraChargeConfig.zip with chargeConfigs.csv + products.csv
+// ============================================================
+
+// Step 1c) Parse a ZIP file containing chargeConfigs.csv and products.csv
+function parseKirraConfigZip(file, log) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    JSZip.loadAsync(e.target.result).then(function(zip) {
+      log.innerHTML += "<div class=\"log-ok\">ZIP opened (" + Math.round(file.size / 1024) + " KB)</div>";
+
+      // Step 1c-i) Find CSV files (case-insensitive)
+      var chargeFile = null;
+      var productFile = null;
+      zip.forEach(function(path, entry) {
+        var lower = path.toLowerCase();
+        if (lower.indexOf("chargeconfigs") !== -1 && lower.indexOf(".csv") !== -1) chargeFile = entry;
+        if (lower.indexOf("products") !== -1 && lower.indexOf(".csv") !== -1) productFile = entry;
+      });
+
+      var promises = [];
+
+      if (productFile) {
+        promises.push(productFile.async("string").then(function(csv) {
+          return { type: "products", csv: csv, name: productFile.name };
+        }));
+      }
+      if (chargeFile) {
+        promises.push(chargeFile.async("string").then(function(csv) {
+          return { type: "configs", csv: csv, name: chargeFile.name };
+        }));
+      }
+
+      if (promises.length === 0) {
+        log.innerHTML += "<div class=\"log-warn\">No chargeConfigs.csv or products.csv found in ZIP</div>";
+        return;
+      }
+
+      Promise.all(promises).then(function(results) {
+        results.forEach(function(r) {
+          if (r.type === "products") {
+            // Step 1c-ii) Parse products CSV
+            var products = parseProductsCSV(r.csv);
+            APP.products = products;
+            log.innerHTML += "<div class=\"log-ok\">" + r.name + ": " + products.length + " product(s) loaded</div>";
+            products.forEach(function(p) {
+              log.innerHTML += "<div class=\"log-ok\">  \u2192 " + p.name + " (" + p.productCategory + "/" + p.productType + ")</div>";
+            });
+          } else if (r.type === "configs") {
+            // Step 1c-iii) Parse transposed chargeConfigs CSV
+            var configs = parseChargeConfigsCSV(r.csv);
+            APP.chargeConfigs = configs;
+            log.innerHTML += "<div class=\"log-ok\">" + r.name + ": " + configs.length + " charge config(s) loaded</div>";
+            configs.forEach(function(cfg) {
+              var deckCount = (cfg.inertDeck || []).length + (cfg.coupledDeck || []).length +
+                              (cfg.decoupledDeck || []).length + (cfg.spacerDeck || []).length;
+              log.innerHTML += "<div class=\"log-ok\">  \u2192 " + (cfg.configName || cfg.configCode) + ": " + deckCount + " deck(s)</div>";
+            });
+          }
+        });
+
+        log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:6px;\">\u2705 Charge config import complete</div>";
+        renderForecast();
+      });
+    }).catch(function(err) {
+      log.innerHTML += "<div class=\"log-err\">ZIP error: " + err.message + "</div>";
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+//  CSV PARSERS FOR CHARGE CONFIG ZIP
+// ============================================================
+
+// Step 1d) Parse a standard row-oriented CSV into an array of objects
+function parseCSVRows(csvText) {
+  var lines = csvText.split(/\r?\n/).filter(function(l) { return l.trim().length > 0; });
+  if (lines.length < 2) return [];
+  var headers = parseCSVLine(lines[0]);
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var vals = parseCSVLine(lines[i]);
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      obj[headers[j].trim()] = (vals[j] || "").trim();
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
+
+// Step 1e) Parse products.csv into APP.products format
+function parseProductsCSV(csvText) {
+  var rows = parseCSVRows(csvText);
+  return rows.map(function(r) {
+    return {
+      productCategory: r.productCategory || "",
+      productType: r.productType || "",
+      name: r.name || "",
+      supplier: r.supplier || "",
+      density: parseFloat(r.density) || 0,
+      colorHex: r.colorHex || "#CCCCCC",
+      isCompressible: r.isCompressible === "true",
+      minDensity: parseFloat(r.minDensity) || 0,
+      maxDensity: parseFloat(r.maxDensity) || 0,
+      vodMs: parseFloat(r.vodMs) || 0,
+      reKjKg: parseFloat(r.reKjKg) || 0,
+      rws: parseFloat(r.rws) || 0,
+      waterResistant: r.waterResistant === "true",
+      dampResistant: r.dampResistant === "true",
+      massGrams: parseFloat(r.massGrams) || 0,
+      diameterMm: parseFloat(r.diameterMm) || 0,
+      lengthMm: parseFloat(r.lengthMm) || 0,
+      initiatorType: r.initiatorType || "",
+      deliveryVodMs: parseFloat(r.deliveryVodMs) || 0,
+      minDelayMs: parseFloat(r.minDelayMs) || 0,
+      maxDelayMs: parseFloat(r.maxDelayMs) || 0,
+      delayIncrementMs: parseFloat(r.delayIncrementMs) || 0,
+      delayMs: parseFloat(r.delayMs) || 0,
+      coreLoadGramsPerMeter: parseFloat(r.coreLoadGramsPerMeter) || 0,
+      spacerType: r.spacerType || "",
+      description: r.description || ""
+    };
+  }).filter(function(p) { return p.name.length > 0; });
+}
+
+// Step 1f) Parse transposed chargeConfigs.csv — rows are fields, columns are configs
+function parseChargeConfigsCSV(csvText) {
+  var lines = csvText.split(/\r?\n/).filter(function(l) { return l.trim().length > 0; });
+  if (lines.length < 2) return [];
+
+  // Step 1f-i) Parse header row to find config column indices
+  var headerCols = parseCSVLine(lines[0]);
+  var numConfigs = headerCols.length - 3;
+  if (numConfigs < 1) return [];
+
+  // Step 1f-ii) Build field map: fieldName -> [value per config]
+  var fieldMap = {};
+  for (var i = 1; i < lines.length; i++) {
+    var cols = parseCSVLine(lines[i]);
+    var fieldName = (cols[2] || "").trim();
+    if (!fieldName) continue;
+    fieldMap[fieldName] = [];
+    for (var c = 3; c < 3 + numConfigs; c++) {
+      fieldMap[fieldName].push((cols[c] || "").trim());
+    }
+  }
+
+  // Step 1f-iii) Assemble config objects column by column
+  var configs = [];
+  for (var ci = 0; ci < numConfigs; ci++) {
+    var code = fieldMap.configCode ? fieldMap.configCode[ci] : "";
+    if (!code) continue;
+
+    var cfg = {
+      configCode: code,
+      configName: fieldMap.configName ? fieldMap.configName[ci] : code,
+      description: fieldMap.description ? fieldMap.description[ci] : "",
+      primerInterval: fieldMap.primerInterval ? parseFloat(fieldMap.primerInterval[ci]) || 10 : 10,
+      inertDeck: parseDeckEntries(fieldMap.inertDeck ? fieldMap.inertDeck[ci] : ""),
+      coupledDeck: parseDeckEntries(fieldMap.coupledDeck ? fieldMap.coupledDeck[ci] : ""),
+      decoupledDeck: parseDeckEntries(fieldMap.decoupledDeck ? fieldMap.decoupledDeck[ci] : ""),
+      spacerDeck: parseDeckEntries(fieldMap.spacerDeck ? fieldMap.spacerDeck[ci] : ""),
+      primer: parseDeckEntries(fieldMap.primer ? fieldMap.primer[ci] : "")
+    };
+    configs.push(cfg);
+  }
+  return configs;
+}
+
+// Step 1g) Parse pipe-delimited deck entries like "{1,0,3.5,Stemming,FL}|{3,fx:...}"
+function parseDeckEntries(raw) {
+  if (!raw || raw.trim().length === 0) return [];
+  var parts = raw.split("|");
+  return parts.map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; });
+}
+
+// Step 1h) Robust CSV line parser — handles quoted fields containing commas
+function parseCSVLine(line) {
+  var result = [];
+  var current = "";
+  var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (inQuotes) {
+      if (ch === "\"" && i + 1 < line.length && line[i + 1] === "\"") {
+        current += "\"";
+        i++;
+      } else if (ch === "\"") {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === "\"") {
+        inQuotes = true;
+      } else if (ch === ",") {
+        result.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current);
+  return result;
 }
 
 // Step 2) Parse Kirra Gantt Project (.kgp) file — restores full scheduler state
@@ -112,16 +331,29 @@ function parseKGPProject(file) {
         data.mpus.forEach(function(m) { mpus.push(m); });
         log.innerHTML += "<div class=\"log-ok\">" + data.mpus.length + " MPU(s) restored</div>";
       }
+      if (data.ancillary && Array.isArray(data.ancillary)) {
+        ancillary.length = 0;
+        data.ancillary.forEach(function(a) { ancillary.push(a); });
+        log.innerHTML += "<div class=\"log-ok\">" + data.ancillary.length + " ancillary unit(s) restored</div>";
+      }
       if (data.people && Array.isArray(data.people)) {
         people.length = 0;
         data.people.forEach(function(p) { people.push(p); });
         log.innerHTML += "<div class=\"log-ok\">" + data.people.length + " personnel restored</div>";
       }
 
-      // Step 2g) Restore conformance
+      // Step 2g) Restore conformance (including actuals if present)
       if (data.conformance) {
         APP.conformance = data.conformance;
-        log.innerHTML += "<div class=\"log-ok\">Conformance targets restored</div>";
+        if (!APP.conformance.actuals) APP.conformance.actuals = [];
+        var actCount = APP.conformance.actuals.length;
+        log.innerHTML += "<div class=\"log-ok\">Conformance restored" + (actCount > 0 ? " (" + actCount + " actuals)" : "") + "</div>";
+      }
+
+      // Step 2g-ii) Restore product library
+      if (data.products && Array.isArray(data.products)) {
+        APP.products = data.products;
+        log.innerHTML += "<div class=\"log-ok\">" + data.products.length + " product(s) restored</div>";
       }
 
       // Step 2h) Restore imported blasts
@@ -427,7 +659,9 @@ function buildBlastFromHoles(entityName, holes) {
     assignedMPUs: [],
     holeTypes: holeTypes,
     polygons: [],
-    _sourceHoleCount: holes.length
+    _sourceHoleCount: holes.length,
+    drillProgress: 0,
+    loadProgress: 0
   };
 }
 
