@@ -3,7 +3,7 @@
 //  Export blast schedule as .kgp (Kirra Gantt Project) or CSV
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { exportPatternTemplate, exportPatternLibrary } from "../views/patternLibrary.js";
@@ -63,14 +63,13 @@ function exportKGP() {
 function exportCSV() {
   // Step 2a) Define CSV columns
   var headers = [
-    "Blast Name", "Status", "Mode", "Pattern",
+    "Blast Name", "Status", "Mode",
     "Surface Area (m2)", "Volume (bcm)", "Explosive Mass (kg)",
-    "D65 Meters", "PV Meters", "Total Drill Meters",
+    "Total Drill Meters", "Hole Count", "Hole Types",
     "Drill Start", "Start Time", "Drill Days",
     "Load Start", "Load Days", "Blast Date",
     "Assigned Drills", "Assigned MPUs",
-    "Rate D65 (m/hr)", "Rate PV (m/hr)",
-    "Num D65", "Num PV", "Load Rate (kg/day)",
+    "Load Rate (kg/day)",
     "Drill % to Load", "Drill % to Blast", "Lead Days",
     "Predecessor",
     "Drill Progress (%)", "Load Progress (%)"
@@ -79,7 +78,16 @@ function exportCSV() {
   // Step 2b) Build rows
   var rows = [headers.join(",")];
   APP.blasts.forEach(function(b) {
-    var totalMeters = (b.d65Meters || 0) + (b.pvMeters || 0);
+    var totalMeters = getTotalDrillMeters(b);
+    var totalHoles = 0;
+    var htSummary = [];
+    if (b.holeTypes) {
+      for (var hi = 0; hi < b.holeTypes.length; hi++) {
+        totalHoles += b.holeTypes[hi].holes || 0;
+        var htLabel = (b.holeTypes[hi].patternId || b.holeTypes[hi].type || "?") + ":" + (b.holeTypes[hi].holes || 0);
+        htSummary.push(htLabel);
+      }
+    }
     var drillPctLoad = b.deps.drillPctForLoad !== null ? b.deps.drillPctForLoad : (APP.deps.drillPctForLoad || "");
     var drillPctBlast = b.deps.drillPctForBlast !== null ? b.deps.drillPctForBlast : (APP.deps.drillPctForBlast || "");
     var leadDays = b.deps.minLeadDays !== null ? b.deps.minLeadDays : (APP.deps.minLeadDays || "");
@@ -89,13 +97,12 @@ function exportCSV() {
       csvEscape(b.name),
       b.status || "",
       b.mode || "",
-      b.pattern || "",
       b.surfaceArea || 0,
       b.volume || 0,
       b.expMass || 0,
-      b.d65Meters || 0,
-      b.pvMeters || 0,
       Math.round(totalMeters * 10) / 10,
+      totalHoles,
+      csvEscape(htSummary.join(" | ")),
       b.drillStart || "",
       b.drillStartTime || "",
       b.drillDays || 0,
@@ -103,12 +110,7 @@ function exportCSV() {
       b.loadDays || 0,
       b.blastDate || "",
       csvEscape((b.assignedDrills || []).join(" | ")),
-      // Step 2b-i) Export assignedMPUs array (backward compat with legacy assignedMPU)
       csvEscape((b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : [])).join(" | ")),
-      b.rateD65 || 0,
-      b.ratePV || 0,
-      b.numD65 || 0,
-      b.numPV || 0,
       b.loadRate || 0,
       drillPctLoad,
       drillPctBlast,

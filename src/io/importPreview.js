@@ -100,16 +100,7 @@ function mergeImported() {
         name: imp.name,
         mode: "Manual",
         surfaceArea: imp.surfaceArea || 0,
-        pattern: imp.pattern || "",
-        pctD65: imp.pctD65 || 0,
-        pctPV: imp.pctPV || 1,
-        rateD65: imp.rateD65 || 19,
-        ratePV: imp.ratePV || 20,
-        numD65: imp.numD65 || 0,
-        numPV: imp.numPV || 4,
         loadRate: imp.loadRate || 100000,
-        d65Meters: imp.d65Meters || 0,
-        pvMeters: imp.pvMeters || 0,
         volume: imp.volume || 0,
         expMass: imp.expMass || 0,
         drillStart: imp.drillStart || isoDate(APP.planStart),
@@ -121,21 +112,25 @@ function mergeImported() {
         status: "planned",
         deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
         assignedDrills: imp.assignedDrills || [],
-        // Step 3b-i) Store as array (migrated from single assignedMPU)
         assignedMPUs: imp.assignedMPUs || (imp.assignedMPU ? [imp.assignedMPU] : []),
         holeTypes: (imp.holeTypes || []).map(function(ht) {
           return {
+            patternId: ht.patternId || "",
             type: ht.type,
             diam: ht.diam > 1 ? ht.diam / 1000 : ht.diam,
             burden: ht.burden || 0,
             spacing: ht.spacing || 0,
+            isLineDrill: ht.isLineDrill || false,
             holes: ht.holes || 0,
+            holeDepth: ht.holeDepth || 0,
             drillMeters: ht.drillMeters || 0,
             expMass: ht.expMass || 0
           };
         }),
         solidBounds: imp.solidBounds || null,
-        solidBenchHt: imp.solidBenchHt || null
+        solidBenchHt: imp.solidBenchHt || null,
+        drillProgress: 0,
+        loadProgress: 0
       });
     }
   });

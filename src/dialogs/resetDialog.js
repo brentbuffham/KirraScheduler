@@ -5,7 +5,7 @@
 //  "Reset All" is a master toggle that selects everything.
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, people } from "../state/equipmentState.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
@@ -256,8 +256,7 @@ function performReset() {
   // Step 7a) Spatial — Remove blasts that have no drill holes (polygon/volume only)
   if (isAll || document.getElementById("resetPolygons").checked) {
     APP.blasts = APP.blasts.filter(function(b) {
-      var totalMeters = (b.d65Meters || 0) + (b.pvMeters || 0);
-      return totalMeters > 0;
+      return getTotalDrillMeters(b) > 0;
     });
   }
 

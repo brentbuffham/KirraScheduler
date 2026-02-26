@@ -292,6 +292,7 @@ function buildColumnMap(headerFields) {
     var keys = Object.keys(candidates);
     for (var k = 0; k < keys.length; k++) {
       var key = keys[k];
+      if (map[key] !== undefined) continue;
       for (var c = 0; c < candidates[key].length; c++) {
         if (h === candidates[key][c].replace(/[\s_-]+/g, "")) {
           map[key] = i;

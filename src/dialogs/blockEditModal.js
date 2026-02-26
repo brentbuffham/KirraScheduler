@@ -7,7 +7,7 @@
 //  - Start date and time
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills as drillFleet } from "../state/equipmentState.js";
 import { calcBlockDays, syncBlastFromBlocks } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
@@ -29,7 +29,7 @@ function showBlockEditor(blastIdx, blockIdx) {
   var block = blast.drillBlocks[blockIdx];
 
   // Step 2a) Calculate total meters and remaining meters for other blocks
-  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
+  var totalMeters = getTotalDrillMeters(blast);
   var otherMeters = 0;
   blast.drillBlocks.forEach(function(b, i) {
     if (i !== blockIdx) otherMeters += (b.meters || 0);

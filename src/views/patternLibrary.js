@@ -41,6 +41,7 @@ function renderPatterns() {
     html += "  <div class=\"pattern-detail\"><span class=\"label\">Powder Factor</span><span class=\"value\">" + p.pf + " kg/bcm</span></div>";
     html += "  <div class=\"pattern-detail\"><span class=\"label\">Sub-drill</span><span class=\"value\">" + p.subdrill + " m</span></div>";
     html += "  <div class=\"pattern-detail\"><span class=\"label\">Stemming</span><span class=\"value\">" + p.stemming + " m</span></div>";
+    html += "  <div class=\"pattern-detail\"><span class=\"label\">Hole Angle</span><span class=\"value\">" + (p.holeAngle || 90) + "&deg;</span></div>";
     html += "</div>";
   });
 
@@ -69,15 +70,16 @@ var PATTERN_HEADERS = [
   "Spacing (m)",
   "Sub-drill (m)",
   "Stemming (m)",
-  "Type"
+  "Type",
+  "Hole Angle (deg)"
 ];
 
 // Step 3) Example rows to seed the template so users understand the format
 var EXAMPLE_ROWS = [
-  ["EXAMPLE-W01",   12,  229,  0.7,  7.1,  8.2,  1.5,  4.0,  "WASTE"],
-  ["EXAMPLE-O01",   12,  229,  1.5,  4.85, 5.6,  1.5,  4.0,  "ORE"],
-  ["EXAMPLE-PS01",  12,  127,  0.6,  1.0,  1.6,  0.6,  2.2,  "PRESPLIT"],
-  ["EXAMPLE-Y01",   10,  165,  1.1,  5.65, 6.55, 1.5,  3.8,  "YELLOW"]
+  ["EXAMPLE-W01",   12,  229,  0.7,  7.1,  8.2,  1.5,  4.0,  "WASTE",    90],
+  ["EXAMPLE-O01",   12,  229,  1.5,  4.85, 5.6,  1.5,  4.0,  "ORE",      90],
+  ["EXAMPLE-PS01",  12,  127,  0.6,  1.0,  1.6,  0.6,  2.2,  "PRESPLIT",  80],
+  ["EXAMPLE-Y01",   10,  165,  1.1,  5.65, 6.55, 1.5,  3.8,  "YELLOW",   90]
 ];
 
 // Step 4) Export the template CSV
@@ -87,7 +89,8 @@ function exportPatternTemplate() {
   // Step 4a) Instruction comment rows (prefixed with # so importer can skip them)
   rows.push("# Kirra Scheduler - Pattern Library Template");
   rows.push("# Fill in your site drill & blast patterns below.");
-  rows.push("# Type must be one of: WASTE, YELLOW, ORE, PRESPLIT");
+  rows.push("# Type must be one of: WASTE, YELLOW, ORE, PRESPLIT, BUFFER");
+  rows.push("# Hole Angle: degrees from horizontal (90 = vertical, 80 = inclined). Default 90 if omitted.");
   rows.push("# Diameter is in mm (e.g. 229, 165, 127, 311)");
   rows.push("# Delete the EXAMPLE rows before importing.");
   rows.push("# Lines starting with # are ignored on import.");
@@ -134,7 +137,8 @@ function exportPatternLibrary() {
       p.spacing,
       p.subdrill,
       p.stemming,
-      p.type
+      p.type,
+      p.holeAngle || 90
     ].join(","));
   });
 
@@ -178,7 +182,7 @@ function importPatternCSV(file) {
       // Step 6c) Parse CSV fields (handle quoted values)
       var fields = parseCSVLine(line);
       if (fields.length < 9) {
-        errors.push("Row " + (i + 1) + ": expected 9 columns, got " + fields.length);
+        errors.push("Row " + (i + 1) + ": expected at least 9 columns, got " + fields.length);
         continue;
       }
 
@@ -192,6 +196,7 @@ function importPatternCSV(file) {
       var subdrill = parseFloat(fields[6]);
       var stemming = parseFloat(fields[7]);
       var type = fields[8].trim().toUpperCase();
+      var holeAngle = fields.length > 9 ? parseFloat(fields[9]) : 90;
 
       if (!patternId) {
         errors.push("Row " + (i + 1) + ": missing Pattern ID");
@@ -202,7 +207,7 @@ function importPatternCSV(file) {
         continue;
       }
 
-      var validTypes = ["WASTE", "YELLOW", "ORE", "PRESPLIT"];
+      var validTypes = ["WASTE", "YELLOW", "ORE", "PRESPLIT", "BUFFER"];
       if (validTypes.indexOf(type) === -1) {
         errors.push("Row " + (i + 1) + " (" + patternId + "): type '" + type + "' not valid. Use: " + validTypes.join(", "));
         continue;
@@ -217,7 +222,8 @@ function importPatternCSV(file) {
         spacing: spacing,
         subdrill: isNaN(subdrill) ? 0 : subdrill,
         stemming: isNaN(stemming) ? 0 : stemming,
-        type: type
+        type: type,
+        holeAngle: isNaN(holeAngle) ? 90 : holeAngle
       });
     }
 

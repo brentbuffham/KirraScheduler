@@ -4,7 +4,7 @@
 //  splitting, merging, and deriving blast-level values from blocks
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills as drillFleet } from "../state/equipmentState.js";
 import { addDays, isoDate } from "../utils/dateUtils.js";
 
@@ -87,7 +87,7 @@ function syncBlastFromBlocks(blast) {
 // Step 5) Split a blast into two blocks (50/50 meters by default)
 // Inherits drillDays proportionally from the blast's existing schedule
 function splitBlast(blast) {
-  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
+  var totalMeters = getTotalDrillMeters(blast);
   var halfMeters = Math.round(totalMeters / 2 * 10) / 10;
   var remainMeters = Math.round((totalMeters - halfMeters) * 10) / 10;
   var drillStart = blast.drillStart || isoDate(new Date());
@@ -147,7 +147,7 @@ function mergeBlocks(blast) {
 
   // Step 6b) Recalculate drillDays using effective hours
   var effectiveHrs = getEffectiveHours();
-  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
+  var totalMeters = getTotalDrillMeters(blast);
   var totalMPerDay = 0;
   blast.assignedDrills.forEach(function(drillId) {
     var drill = drillFleet.find(function(d) { return d.id === drillId; });
@@ -286,7 +286,7 @@ function splitAndRemoveDrill(blast, drillId, fromDate, blockIdx) {
   var splitDate2 = new Date(fromDate);
   var daysBefore2 = Math.round((splitDate2 - drillStart) / 86400000);
   var currentDrills = blast.assignedDrills || [];
-  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
+  var totalMeters = getTotalDrillMeters(blast);
 
   if (daysBefore2 <= 0) {
     // Step 9b-i) Removing from the very start — just remove the drill

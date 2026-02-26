@@ -4,7 +4,7 @@
 //  Supports drill blocks (split blasts) and inline edit icons
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
 import { calcDrillCrewRequired, calcLoadCrewRequired, ensureCrewAllocated, buildCrewBadges } from "../state/crewRoles.js";
 import { getBlastDeps } from "../engine/dependencyEngine.js";
@@ -83,7 +83,7 @@ function renderGantt() {
   // Step 1b) Compute stats
   var totalVolume = APP.blasts.reduce(function(s, b) { return s + (b.volume || 0); }, 0);
   var totalExp = APP.blasts.reduce(function(s, b) { return s + (b.expMass || 0); }, 0);
-  var totalDrillM = APP.blasts.reduce(function(s, b) { return s + (b.d65Meters || 0) + (b.pvMeters || 0); }, 0);
+  var totalDrillM = APP.blasts.reduce(function(s, b) { return s + getTotalDrillMeters(b); }, 0);
   var activeCount = APP.blasts.filter(function(b) { return b.status === "active"; }).length;
   var plannedCount = APP.blasts.filter(function(b) { return b.status === "planned"; }).length;
   var effectiveHours = APP.rigHours * APP.availability * APP.utilisation;
@@ -428,7 +428,7 @@ function renderGantt() {
           if (hasConflict) conflictBadge = "<span class=\"fleet-conflict-badge\" title=\"Drill rig double-booked\">\u26A0 CONFLICT</span>";
         }
         var drillPctBadge = (blast.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.drillProgress * 100) + "%</span>" : "";
-        info = drillTag + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + "m" + drillPctBadge + depIcon + maintIcon + drillCrewHtml + conflictBadge;
+        info = drillTag + formatNum(getTotalDrillMeters(blast)) + "m" + drillPctBadge + depIcon + maintIcon + drillCrewHtml + conflictBadge;
       } else if (sectionName === "LOADING") {
         // Step 1f-ii-mpu) Build MPU chips from array (backward compat with legacy single assignedMPU)
         var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);

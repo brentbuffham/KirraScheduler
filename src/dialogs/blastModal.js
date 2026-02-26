@@ -1,9 +1,10 @@
 // ============================================================
 //  BLAST MODAL
 //  Add / Edit blast dialog logic
+//  Multi-pattern hole type editor
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, ancillary, canDrillDiameter } from "../state/equipmentState.js";
 import { openModal, closeModal } from "../ui/modal.js";
 import { isoDate } from "../utils/dateUtils.js";
@@ -20,19 +21,202 @@ function findMatchingSolid(blastName) {
   return null;
 }
 
-// Step 1) Populate the pattern dropdown from APP.patterns
-function populatePatternDropdown() {
-  var sel = document.getElementById("fPattern");
-  sel.innerHTML = "<option value=\"\">-- Select Pattern --</option>";
-  APP.patterns.forEach(function(p) {
-    var opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.id + " \u2014 " + p.type + " (PF: " + p.pf + ")";
-    sel.appendChild(opt);
+// ============================================================
+//  HOLE TYPE TABLE HELPERS
+// ============================================================
+
+// Step 1) Calculate hole depth from pattern angle
+function calcHoleDepth(pattern) {
+  var angle = pattern.holeAngle || 90;
+  var radians = angle * Math.PI / 180;
+  var depth = pattern.benchHt / Math.sin(radians) + (pattern.subdrill || 0);
+  return Math.round(depth * 100) / 100;
+}
+
+// Step 1b) Build a pattern <select> dropdown HTML for a hole type row
+function buildPatternSelect(selectedId) {
+  var html = "<select class=\"ht-pattern\" style=\"width:100%;font-size:11px;padding:2px 4px;\">";
+  html += "<option value=\"\">-- Pattern --</option>";
+  for (var i = 0; i < APP.patterns.length; i++) {
+    var p = APP.patterns[i];
+    var sel = (p.id === selectedId) ? " selected" : "";
+    html += "<option value=\"" + p.id + "\"" + sel + ">" + p.id + " \u2014 " + p.type + " (" + p.diam + "mm)</option>";
+  }
+  html += "</select>";
+  return html;
+}
+
+// Step 2) Add a hole type row to the table
+function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
+  var tbody = document.getElementById("holeTypeRows");
+  var tr = document.createElement("tr");
+  tr.style.borderBottom = "1px solid var(--border)";
+
+  var pattern = APP.patterns.find(function(p) { return p.id === patternId; });
+  var depth = pattern ? calcHoleDepth(pattern) : 0;
+  var autoLine = false;
+  if (pattern) {
+    var t = pattern.type.toUpperCase();
+    autoLine = (t === "PRESPLIT" || t === "BUFFER");
+  }
+  var lineDrill = (isLineDrill !== undefined) ? isLineDrill : autoLine;
+  var holeCount = holes || 0;
+  var meters = drillMeters || (holeCount * depth);
+  var mass = expMass || 0;
+
+  tr.innerHTML =
+    "<td style=\"padding:4px 2px;\">" + buildPatternSelect(patternId || "") + "</td>" +
+    "<td style=\"padding:4px 2px;text-align:center;\"><input type=\"checkbox\" class=\"ht-line\"" + (lineDrill ? " checked" : "") + "></td>" +
+    "<td style=\"padding:4px 2px;\"><input type=\"number\" class=\"ht-holes\" value=\"" + holeCount + "\" min=\"0\" step=\"1\" style=\"width:60px;text-align:right;font-size:11px;\"></td>" +
+    "<td class=\"ht-depth\" style=\"padding:4px 6px;text-align:right;color:var(--text-muted);\">" + depth.toFixed(2) + "</td>" +
+    "<td class=\"ht-meters\" style=\"padding:4px 6px;text-align:right;\">" + Math.round(meters) + "</td>" +
+    "<td class=\"ht-mass\" style=\"padding:4px 6px;text-align:right;\">" + Math.round(mass) + "</td>" +
+    "<td style=\"padding:4px 2px;text-align:center;\"><button type=\"button\" class=\"ht-del\" style=\"background:none;border:none;color:var(--accent-blast);cursor:pointer;font-size:14px;\" title=\"Remove\">&times;</button></td>";
+
+  tbody.appendChild(tr);
+
+  // Step 2a) Wire up events
+  var patSel = tr.querySelector(".ht-pattern");
+  var lineChk = tr.querySelector(".ht-line");
+  var holesInp = tr.querySelector(".ht-holes");
+  var delBtn = tr.querySelector(".ht-del");
+
+  patSel.addEventListener("change", function() {
+    var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
+    if (p) {
+      var t = p.type.toUpperCase();
+      lineChk.checked = (t === "PRESPLIT" || t === "BUFFER");
+      tr.querySelector(".ht-depth").textContent = calcHoleDepth(p).toFixed(2);
+      // Step 2b) Auto-estimate holes for area-fill patterns
+      if (!lineChk.checked) {
+        var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
+        if (area > 0) {
+          holesInp.value = Math.round(area / (p.burden * p.spacing));
+        }
+      }
+    }
+    recalcHoleTypes();
+  });
+  lineChk.addEventListener("change", recalcHoleTypes);
+  holesInp.addEventListener("input", recalcHoleTypes);
+  delBtn.addEventListener("click", function() {
+    tr.remove();
+    recalcHoleTypes();
   });
 }
 
-// Step 2) Populate predecessor dropdown (excluding the named blast)
+// Step 3) Recalculate all hole type rows and update totals
+function recalcHoleTypes() {
+  var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+  var totalMeters = 0;
+  var totalMass = 0;
+
+  for (var i = 0; i < rows.length; i++) {
+    var tr = rows[i];
+    var patSel = tr.querySelector(".ht-pattern");
+    var holesInp = tr.querySelector(".ht-holes");
+    var depthCell = tr.querySelector(".ht-depth");
+    var metersCell = tr.querySelector(".ht-meters");
+    var massCell = tr.querySelector(".ht-mass");
+
+    var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
+    var holes = parseInt(holesInp.value) || 0;
+    var depth = p ? calcHoleDepth(p) : 0;
+
+    if (p) depthCell.textContent = depth.toFixed(2);
+
+    var meters = holes * depth;
+    // Step 3a) Explosive mass per hole type: holes * burden * spacing * benchHt * pf (area-fill)
+    //          For line drill: holes * (depth - stemming) * linearChargeDensity is complex,
+    //          so use a simple pf-based estimate: meters * pf * avgCrossSection
+    var mass = 0;
+    if (p && holes > 0) {
+      var isLine = tr.querySelector(".ht-line").checked;
+      if (isLine) {
+        mass = meters * p.pf;
+      } else {
+        mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+      }
+    }
+
+    metersCell.textContent = Math.round(meters);
+    massCell.textContent = Math.round(mass);
+
+    totalMeters += meters;
+    totalMass += mass;
+  }
+
+  document.getElementById("htTotalMeters").textContent = Math.round(totalMeters);
+  document.getElementById("htTotalMass").textContent = Math.round(totalMass);
+
+  // Step 3b) Auto-fill Volume and ExpMass fields if user hasn't manually overridden
+  var volEl = document.getElementById("fVolume");
+  var massEl = document.getElementById("fExpMass");
+  if (totalMass > 0 && !massEl.dataset.userEdited) {
+    massEl.value = Math.round(totalMass);
+  }
+}
+
+// Step 4) Collect hole types from table into array
+function collectHoleTypes() {
+  var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var tr = rows[i];
+    var patId = tr.querySelector(".ht-pattern").value;
+    var p = APP.patterns.find(function(pp) { return pp.id === patId; });
+    var holes = parseInt(tr.querySelector(".ht-holes").value) || 0;
+    var isLine = tr.querySelector(".ht-line").checked;
+    var depth = p ? calcHoleDepth(p) : 0;
+    var meters = holes * depth;
+    var mass = 0;
+    if (p && holes > 0) {
+      if (isLine) {
+        mass = meters * p.pf;
+      } else {
+        mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+      }
+    }
+
+    result.push({
+      patternId: patId,
+      type: p ? p.type : "",
+      diam: p ? p.diam / 1000 : 0,
+      burden: p ? p.burden : 0,
+      spacing: p ? p.spacing : 0,
+      isLineDrill: isLine,
+      holes: holes,
+      holeDepth: depth,
+      drillMeters: Math.round(meters * 10) / 10,
+      expMass: Math.round(mass)
+    });
+  }
+  return result;
+}
+
+// Step 4b) Clear hole type table
+function clearHoleTypeTable() {
+  document.getElementById("holeTypeRows").innerHTML = "";
+  document.getElementById("htTotalMeters").textContent = "0";
+  document.getElementById("htTotalMass").textContent = "0";
+}
+
+// Step 4c) Populate hole type table from existing blast holeTypes
+function populateHoleTypeTable(holeTypes) {
+  clearHoleTypeTable();
+  if (!holeTypes || holeTypes.length === 0) return;
+  for (var i = 0; i < holeTypes.length; i++) {
+    var ht = holeTypes[i];
+    addHoleTypeRow(ht.patternId || "", ht.isLineDrill, ht.holes, ht.drillMeters, ht.expMass);
+  }
+  recalcHoleTypes();
+}
+
+// ============================================================
+//  DROPDOWN HELPERS
+// ============================================================
+
+// Step 5) Populate predecessor dropdown (excluding the named blast)
 function populatePredecessorDropdown(excludeName) {
   var sel = document.getElementById("fDepPredecessor");
   sel.innerHTML = "<option value=\"\">\u2014 None \u2014</option>";
@@ -46,7 +230,7 @@ function populatePredecessorDropdown(excludeName) {
   });
 }
 
-// Step 2b) Populate drill assignment multi-select
+// Step 5b) Populate drill assignment multi-select
 function populateDrillDropdown(selectedIds) {
   var sel = document.getElementById("fAssignedDrills");
   sel.innerHTML = "";
@@ -59,7 +243,7 @@ function populateDrillDropdown(selectedIds) {
   });
 }
 
-// Step 2c) Populate MPU assignment multi-select (migrated from single-select to array)
+// Step 5c) Populate MPU assignment multi-select
 function populateMPUDropdown(selectedIds) {
   var sel = document.getElementById("fAssignedMPUs");
   sel.innerHTML = "";
@@ -72,7 +256,7 @@ function populateMPUDropdown(selectedIds) {
   });
 }
 
-// Step 2d-i) Populate ancillary equipment multi-select for pattern preparation
+// Step 5d) Populate ancillary equipment multi-select
 function populateAncillaryDropdown(selectedIds) {
   var sel = document.getElementById("fAssignedAncillary");
   if (!sel) return;
@@ -86,32 +270,11 @@ function populateAncillaryDropdown(selectedIds) {
   });
 }
 
-// Step 2d) Check drill compatibility with blast hole diameters and show warnings
-function checkDrillCompatibility() {
-  var warn = document.getElementById("fDrillCompatWarning");
-  var sel = document.getElementById("fAssignedDrills");
-  var patId = document.getElementById("fPattern").value;
-  var pattern = APP.patterns.find(function(p) { return p.id === patId; });
-  if (!pattern || !sel) { warn.style.display = "none"; return; }
+// ============================================================
+//  SHOW / EDIT / SAVE
+// ============================================================
 
-  var diamMm = pattern.diam;
-  var selectedOpts = sel.selectedOptions;
-  var warnings = [];
-  for (var i = 0; i < selectedOpts.length; i++) {
-    var drill = drills.find(function(d) { return d.id === selectedOpts[i].value; });
-    if (drill && !canDrillDiameter(drill, diamMm)) {
-      warnings.push(drill.id + " cannot drill " + diamMm + "mm (range: " + drill.minDiam + "-" + drill.maxDiam + "mm)");
-    }
-  }
-  if (warnings.length > 0) {
-    warn.textContent = "Warning: " + warnings.join("; ");
-    warn.style.display = "block";
-  } else {
-    warn.style.display = "none";
-  }
-}
-
-// Step 3) Show the Add Blast modal with empty fields
+// Step 6) Show the Add Blast modal with empty fields
 function showAddBlastModal() {
   APP.editingBlastIdx = null;
   document.getElementById("blastModalTitle").textContent = "Add Blast";
@@ -121,43 +284,34 @@ function showAddBlastModal() {
   document.getElementById("fSurfaceArea").value = "";
   document.getElementById("fDrillStart").value = isoDate(APP.planStart);
   document.getElementById("fDrillStartTime").value = "06:00";
-  document.getElementById("fPctD65").value = 0;
-  document.getElementById("fPctPV").value = 1;
   document.getElementById("fLoadRate").value = 100000;
   document.getElementById("fVolume").value = "";
   document.getElementById("fExpMass").value = "";
-  document.getElementById("fRateD65").value = 19;
-  document.getElementById("fRatePV").value = 20;
-  document.getElementById("fNumD65").value = 0;
-  document.getElementById("fNumPV").value = 4;
-  // Dependency fields blank = use global
+  // Step 6a) Clear hole type table and add one blank row
+  clearHoleTypeTable();
+  // Step 6b) Dependency fields blank = use global
   document.getElementById("fDepDrillForLoad").value = "";
   document.getElementById("fDepDrillForBlast").value = "";
   document.getElementById("fDepMinLead").value = "";
   populatePredecessorDropdown(null);
   document.getElementById("fDepPredecessor").value = "";
   document.getElementById("fDepPredType").value = "blast-before-drill";
-  // Update placeholders with current globals
   document.getElementById("fDepDrillForLoad").placeholder = "Global: " + Math.round(APP.deps.drillPctForLoad * 100) + "%";
   document.getElementById("fDepDrillForBlast").placeholder = "Global: " + Math.round(APP.deps.drillPctForBlast * 100) + "%";
   document.getElementById("fDepMinLead").placeholder = "Global: " + APP.deps.minLeadDays;
-  populatePatternDropdown();
   populateDrillDropdown([]);
-  // Step 3a) MPU multi-select — empty array for new blast
   populateMPUDropdown([]);
-  // Step 3b) Pattern Preparation fields — default empty
   var prepStartEl = document.getElementById("fPrepStart");
   var prepDaysEl = document.getElementById("fPrepDays");
   if (prepStartEl) prepStartEl.value = "";
   if (prepDaysEl) prepDaysEl.value = "";
   populateAncillaryDropdown([]);
-  // Step 3c) Progress fields — blank for new blast
   document.getElementById("fDrillProgress").value = "";
   document.getElementById("fLoadProgress").value = "";
   openModal("blastModal");
 }
 
-// Step 4) Edit an existing blast
+// Step 7) Edit an existing blast
 function editBlast(idx) {
   APP.editingBlastIdx = idx;
   var b = APP.blasts[idx];
@@ -168,16 +322,12 @@ function editBlast(idx) {
   document.getElementById("fSurfaceArea").value = b.surfaceArea || "";
   document.getElementById("fDrillStart").value = b.drillStart || "";
   document.getElementById("fDrillStartTime").value = b.drillStartTime || "06:00";
-  document.getElementById("fPctD65").value = b.pctD65;
-  document.getElementById("fPctPV").value = b.pctPV;
   document.getElementById("fLoadRate").value = b.loadRate;
   document.getElementById("fVolume").value = b.volume || "";
   document.getElementById("fExpMass").value = b.expMass || "";
-  document.getElementById("fRateD65").value = b.rateD65;
-  document.getElementById("fRatePV").value = b.ratePV;
-  document.getElementById("fNumD65").value = b.numD65;
-  document.getElementById("fNumPV").value = b.numPV;
-  // Dependency fields
+  // Step 7a) Populate hole type table from blast
+  populateHoleTypeTable(b.holeTypes || []);
+  // Step 7b) Dependency fields
   var bd = b.deps || {};
   document.getElementById("fDepDrillForLoad").value = (bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined) ? bd.drillPctForLoad : "";
   document.getElementById("fDepDrillForBlast").value = (bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined) ? bd.drillPctForBlast : "";
@@ -185,39 +335,31 @@ function editBlast(idx) {
   populatePredecessorDropdown(b.name);
   document.getElementById("fDepPredecessor").value = bd.predecessor || "";
   document.getElementById("fDepPredType").value = bd.predType || "blast-before-drill";
-  // Update placeholders
   document.getElementById("fDepDrillForLoad").placeholder = "Global: " + Math.round(APP.deps.drillPctForLoad * 100) + "%";
   document.getElementById("fDepDrillForBlast").placeholder = "Global: " + Math.round(APP.deps.drillPctForBlast * 100) + "%";
   document.getElementById("fDepMinLead").placeholder = "Global: " + APP.deps.minLeadDays;
-  populatePatternDropdown();
-  document.getElementById("fPattern").value = b.pattern || "";
   populateDrillDropdown(b.assignedDrills || []);
-  // Step 4a) MPU multi-select — backward compat: read assignedMPUs or legacy assignedMPU
   populateMPUDropdown(b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : []));
-  // Step 4b) Pattern Preparation fields
   var prepStartEl = document.getElementById("fPrepStart");
   var prepDaysEl = document.getElementById("fPrepDays");
   if (prepStartEl) prepStartEl.value = b.prepStart || "";
   if (prepDaysEl) prepDaysEl.value = b.prepDays || "";
   populateAncillaryDropdown(b.assignedAncillary || []);
-  // Step 4c) Progress fields
   document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
   document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
   openModal("blastModal");
 }
 
-// Step 5) Save blast from modal form
+// Step 8) Save blast from modal form
 function saveBlast() {
   var name = document.getElementById("fBlastName").value.trim();
   if (!name) { alert("Blast name required"); return; }
 
-  var patId = document.getElementById("fPattern").value;
-  var pattern = APP.patterns.find(function(p) { return p.id === patId; });
   var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
   var volume = parseFloat(document.getElementById("fVolume").value) || 0;
   var expMass = parseFloat(document.getElementById("fExpMass").value) || 0;
 
-  // Step 5a) Try to auto-fill volume from matched solid if not set
+  // Step 8a) Try to auto-fill volume from matched solid if not set
   var matchedSolid = findMatchingSolid(name);
   if (!volume && matchedSolid) {
     volume = matchedSolid.volume || 0;
@@ -226,81 +368,72 @@ function saveBlast() {
     }
   }
 
-  // Step 5a-ii) Auto-calc from pattern if still empty
-  if (pattern && area > 0 && !volume) {
-    volume = area * pattern.benchHt;
-  }
-  if (pattern && volume > 0 && !expMass) {
-    expMass = volume * pattern.pf;
-  }
+  // Step 8b) Collect hole types from table
+  var holeTypes = collectHoleTypes();
 
-  // Step 5b) Estimate drill meters
-  var drillMeters = 0;
-  if (pattern && area > 0) {
-    var holesEst = area / (pattern.burden * pattern.spacing);
-    var holeDepth = pattern.benchHt + pattern.subdrill;
-    drillMeters = holesEst * holeDepth;
+  // Step 8c) Sum drill meters and explosive mass from hole types
+  var totalMeters = 0;
+  var totalExpMass = 0;
+  for (var h = 0; h < holeTypes.length; h++) {
+    totalMeters += holeTypes[h].drillMeters || 0;
+    totalExpMass += holeTypes[h].expMass || 0;
+  }
+  if (!expMass && totalExpMass > 0) expMass = totalExpMass;
+
+  // Step 8d) Auto-calc volume from first pattern if not set
+  if (!volume && area > 0 && holeTypes.length > 0) {
+    var firstPat = APP.patterns.find(function(p) { return p.id === holeTypes[0].patternId; });
+    if (firstPat) volume = area * firstPat.benchHt;
   }
 
   var loadRate = parseFloat(document.getElementById("fLoadRate").value) || 100000;
   var drillStart = document.getElementById("fDrillStart").value;
   var drillStartTime = document.getElementById("fDrillStartTime").value || "06:00";
-  var rateD65 = parseFloat(document.getElementById("fRateD65").value) || 19;
-  var ratePV = parseFloat(document.getElementById("fRatePV").value) || 20;
-  var numD65 = parseInt(document.getElementById("fNumD65").value) || 0;
-  var numPV = parseInt(document.getElementById("fNumPV").value) || 0;
-  var pctD65 = parseFloat(document.getElementById("fPctD65").value) || 0;
-  var pctPV = parseFloat(document.getElementById("fPctPV").value) || 0;
 
-  // Step 5c) Estimate durations — rate is m/hr per rig, multiply by effective hours
-  var totalMeters = drillMeters || 0;
-  var d65Meters = totalMeters * pctD65;
-  var pvMeters = totalMeters * pctPV;
+  // Step 8e) Calculate drill days from assigned drills' equipment rates
+  var assignedDrills = [];
+  var drillSelect = document.getElementById("fAssignedDrills");
+  for (var si = 0; si < drillSelect.selectedOptions.length; si++) {
+    assignedDrills.push(drillSelect.selectedOptions[si].value);
+  }
 
   var effectiveHrs = APP.rigHours * APP.availability * APP.utilisation;
-  var d65DailyM = numD65 > 0 ? rateD65 * numD65 * effectiveHrs : 0;
-  var pvDailyM = numPV > 0 ? ratePV * numPV * effectiveHrs : 0;
-  var totalDailyM = d65DailyM + pvDailyM;
+  var totalDailyM = 0;
+  for (var di = 0; di < assignedDrills.length; di++) {
+    var drillObj = drills.find(function(d) { return d.id === assignedDrills[di]; });
+    if (drillObj) totalDailyM += (drillObj.rateM_per_day || 0) * effectiveHrs;
+  }
   var drillDays = totalDailyM > 0 ? Math.ceil(totalMeters / totalDailyM) : 1;
   var loadDays = loadRate > 0 ? Math.ceil(expMass / loadRate) : 1;
 
-  // Step 5d) Read dependency overrides (blank = null = use global)
+  // Step 8f) Read assigned MPUs
+  var assignedMPUs = [];
+  var mpuSelect = document.getElementById("fAssignedMPUs");
+  for (var mi = 0; mi < mpuSelect.selectedOptions.length; mi++) {
+    assignedMPUs.push(mpuSelect.selectedOptions[mi].value);
+  }
+
+  // Step 8g) Read dependency overrides
   var fDepDL = document.getElementById("fDepDrillForLoad").value;
   var fDepDB = document.getElementById("fDepDrillForBlast").value;
   var fDepML = document.getElementById("fDepMinLead").value;
   var fDepPred = document.getElementById("fDepPredecessor").value;
   var fDepPredType = document.getElementById("fDepPredType").value;
-
   var blastDeps = {
     drillPctForLoad:  fDepDL !== "" ? parseFloat(fDepDL) : null,
     drillPctForBlast: fDepDB !== "" ? parseFloat(fDepDB) : null,
-    loadPctForBlast:  null, // Hard constraint: always 100%
+    loadPctForBlast:  null,
     minLeadDays:      fDepML !== "" ? parseInt(fDepML) : null,
     predecessor:      fDepPred || null,
     predType:         fDepPredType || "blast-before-drill",
   };
 
-  // Step 5e) Build hole types array
-  var holeTypes = [];
-  if (pattern) {
-    holeTypes.push({
-      type: pattern.type,
-      diam: pattern.diam / 1000,
-      burden: pattern.burden,
-      spacing: pattern.spacing,
-      holes: area > 0 ? Math.round(area / (pattern.burden * pattern.spacing)) : 0,
-      drillMeters: drillMeters,
-      expMass: expMass
-    });
-  }
-
-  // Step 5e-ii) Read pattern preparation fields
+  // Step 8h) Read pattern preparation fields
   var prepStartEl = document.getElementById("fPrepStart");
   var prepDaysEl = document.getElementById("fPrepDays");
   var prepStart = prepStartEl ? prepStartEl.value : "";
   var prepDays = prepDaysEl ? (parseInt(prepDaysEl.value) || 0) : 0;
 
-  // Step 5e-iii) Read assigned ancillary equipment
   var assignedAncillary = [];
   var ancSelect = document.getElementById("fAssignedAncillary");
   if (ancSelect) {
@@ -309,34 +442,12 @@ function saveBlast() {
     }
   }
 
-  // Step 5f) Read assigned equipment
-  var assignedDrills = [];
-  var drillSelect = document.getElementById("fAssignedDrills");
-  for (var si = 0; si < drillSelect.selectedOptions.length; si++) {
-    assignedDrills.push(drillSelect.selectedOptions[si].value);
-  }
-  // Step 5f-ii) Read assigned MPUs from multi-select (array)
-  var assignedMPUs = [];
-  var mpuSelect = document.getElementById("fAssignedMPUs");
-  for (var mi = 0; mi < mpuSelect.selectedOptions.length; mi++) {
-    assignedMPUs.push(mpuSelect.selectedOptions[mi].value);
-  }
-
-  // Step 5g) Build blast object
+  // Step 8i) Build blast object
   var blastData = {
     name: name,
     mode: document.getElementById("fBlastMode").value,
     surfaceArea: area,
-    pattern: patId,
-    pctD65: pctD65,
-    pctPV: pctPV,
-    rateD65: rateD65,
-    ratePV: ratePV,
-    numD65: numD65,
-    numPV: numPV,
     loadRate: loadRate,
-    d65Meters: d65Meters,
-    pvMeters: pvMeters,
     volume: volume,
     expMass: expMass,
     drillStart: drillStart,
@@ -348,31 +459,26 @@ function saveBlast() {
     status: "planned",
     deps: blastDeps,
     assignedDrills: assignedDrills,
-    // Step 5g-i) Store as array (migrated from single assignedMPU)
     assignedMPUs: assignedMPUs,
-    // Step 5g-ii) Pattern preparation phase
     prepStart: prepStart || null,
     prepDays: prepDays || 0,
     assignedAncillary: assignedAncillary,
     holeTypes: holeTypes,
     solidBounds: matchedSolid ? matchedSolid.bounds : null,
     solidBenchHt: matchedSolid ? matchedSolid.benchHt : null,
-    // Step 5g-iii) Progress tracking (0.0 to 1.0)
     drillProgress: parseFloat(document.getElementById("fDrillProgress").value) / 100 || 0,
     loadProgress: parseFloat(document.getElementById("fLoadProgress").value) / 100 || 0
   };
 
-  // Step 5h) Save or update — preserve existing solid/spatial data
+  // Step 8j) Save or update — preserve existing data
   if (APP.editingBlastIdx !== null) {
     var prev = APP.blasts[APP.editingBlastIdx];
     blastData.status = prev.status;
     if (!blastData.solidBounds && prev.solidBounds) blastData.solidBounds = prev.solidBounds;
     if (!blastData.solidBenchHt && prev.solidBenchHt) blastData.solidBenchHt = prev.solidBenchHt;
-    // Step 5h-i) Preserve prep phase data from previous if not overwritten
     if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
-    // Step 5h-ii) Preserve drillBlocks from previous
     if (prev.drillBlocks) blastData.drillBlocks = prev.drillBlocks;
     APP.blasts[APP.editingBlastIdx] = blastData;
   } else {
@@ -385,16 +491,17 @@ function saveBlast() {
   renderBlasts();
 }
 
-// Step 6) Initialise modal button handlers
+// Step 9) Initialise modal button handlers
 function initBlastModal() {
   document.getElementById("btnAddBlast").addEventListener("click", showAddBlastModal);
   document.getElementById("blastModalSave").addEventListener("click", saveBlast);
   document.getElementById("btnCloseBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
   document.getElementById("btnCancelBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
 
-  // Check drill compatibility when pattern or drill selection changes
-  document.getElementById("fPattern").addEventListener("change", checkDrillCompatibility);
-  document.getElementById("fAssignedDrills").addEventListener("change", checkDrillCompatibility);
+  // Step 9a) Add Hole Type button
+  document.getElementById("btnAddHoleType").addEventListener("click", function() {
+    addHoleTypeRow("", false, 0, 0, 0);
+  });
 }
 
 export { showAddBlastModal, editBlast, saveBlast, initBlastModal };

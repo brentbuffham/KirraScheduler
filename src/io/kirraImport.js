@@ -6,7 +6,7 @@
 // ============================================================
 
 import JSZip from "jszip";
-import { APP } from "../state/appState.js";
+import { APP, migrateBlastLegacy } from "../state/appState.js";
 import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
@@ -303,15 +303,17 @@ function parseKGPProject(file) {
         log.innerHTML += "<div class=\"log-ok\">Settings restored</div>";
       }
 
-      // Step 2c) Restore blasts
+      // Step 2c) Restore blasts (with legacy migration)
       if (data.blasts && Array.isArray(data.blasts)) {
         APP.blasts = data.blasts;
+        APP.blasts.forEach(function(b) { migrateBlastLegacy(b); });
         log.innerHTML += "<div class=\"log-ok\">" + data.blasts.length + " blast(s) restored</div>";
       }
 
-      // Step 2d) Restore patterns
+      // Step 2d) Restore patterns (ensure holeAngle exists)
       if (data.patterns && Array.isArray(data.patterns)) {
         APP.patterns = data.patterns;
+        APP.patterns.forEach(function(p) { if (p.holeAngle === undefined) p.holeAngle = 90; });
         log.innerHTML += "<div class=\"log-ok\">" + data.patterns.length + " pattern(s) restored</div>";
       }
 
@@ -615,35 +617,24 @@ function buildBlastFromHoles(entityName, holes) {
 
   var holeTypes = Object.keys(typeMap).map(function(k) { return typeMap[k]; });
 
-  // Step B) Determine diameter split (D65 = <=165mm, PV271 = >165mm)
-  var d65Meters = 0;
-  var pvMeters = 0;
+  // Step B) Enrich holeTypes with new fields
   holeTypes.forEach(function(ht) {
-    if (ht.diam <= 0.165) {
-      d65Meters += ht.drillMeters;
-    } else {
-      pvMeters += ht.drillMeters;
+    if (ht.patternId === undefined) ht.patternId = "";
+    if (ht.isLineDrill === undefined) {
+      var t = (ht.type || "").toUpperCase();
+      ht.isLineDrill = (t === "PRESPLIT" || t === "BUFFER");
+    }
+    if (ht.holeDepth === undefined) {
+      ht.holeDepth = ht.holes > 0 && ht.drillMeters > 0 ? ht.drillMeters / ht.holes : 0;
     }
   });
-
-  var pctD65 = totalDrillMeters > 0 ? d65Meters / totalDrillMeters : 0;
-  var pctPV = totalDrillMeters > 0 ? pvMeters / totalDrillMeters : 0;
 
   // Step C) Build the blast object matching APP.blasts structure
   return {
     name: entityName,
     mode: "Auto",
     surfaceArea: 0,
-    pattern: "",
-    pctD65: Math.round(pctD65 * 100) / 100,
-    pctPV: Math.round(pctPV * 100) / 100,
-    rateD65: 19,
-    ratePV: 20,
-    numD65: pctD65 > 0 ? 1 : 0,
-    numPV: pctPV > 0 ? 1 : 0,
     loadRate: 100000,
-    d65Meters: Math.round(d65Meters * 10) / 10,
-    pvMeters: Math.round(pvMeters * 10) / 10,
     volume: 0,
     expMass: Math.round(totalExpMass),
     drillStart: null,
@@ -655,7 +646,6 @@ function buildBlastFromHoles(entityName, holes) {
     status: "planned",
     deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
     assignedDrills: [],
-    // Step C-i) Use array for MPU assignments (migrated from single assignedMPU)
     assignedMPUs: [],
     holeTypes: holeTypes,
     polygons: [],

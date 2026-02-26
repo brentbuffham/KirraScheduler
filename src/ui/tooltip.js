@@ -3,7 +3,7 @@
 //  Shows hover tooltips for Gantt chart bars
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { getBlastDeps } from "../engine/dependencyEngine.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 
@@ -24,7 +24,7 @@ function showBarTooltip(e, bar) {
   html += "<div class=\"tt-row\"><span>Date</span><span class=\"tt-val\">" + formatDate(date) + "</span></div>";
 
   if (section === "DRILLING") {
-    html += "<div class=\"tt-row\"><span>Drill Meters</span><span class=\"tt-val\">" + formatNum((blast.d65Meters || 0) + (blast.pvMeters || 0)) + " m</span></div>";
+    html += "<div class=\"tt-row\"><span>Drill Meters</span><span class=\"tt-val\">" + formatNum(getTotalDrillMeters(blast)) + " m</span></div>";
     html += "<div class=\"tt-row\"><span>Duration</span><span class=\"tt-val\">" + blast.drillDays + " days</span></div>";
     if (blast.drillProgress > 0) {
       html += "<div class=\"tt-row\"><span style=\"color:var(--accent-green)\">Drill Progress</span><span class=\"tt-val\" style=\"color:var(--accent-green);font-weight:700\">" + Math.round(blast.drillProgress * 100) + "%</span></div>";

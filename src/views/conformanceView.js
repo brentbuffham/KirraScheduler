@@ -4,7 +4,7 @@
 //  Supports actuals import via CSV and REST API query
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { setupDropZone } from "../io/dropZone.js";
 
@@ -193,7 +193,7 @@ function importActualsCSV(file) {
           matched++;
           // Step 5a-i) Auto-calculate drill/load progress from actuals
           if (actual.actualDrillMeters > 0) {
-            var totalDrillM = (match.d65Meters || 0) + (match.pvMeters || 0);
+            var totalDrillM = getTotalDrillMeters(match);
             if (totalDrillM > 0) {
               match.drillProgress = Math.min(actual.actualDrillMeters / totalDrillM, 1);
               progressUpdated++;
@@ -553,7 +553,7 @@ function processActualsRows(rows, log) {
       matched++;
       // Step 9a) Auto-calculate progress from actuals
       if (actual.actualDrillMeters > 0) {
-        var totalDrillM = (match.d65Meters || 0) + (match.pvMeters || 0);
+        var totalDrillM = getTotalDrillMeters(match);
         if (totalDrillM > 0) match.drillProgress = Math.min(actual.actualDrillMeters / totalDrillM, 1);
       }
       if (actual.actualLoadKg > 0 && match.expMass > 0) {

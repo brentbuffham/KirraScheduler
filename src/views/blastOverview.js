@@ -3,7 +3,7 @@
 //  Renders the blast overview table and stats
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { getBlastDeps } from "../engine/dependencyEngine.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { editBlast } from "../dialogs/blastModal.js";
@@ -47,7 +47,7 @@ function renderBlasts() {
 
   APP.blasts.forEach(function(b, idx) {
     var pf = b.volume ? (b.expMass / b.volume).toFixed(2) : "\u2014";
-    var drillM = (b.d65Meters || 0) + (b.pvMeters || 0);
+    var drillM = getTotalDrillMeters(b);
     var statusBadge = b.status === "active" ? "badge-active" : b.status === "fired" ? "badge-blast" : "badge-drill";
     var holeTypeSummary = b.holeTypes.map(function(ht) {
       var badge = ht.type === "PRESPLIT" ? "badge-presplit" : ht.type === "BUFFER" ? "badge-buffer" : "badge-production";

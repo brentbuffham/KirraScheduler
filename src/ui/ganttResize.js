@@ -238,17 +238,7 @@ function applyBlastDrillResize(blast, dayOffset, edge, originalDays, originalSta
   }
   blast.drillDays = newDays;
 
-  // Step 7a) Recalculate pen rates at blast level (m/hr stored in rateD65/ratePV)
-  var effectiveHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
-  var totalMeters = (blast.d65Meters || 0) + (blast.pvMeters || 0);
-  var numRigs = (blast.numD65 || 0) + (blast.numPV || 0);
-  if (numRigs > 0 && totalMeters > 0 && effectiveHrs > 0) {
-    var requiredMPerDay = totalMeters / newDays;
-    var newRate = Math.round((requiredMPerDay / (numRigs * effectiveHrs)) * 10) / 10;
-    newRate = Math.max(1, newRate);
-    if (blast.numPV > 0) blast.ratePV = newRate;
-    if (blast.numD65 > 0) blast.rateD65 = newRate;
-  }
+  // Step 7a) drillDays already updated above — no per-rig rate fields to back-calculate
 }
 
 // Step 8) Apply loading resize — adjust MPU kg/day rate

@@ -207,16 +207,7 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
         name: name,
         mode: "Manual",
         surfaceArea: surfaceArea,
-        pattern: "",
-        pctD65: 0,
-        pctPV: 1,
-        rateD65: 19,
-        ratePV: 20,
-        numD65: 0,
-        numPV: 4,
         loadRate: 100000,
-        d65Meters: 0,
-        pvMeters: 0,
         volume: Math.round(volume),
         expMass: 0,
         drillStart: null,
@@ -228,11 +219,12 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
         status: "planned",
         deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
         assignedDrills: [],
-        // Step 3d-i) Use array for MPU assignments (migrated from single assignedMPU)
         assignedMPUs: [],
         holeTypes: [],
         solidBounds: bounds,
         solidBenchHt: benchHt,
+        drillProgress: 0,
+        loadProgress: 0,
         _sourceType: "solid"
       };
 
