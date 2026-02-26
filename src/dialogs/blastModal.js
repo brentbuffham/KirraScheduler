@@ -121,40 +121,80 @@ function recalcHoleTypes() {
 
     var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
     var holes = parseInt(holesInp.value) || 0;
-    var depth = p ? calcHoleDepth(p) : 0;
 
-    if (p) depthCell.textContent = depth.toFixed(2);
-
-    var meters = holes * depth;
-    // Step 3a) Explosive mass per hole type: holes * burden * spacing * benchHt * pf (area-fill)
-    //          For line drill: holes * (depth - stemming) * linearChargeDensity is complex,
-    //          so use a simple pf-based estimate: meters * pf * avgCrossSection
-    var mass = 0;
-    if (p && holes > 0) {
-      var isLine = tr.querySelector(".ht-line").checked;
-      if (isLine) {
-        mass = meters * p.pf;
-      } else {
-        mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+    if (p) {
+      // Step 3a) Pattern is known — recalculate from pattern specs
+      var depth = calcHoleDepth(p);
+      depthCell.textContent = depth.toFixed(2);
+      var meters = holes * depth;
+      var mass = 0;
+      if (holes > 0) {
+        var isLine = tr.querySelector(".ht-line").checked;
+        if (isLine) {
+          mass = meters * p.pf;
+        } else {
+          mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+        }
       }
+      metersCell.textContent = Math.round(meters);
+      massCell.textContent = Math.round(mass);
+      totalMeters += meters;
+      totalMass += mass;
+    } else {
+      // Step 3b) No pattern selected — preserve existing displayed values
+      totalMeters += parseFloat(metersCell.textContent) || 0;
+      totalMass += parseFloat(massCell.textContent) || 0;
     }
-
-    metersCell.textContent = Math.round(meters);
-    massCell.textContent = Math.round(mass);
-
-    totalMeters += meters;
-    totalMass += mass;
   }
 
   document.getElementById("htTotalMeters").textContent = Math.round(totalMeters);
   document.getElementById("htTotalMass").textContent = Math.round(totalMass);
 
-  // Step 3b) Auto-fill Volume and ExpMass fields if user hasn't manually overridden
+  // Step 3c) Auto-fill Volume and ExpMass fields if user hasn't manually overridden
   var volEl = document.getElementById("fVolume");
   var massEl = document.getElementById("fExpMass");
   if (totalMass > 0 && !massEl.dataset.userEdited) {
     massEl.value = Math.round(totalMass);
   }
+
+  // Step 3d) Update the live drill-day estimate
+  updateDrillDayEstimate();
+}
+
+// Step 3e) Live drill-day estimate shown in the modal
+function updateDrillDayEstimate() {
+  var el = document.getElementById("drillDayEstimate");
+  if (!el) return;
+
+  var totalMeters = parseFloat(document.getElementById("htTotalMeters").textContent) || 0;
+  var drillSelect = document.getElementById("fAssignedDrills");
+  var effectiveHrs = APP.rigHours * APP.availability * APP.utilisation;
+  var totalDailyM = 0;
+
+  for (var si = 0; si < drillSelect.selectedOptions.length; si++) {
+    var drillObj = drills.find(function(d) { return d.id === drillSelect.selectedOptions[si].value; });
+    if (drillObj) totalDailyM += (drillObj.rateM_per_day || 0) * effectiveHrs;
+  }
+
+  if (totalMeters <= 0 && drillSelect.selectedOptions.length === 0) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "block";
+
+  var parts = [];
+  parts.push("Total Meters: " + Math.round(totalMeters) + " m");
+  parts.push("Daily Rate: " + Math.round(totalDailyM) + " m/day (" + drillSelect.selectedOptions.length + " rig" + (drillSelect.selectedOptions.length !== 1 ? "s" : "") + ")");
+
+  if (totalMeters > 0 && totalDailyM > 0) {
+    var estDays = Math.ceil(totalMeters / totalDailyM);
+    parts.push("Est. Drill Days: " + estDays);
+  } else if (totalMeters > 0) {
+    parts.push("Est. Drill Days: assign drills to calculate");
+  } else {
+    parts.push("Est. Drill Days: add hole types to calculate");
+  }
+  el.innerHTML = parts.join(" &nbsp;|&nbsp; ");
 }
 
 // Step 4) Collect hole types from table into array
@@ -167,15 +207,25 @@ function collectHoleTypes() {
     var p = APP.patterns.find(function(pp) { return pp.id === patId; });
     var holes = parseInt(tr.querySelector(".ht-holes").value) || 0;
     var isLine = tr.querySelector(".ht-line").checked;
-    var depth = p ? calcHoleDepth(p) : 0;
-    var meters = holes * depth;
-    var mass = 0;
-    if (p && holes > 0) {
-      if (isLine) {
-        mass = meters * p.pf;
-      } else {
-        mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+
+    var depth, meters, mass;
+    if (p) {
+      // Step 4a) Pattern exists — calculate from pattern specs
+      depth = calcHoleDepth(p);
+      meters = holes * depth;
+      mass = 0;
+      if (holes > 0) {
+        if (isLine) {
+          mass = meters * p.pf;
+        } else {
+          mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+        }
       }
+    } else {
+      // Step 4b) No pattern — read displayed values (preserves legacy/imported data)
+      depth = parseFloat(tr.querySelector(".ht-depth").textContent) || 0;
+      meters = parseFloat(tr.querySelector(".ht-meters").textContent) || 0;
+      mass = parseFloat(tr.querySelector(".ht-mass").textContent) || 0;
     }
 
     result.push({
@@ -186,7 +236,7 @@ function collectHoleTypes() {
       spacing: p ? p.spacing : 0,
       isLineDrill: isLine,
       holes: holes,
-      holeDepth: depth,
+      holeDepth: Math.round(depth * 100) / 100,
       drillMeters: Math.round(meters * 10) / 10,
       expMass: Math.round(mass)
     });
@@ -237,7 +287,7 @@ function populateDrillDropdown(selectedIds) {
   drills.forEach(function(d) {
     var opt = document.createElement("option");
     opt.value = d.id;
-    opt.textContent = d.id + " (" + d.type + ", " + d.minDiam + "-" + d.maxDiam + "mm)";
+    opt.textContent = d.id + " (" + d.type + ", " + d.minDiam + "-" + d.maxDiam + "mm, " + (d.rateM_per_day || 0) + " m/hr)";
     if (selectedIds && selectedIds.indexOf(d.id) !== -1) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -308,6 +358,7 @@ function showAddBlastModal() {
   populateAncillaryDropdown([]);
   document.getElementById("fDrillProgress").value = "";
   document.getElementById("fLoadProgress").value = "";
+  updateDrillDayEstimate();
   openModal("blastModal");
 }
 
@@ -347,6 +398,7 @@ function editBlast(idx) {
   populateAncillaryDropdown(b.assignedAncillary || []);
   document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
   document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
+  updateDrillDayEstimate();
   openModal("blastModal");
 }
 
@@ -403,8 +455,14 @@ function saveBlast() {
     var drillObj = drills.find(function(d) { return d.id === assignedDrills[di]; });
     if (drillObj) totalDailyM += (drillObj.rateM_per_day || 0) * effectiveHrs;
   }
-  var drillDays = totalDailyM > 0 ? Math.ceil(totalMeters / totalDailyM) : 1;
-  var loadDays = loadRate > 0 ? Math.ceil(expMass / loadRate) : 1;
+  // Step 8e-i) drillDays: at least 1 when there are meters to drill
+  var drillDays = 1;
+  if (totalMeters > 0 && totalDailyM > 0) {
+    drillDays = Math.ceil(totalMeters / totalDailyM);
+  } else if (totalMeters > 0) {
+    drillDays = 365;
+  }
+  var loadDays = (loadRate > 0 && expMass > 0) ? Math.max(1, Math.ceil(expMass / loadRate)) : 1;
 
   // Step 8f) Read assigned MPUs
   var assignedMPUs = [];
@@ -501,6 +559,11 @@ function initBlastModal() {
   // Step 9a) Add Hole Type button
   document.getElementById("btnAddHoleType").addEventListener("click", function() {
     addHoleTypeRow("", false, 0, 0, 0);
+  });
+
+  // Step 9b) Update drill-day estimate when drill assignment changes
+  document.getElementById("fAssignedDrills").addEventListener("change", function() {
+    updateDrillDayEstimate();
   });
 }
 
