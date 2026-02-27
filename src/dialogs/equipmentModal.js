@@ -8,6 +8,7 @@ import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { openModal, closeModal } from "../ui/modal.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { isoDate } from "../utils/dateUtils.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 var editingEquipIdx = null;
 var editingEquipType = null;
@@ -252,6 +253,7 @@ function duplicateEquip(eqType, equipId) {
   if (clone.maintenance) clone.maintenance = [];
 
   collection.push(clone);
+  debouncedSave();
   renderEquipment();
 
   // Step 5b) Immediately open edit modal so user can rename
@@ -374,10 +376,11 @@ function saveEquipment() {
     }
   }
 
-  // Step 6f) Reset editing state and re-render
+  // Step 6f) Reset editing state, persist, and re-render
   editingEquipIdx = null;
   editingEquipType = null;
   editingOldId = null;
+  debouncedSave();
   closeModal("equipmentModal");
   renderEquipment();
 }
@@ -385,6 +388,11 @@ function saveEquipment() {
 // ============================================================
 //  MAINTENANCE MODAL
 // ============================================================
+
+// Step 5-pre) Track whether we are editing an existing maintenance entry
+var editingMaintEqType = null;
+var editingMaintEqId = null;
+var editingMaintIdx = null;
 
 // Step 5) Populate equipment dropdown for maintenance modal
 function populateMaintenanceEquipDropdown() {
@@ -406,7 +414,12 @@ function populateMaintenanceEquipDropdown() {
 
 // Step 6) Show add maintenance modal
 function showAddMaintenanceModal() {
+  editingMaintEqType = null;
+  editingMaintEqId = null;
+  editingMaintIdx = null;
   populateMaintenanceEquipDropdown();
+  var sel = document.getElementById("fMaintEquip");
+  sel.disabled = false;
   document.getElementById("maintModalTitle").textContent = "Add Maintenance Window";
   document.getElementById("fMaintReason").value = "";
   document.getElementById("fMaintStart").value = "";
@@ -414,7 +427,31 @@ function showAddMaintenanceModal() {
   openModal("maintenanceModal");
 }
 
-// Step 7) Save maintenance window
+// Step 6b) Show edit maintenance modal — pre-fills from existing entry and locks the equipment dropdown
+function showEditMaintenanceModal(eqType, equipId, maintIdx) {
+  editingMaintEqType = eqType;
+  editingMaintEqId = equipId;
+  editingMaintIdx = maintIdx;
+
+  var collection = eqType === "drill" ? drills : mpus;
+  var equip = collection.find(function(e) { return e.id === equipId; });
+  if (!equip || !equip.maintenance || !equip.maintenance[maintIdx]) return;
+
+  var entry = equip.maintenance[maintIdx];
+
+  populateMaintenanceEquipDropdown();
+  var sel = document.getElementById("fMaintEquip");
+  sel.value = eqType + ":" + equipId;
+  sel.disabled = true;
+
+  document.getElementById("maintModalTitle").textContent = "Edit Maintenance: " + equipId;
+  document.getElementById("fMaintReason").value = entry.reason || "";
+  document.getElementById("fMaintStart").value = entry.start || "";
+  document.getElementById("fMaintEnd").value = entry.end || "";
+  openModal("maintenanceModal");
+}
+
+// Step 7) Save maintenance window — handles both add and edit
 function saveMaintenance() {
   var equipVal = document.getElementById("fMaintEquip").value;
   var reason = document.getElementById("fMaintReason").value.trim();
@@ -425,16 +462,35 @@ function saveMaintenance() {
   if (end < start) { alert("End date must be on or after start date"); return; }
   if (!reason) reason = "Maintenance";
 
-  var parts = equipVal.split(":");
-  var eqType = parts[0]; // "drill" or "mpu"
-  var eqId = parts[1];
+  // Step 7a) If editing, update in-place
+  if (editingMaintIdx !== null && editingMaintEqType && editingMaintEqId) {
+    var editColl = editingMaintEqType === "drill" ? drills : mpus;
+    var editEquip = editColl.find(function(e) { return e.id === editingMaintEqId; });
+    if (editEquip && editEquip.maintenance && editEquip.maintenance[editingMaintIdx]) {
+      editEquip.maintenance[editingMaintIdx].start = start;
+      editEquip.maintenance[editingMaintIdx].end = end;
+      editEquip.maintenance[editingMaintIdx].reason = reason;
+    }
+    editingMaintEqType = null;
+    editingMaintEqId = null;
+    editingMaintIdx = null;
+  } else {
+    // Step 7b) Adding new entry
+    var parts = equipVal.split(":");
+    var eqType = parts[0];
+    var eqId = parts[1];
 
-  var collection = eqType === "drill" ? drills : mpus;
-  var equip = collection.find(function(e) { return e.id === eqId; });
-  if (equip) {
-    equip.maintenance.push({ start: start, end: end, reason: reason });
+    var collection = eqType === "drill" ? drills : mpus;
+    var equip = collection.find(function(e) { return e.id === eqId; });
+    if (equip) {
+      equip.maintenance.push({ start: start, end: end, reason: reason });
+    }
   }
 
+  // Step 7c) Unlock the dropdown for next use
+  document.getElementById("fMaintEquip").disabled = false;
+
+  debouncedSave();
   closeModal("maintenanceModal");
   renderEquipment();
 }
@@ -458,4 +514,4 @@ function initEquipmentModals() {
   document.getElementById("btnCancelMaintModal").addEventListener("click", function() { closeModal("maintenanceModal"); });
 }
 
-export { initEquipmentModals, showEditEquipModal, duplicateEquip };
+export { initEquipmentModals, showEditEquipModal, showEditMaintenanceModal, duplicateEquip };

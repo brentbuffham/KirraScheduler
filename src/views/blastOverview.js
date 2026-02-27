@@ -1,12 +1,15 @@
 // ============================================================
 //  BLAST OVERVIEW
 //  Renders the blast overview table and stats
+//  Supports drag-and-drop pattern assignment from Pattern Library
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { getBlastDeps } from "../engine/dependencyEngine.js";
+import { getBlastDeps, recalcDependencies } from "../engine/dependencyEngine.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { editBlast } from "../dialogs/blastModal.js";
+import { renderGantt } from "./ganttView.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Render blast overview tab
 function renderBlasts() {
@@ -87,6 +90,191 @@ function renderBlasts() {
       editBlast(parseInt(row.dataset.blastIdx));
     });
   });
+
+  // Step 5) Attach pattern drag-and-drop handlers on blast rows
+  attachBlastDropTargets();
 }
 
-export { renderBlasts };
+// ============================================================
+//  PATTERN DRAG-AND-DROP — Blast rows as drop targets
+// ============================================================
+
+// Step 5a) Wire up dragover/dragleave/drop on each blast row
+function attachBlastDropTargets() {
+  document.querySelectorAll("#blastTable tr[data-blast-idx]").forEach(function(row) {
+    row.addEventListener("dragover", function(e) {
+      var data = e.dataTransfer.types.indexOf("text/plain") !== -1;
+      if (!data) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      row.classList.add("blast-drop-highlight");
+    });
+    row.addEventListener("dragleave", function() {
+      row.classList.remove("blast-drop-highlight");
+    });
+    row.addEventListener("drop", function(e) {
+      e.preventDefault();
+      row.classList.remove("blast-drop-highlight");
+      var payload = e.dataTransfer.getData("text/plain");
+      if (!payload || payload.indexOf("pattern:") !== 0) return;
+
+      var patternId = payload.replace("pattern:", "");
+      var blastIdx = parseInt(row.dataset.blastIdx);
+      var blast = APP.blasts[blastIdx];
+      if (!blast) return;
+
+      var pattern = APP.patterns.find(function(p) { return p.id === patternId; });
+      if (!pattern) { alert("Pattern '" + patternId + "' not found in library."); return; }
+
+      // Step 5b) Show the pattern allocation dialog
+      showPatternAllocDialog(blast, blastIdx, pattern);
+    });
+  });
+}
+
+// ============================================================
+//  PATTERN ALLOCATION DIALOG
+// ============================================================
+
+// Step 6) Show the allocation dialog for assigning a pattern to a blast
+function showPatternAllocDialog(blast, blastIdx, pattern) {
+  // Step 6a) Remove any existing dialog
+  var existing = document.getElementById("patternAllocOverlay");
+  if (existing) existing.remove();
+
+  // Step 6b) Determine if line-drill type
+  var isLineDrill = (pattern.type === "PRESPLIT" || pattern.type === "BUFFER");
+
+  // Step 6c) Calculate hole depth from pattern data
+  //   holeDepth = (benchHt + subdrill) / sin(holeAngle)
+  var angleRad = ((pattern.holeAngle || 90) * Math.PI) / 180;
+  var sinAngle = Math.sin(angleRad);
+  if (sinAngle < 0.01) sinAngle = 1;
+  var holeDepth = Math.round(((pattern.benchHt + (pattern.subdrill || 0)) / sinAngle) * 100) / 100;
+
+  // Step 6d) Check if this pattern is already assigned — pre-fill if so
+  var existingIdx = -1;
+  for (var i = 0; i < blast.holeTypes.length; i++) {
+    if (blast.holeTypes[i].patternId === pattern.id) { existingIdx = i; break; }
+  }
+  var defaultHoles = existingIdx >= 0 ? blast.holeTypes[existingIdx].holes : 100;
+
+  // Step 6e) Build dialog HTML
+  var html = "<div class=\"pattern-alloc-overlay\" id=\"patternAllocOverlay\">";
+  html += "<div class=\"pattern-alloc-dialog\">";
+  html += "<h3>Assign Pattern to " + blast.name + "</h3>";
+  html += "<div style=\"margin-bottom:14px;padding:8px 12px;background:var(--bg-secondary);border-radius:var(--radius);font-size:12px;\">";
+  html += "<strong>" + pattern.id + "</strong> &mdash; " + pattern.type;
+  html += " | " + pattern.diam + "mm | B" + pattern.burden + " S" + pattern.spacing;
+  html += " | BH " + pattern.benchHt + "m | PF " + pattern.pf + " kg/bcm";
+  html += "</div>";
+
+  html += "<div class=\"form-row\">";
+  html += "<div class=\"form-field\"><label>Number of Holes</label><input type=\"number\" id=\"allocHoles\" value=\"" + defaultHoles + "\" min=\"1\"></div>";
+  html += "<div class=\"form-field\"><label>Hole Depth (m)</label><input type=\"number\" id=\"allocDepth\" value=\"" + holeDepth + "\" step=\"0.01\"></div>";
+  html += "</div>";
+
+  html += "<div class=\"form-row\">";
+  html += "<div class=\"form-field\"><label>Drill Meters (calc)</label><input type=\"number\" id=\"allocDrillM\" value=\"" + Math.round(defaultHoles * holeDepth * 10) / 10 + "\" readonly style=\"opacity:0.7;\"></div>";
+  html += "<div class=\"form-field\"><label>Explosive Mass (kg, calc)</label><input type=\"number\" id=\"allocExpMass\" value=\"0\" readonly style=\"opacity:0.7;\"></div>";
+  html += "</div>";
+
+  html += "<div class=\"form-row\">";
+  html += "<div class=\"form-field\"><label>Line Drill</label><select id=\"allocLineDrill\"><option value=\"false\"" + (!isLineDrill ? " selected" : "") + ">No</option><option value=\"true\"" + (isLineDrill ? " selected" : "") + ">Yes</option></select></div>";
+  html += "<div class=\"form-field\"><label>Hole Type</label><input type=\"text\" id=\"allocType\" value=\"" + pattern.type + "\" readonly style=\"opacity:0.7;\"></div>";
+  html += "</div>";
+
+  html += "<div class=\"alloc-actions\">";
+  html += "<button class=\"btn-alloc-cancel\" id=\"allocCancel\">Cancel</button>";
+  html += "<button class=\"btn-alloc-save\" id=\"allocSave\">" + (existingIdx >= 0 ? "Update" : "Add") + " Pattern</button>";
+  html += "</div>";
+  html += "</div></div>";
+
+  // Step 6f) Insert into DOM
+  var container = document.createElement("div");
+  container.innerHTML = html;
+  document.body.appendChild(container.firstChild);
+
+  // Step 6g) Calculate initial explosive mass and wire up live recalc
+  recalcAllocFields(pattern);
+
+  document.getElementById("allocHoles").addEventListener("input", function() { recalcAllocFields(pattern); });
+  document.getElementById("allocDepth").addEventListener("input", function() { recalcAllocFields(pattern); });
+
+  // Step 6h) Cancel button
+  document.getElementById("allocCancel").addEventListener("click", function() {
+    var overlay = document.getElementById("patternAllocOverlay");
+    if (overlay) overlay.remove();
+  });
+
+  // Step 6i) Save button — push/update holeTypes entry on the blast
+  document.getElementById("allocSave").addEventListener("click", function() {
+    var holes = parseInt(document.getElementById("allocHoles").value) || 0;
+    var depth = parseFloat(document.getElementById("allocDepth").value) || holeDepth;
+    var drillMeters = Math.round(holes * depth * 10) / 10;
+    var expMass = parseFloat(document.getElementById("allocExpMass").value) || 0;
+    var isLine = document.getElementById("allocLineDrill").value === "true";
+
+    if (holes <= 0) { alert("Number of holes must be greater than zero."); return; }
+
+    var entry = {
+      patternId: pattern.id,
+      type: pattern.type,
+      diam: pattern.diam / 1000,
+      burden: pattern.burden,
+      spacing: pattern.spacing,
+      isLineDrill: isLine,
+      holes: holes,
+      holeDepth: depth,
+      drillMeters: drillMeters,
+      expMass: Math.round(expMass)
+    };
+
+    // Step 6i-i) Update existing or push new
+    if (existingIdx >= 0) {
+      blast.holeTypes[existingIdx] = entry;
+    } else {
+      blast.holeTypes.push(entry);
+    }
+
+    // Step 6i-ii) Recalculate blast totals from holeTypes
+    recalcBlastFromHoleTypes(blast);
+
+    // Step 6j) Persist, recalculate dependencies, and re-render
+    debouncedSave();
+    recalcDependencies();
+    renderBlasts();
+    renderGantt();
+
+    var overlay = document.getElementById("patternAllocOverlay");
+    if (overlay) overlay.remove();
+  });
+
+  // Step 6k) Close on overlay click outside dialog
+  document.getElementById("patternAllocOverlay").addEventListener("click", function(e) {
+    if (e.target === this) this.remove();
+  });
+}
+
+// Step 7) Live-recalculate drill meters and explosive mass in the allocation dialog
+function recalcAllocFields(pattern) {
+  var holes = parseInt(document.getElementById("allocHoles").value) || 0;
+  var depth = parseFloat(document.getElementById("allocDepth").value) || 0;
+  var drillMeters = Math.round(holes * depth * 10) / 10;
+  document.getElementById("allocDrillM").value = drillMeters;
+
+  // Step 7a) Explosive mass = pf * burden * spacing * benchHt * holes
+  var expMass = pattern.pf * pattern.burden * pattern.spacing * pattern.benchHt * holes;
+  document.getElementById("allocExpMass").value = Math.round(expMass);
+}
+
+// Step 8) Recalculate blast-level totals from holeTypes array
+function recalcBlastFromHoleTypes(blast) {
+  var totalExpMass = 0;
+  for (var i = 0; i < blast.holeTypes.length; i++) {
+    totalExpMass += blast.holeTypes[i].expMass || 0;
+  }
+  blast.expMass = totalExpMass;
+}
+
+export { renderBlasts, showPatternAllocDialog };

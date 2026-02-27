@@ -15,6 +15,7 @@ import { renderForecast } from "../views/forecastView.js";
 import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { clearStartupKey } from "./startupDialog.js";
+import { clearDB, debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Show the reset dialog as a modal overlay
 function showResetDialog() {
@@ -395,6 +396,13 @@ function performReset() {
   renderForecast();
   renderConformance();
   renderEquipment();
+
+  // Step 8b) Persist the reset state (clear if Reset All, otherwise save current)
+  if (isAll) {
+    clearDB();
+  } else {
+    debouncedSave();
+  }
 }
 
 // Step 9) Initialise the reset button event listener

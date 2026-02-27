@@ -39,6 +39,9 @@
   --radius: 4px;
   --radius-lg: 4px;
   --hover-overlay: rgba(255,255,255,0.03);
+  --bg-weekend: #1a1a1e;
+  --plan-band-even: transparent;
+  --plan-band-odd: rgba(255,255,255,0.03);
   color-scheme: dark;
 }
 
@@ -57,6 +60,9 @@
   --gantt-planned: #b8b8b8;
   --shadow: 0 4px 24px rgba(0,0,0,0.15);
   --hover-overlay: rgba(0,0,0,0.04);
+  --bg-weekend: #dcdcdc;
+  --plan-band-even: transparent;
+  --plan-band-odd: rgba(0,0,0,0.035);
   color-scheme: light;
 }
 
@@ -262,7 +268,8 @@ body {
 .gantt-table {
   width: max-content;
   min-width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 .gantt-table th, .gantt-table td {
   font-family: 'JetBrains Mono', monospace;
@@ -271,9 +278,8 @@ body {
 }
 .gantt-table thead th {
   position: sticky;
-  top: 0;
   background: var(--bg-secondary);
-  z-index: 10;
+  z-index: 30;
   padding: 6px 4px;
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
@@ -283,14 +289,23 @@ body {
 .gantt-table thead th.sticky-col {
   position: sticky;
   left: 0;
-  z-index: 20;
+  z-index: 40;
   background: var(--bg-secondary);
 }
 .gantt-table thead th.sticky-col-2 {
   position: sticky;
   left: 180px;
-  z-index: 20;
+  z-index: 40;
   background: var(--bg-secondary);
+}
+/* Step 9b) Stacked sticky header rows — top offsets set by JS after render
+   for pixel-accurate alignment. Default top:0 as fallback.
+   Box-shadow seals any sub-pixel rendering gaps. */
+.header-row-month th,
+.header-row-week th,
+.header-row-date th {
+  top: 0;
+  box-shadow: 0 1px 0 var(--bg-secondary);
 }
 .gantt-header-month {
   font-size: 11px;
@@ -307,7 +322,7 @@ body {
   min-width: 32px;
   padding: 2px 1px;
 }
-.gantt-header-date.weekend { color: var(--accent-blast); opacity: 0.6; }
+.gantt-header-date.weekend { color: var(--accent-blast); }
 .gantt-header-date.today { color: var(--accent-cyan); font-weight: 700; }
 
 /* Step 10) Gantt rows */
@@ -350,12 +365,13 @@ body {
   height: 28px;
   vertical-align: middle;
   font-size: 12px;
+  background: var(--bg-card);
 }
 .gantt-row td.sticky-col {
   position: sticky;
   left: 0;
   background: var(--bg-card);
-  z-index: 5;
+  z-index: 20;
   padding-left: 16px;
   padding-right: 8px;
   min-width: 180px;
@@ -366,16 +382,15 @@ body {
   position: sticky;
   left: 180px;
   background: var(--bg-card);
-  z-index: 5;
+  z-index: 20;
   padding: 3px 8px;
   text-align: right;
   color: var(--text-muted);
   min-width: 90px;
 }
-.gantt-row:hover td { background: rgba(59,130,246,0.04); }
+.gantt-row:hover td { background: var(--bg-tertiary); }
 .gantt-row:hover td.sticky-col,
 .gantt-row:hover td.sticky-col-2 { background: var(--bg-tertiary); }
-[data-theme="light"] .gantt-row:hover td { background: rgba(59,130,246,0.07); }
 
 /* Step 11) Gantt bar cells */
 .gantt-cell {
@@ -485,6 +500,59 @@ body {
 }
 .gantt-row td.sticky-col:hover .gantt-edit-btn {
   opacity: 0.8;
+}
+
+/* Step 11b-ii) Auto/Manual mode toggle switch */
+.gantt-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  cursor: pointer;
+  margin-right: 4px;
+  flex-shrink: 0;
+  position: relative;
+}
+.gantt-mode-toggle input.gantt-mode-cb {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.gantt-mode-slider {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+/* Auto mode (unchecked) — green, indicates rates are auto-calculated */
+.gantt-mode-toggle input:not(:checked) + .gantt-mode-slider {
+  background: rgba(16, 185, 129, 0.25);
+  color: var(--accent-green);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.35);
+}
+/* Manual mode (checked) — amber, indicates user-overridden durations */
+.gantt-mode-toggle input:checked + .gantt-mode-slider {
+  background: rgba(245, 158, 11, 0.25);
+  color: var(--accent-load);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.4);
+}
+.gantt-mode-toggle:hover .gantt-mode-slider {
+  filter: brightness(1.2);
+}
+[data-theme="light"] .gantt-mode-toggle input:not(:checked) + .gantt-mode-slider {
+  background: rgba(16, 185, 129, 0.18);
+}
+[data-theme="light"] .gantt-mode-toggle input:checked + .gantt-mode-slider {
+  background: rgba(245, 158, 11, 0.2);
 }
 
 /* Step 11c) Block sub-row styling */
@@ -1387,32 +1455,56 @@ select[multiple] option:checked {
    ============================================================ */
 .gantt-resize-handle {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 6px;
+  top: -2px;
+  bottom: -2px;
+  width: 10px;
   cursor: ew-resize;
   z-index: 10;
-  transition: background 0.1s;
+  transition: background 0.15s, box-shadow 0.15s;
+  background: rgba(255,255,255,0.08);
 }
 .gantt-resize-handle:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.35);
+  box-shadow: 0 0 4px rgba(59,130,246,0.5);
+}
+.gantt-resize-handle:active {
+  background: rgba(59,130,246,0.5);
 }
 .gantt-resize-handle.handle-left {
-  left: 0;
+  left: -3px;
   border-radius: 3px 0 0 3px;
+  border-left: 2px solid rgba(255,255,255,0.2);
 }
 .gantt-resize-handle.handle-right {
-  right: 0;
+  right: -3px;
   border-radius: 0 3px 3px 0;
+  border-right: 2px solid rgba(255,255,255,0.2);
 }
 .gantt-bar:hover .gantt-resize-handle {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.35);
 }
 .gantt-bar:hover .gantt-resize-handle:hover {
-  background: rgba(255,255,255,0.4);
+  background: rgba(59,130,246,0.4);
+  border-color: rgba(59,130,246,0.6);
 }
 .gantt-bar-resizing {
   z-index: 50 !important;
+  outline: 2px solid var(--accent-cyan) !important;
+}
+.gantt-resize-indicator {
+  position: fixed;
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  z-index: 9999;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* ============================================================
@@ -1523,6 +1615,15 @@ select[multiple] option:checked {
 }
 .palette-chip.crew-chip .palette-chip-text {
   font-size: 9px;
+}
+
+/* Step 43b) Pattern chips in palette */
+.palette-chip.pattern-chip {
+  background: var(--bg-secondary);
+}
+.palette-chip.pattern-chip .palette-chip-icon {
+  font-size: 9px;
+  font-weight: 700;
 }
 
 /* ============================================================
@@ -1963,4 +2064,199 @@ select[multiple] option:checked {
   font-size: 11px;
   color: var(--text-muted);
   margin: 0;
+}
+
+/* ============================================================
+   Step 38) Sortable equipment table headers
+   ============================================================ */
+.sortable-th {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.sortable-th:hover {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+}
+
+/* ============================================================
+   Step 39) Maintenance table action buttons
+   ============================================================ */
+.btn-maint-action {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-right: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-maint-action:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.btn-maint-action.btn-maint-delete:hover {
+  background: rgba(239,68,68,0.15);
+  color: var(--accent-blast);
+}
+
+/* ============================================================
+   Step 40) Pattern card drag styling + blast row drop target
+   ============================================================ */
+.pattern-card[draggable="true"] {
+  cursor: grab;
+}
+.pattern-card[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+.pattern-card.dragging {
+  opacity: 0.5;
+  outline: 2px dashed var(--accent-cyan);
+}
+.blast-drop-highlight {
+  background: rgba(59,130,246,0.12) !important;
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -2px;
+}
+
+/* ============================================================
+   Step 41) Pattern allocation dialog
+   ============================================================ */
+.pattern-alloc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+.pattern-alloc-dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  min-width: 380px;
+  max-width: 480px;
+  box-shadow: var(--shadow);
+}
+.pattern-alloc-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.pattern-alloc-dialog .form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pattern-alloc-dialog .form-field {
+  flex: 1;
+}
+.pattern-alloc-dialog .form-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pattern-alloc-dialog .form-field input,
+.pattern-alloc-dialog .form-field select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+.pattern-alloc-dialog .alloc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.pattern-alloc-dialog .alloc-actions button {
+  padding: 8px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.pattern-alloc-dialog .alloc-actions button.btn-alloc-save {
+  background: var(--accent-brand);
+  border-color: var(--accent-brand);
+  color: #fff;
+}
+.pattern-alloc-dialog .alloc-actions button:hover {
+  filter: brightness(1.15);
+}
+
+/* ============================================================
+   Step 50) Plan week colour popup
+   ============================================================ */
+.plan-week-color-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  z-index: 3000;
+  box-shadow: var(--shadow);
+  min-width: 180px;
+}
+.plan-week-color-popup .pw-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.plan-week-color-popup .pw-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  width: 36px;
+}
+.plan-week-color-popup input[type="color"] {
+  width: 28px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+.plan-week-color-popup .pw-clear {
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.plan-week-color-popup .pw-clear:hover {
+  color: var(--accent-blast);
+  background: rgba(239,68,68,0.1);
+}
+.plan-week-color-popup .pw-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
 }

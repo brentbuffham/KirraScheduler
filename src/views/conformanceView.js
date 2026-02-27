@@ -7,6 +7,7 @@
 import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { setupDropZone } from "../io/dropZone.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Render conformance tab — stats + table with planned vs actuals
 function renderConformance() {
@@ -215,6 +216,7 @@ function importActualsCSV(file) {
         log.innerHTML += "<div class=\"log-warn\">" + (actuals.length - matched) + " actuals did not match any scheduled blast name</div>";
       }
 
+      debouncedSave();
       renderConformance();
     } catch (err) {
       log.innerHTML += "<div class=\"log-err\">CSV parse error: " + err.message + "</div>";
@@ -567,6 +569,7 @@ function processActualsRows(rows, log) {
   if (actuals.length > matched && matched > 0) {
     log.innerHTML += "<div class=\"log-warn\">" + (actuals.length - matched) + " did not match any scheduled blast</div>";
   }
+  debouncedSave();
   renderConformance();
 }
 

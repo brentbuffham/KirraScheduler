@@ -16,6 +16,7 @@ import { renderForecast } from "../views/forecastView.js";
 import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { showImportPreview } from "./importPreview.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Parse Kirra charge configuration file (JSON, .kirra, or .zip)
 function parseKirraConfig(file) {
@@ -53,6 +54,7 @@ function parseKirraConfig(file) {
         log.innerHTML += "<div class=\"log-warn\">No charge configs found in file. Expected 'chargeConfigs' or 'charge_configs' key.</div>";
       }
 
+      debouncedSave();
       renderForecast();
     } catch (err) {
       log.innerHTML += "<div class=\"log-err\">Parse error: " + err.message + "</div>";
@@ -124,6 +126,7 @@ function parseKirraConfigZip(file, log) {
         });
 
         log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:6px;\">\u2705 Charge config import complete</div>";
+        debouncedSave();
         renderForecast();
       });
     }).catch(function(err) {
@@ -387,8 +390,9 @@ function parseKGPProject(file) {
       if (elAvail) elAvail.value = APP.availability;
       if (elUtil) elUtil.value = APP.utilisation;
 
-      // Step 2j) Re-render everything
+      // Step 2j) Persist and re-render everything
       recalcDependencies();
+      debouncedSave();
       renderGantt();
       renderBlasts();
       renderPatterns();

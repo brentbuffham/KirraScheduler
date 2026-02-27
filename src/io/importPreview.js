@@ -10,6 +10,7 @@ import { isoDate } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Format number with locale separators
 function fmtNum(v) {
@@ -145,6 +146,7 @@ function mergeImported() {
   if (dxfLog) dxfLog.innerHTML += "<div class=\"log-ok\">Merged into schedule</div>";
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   renderBlasts();
 }

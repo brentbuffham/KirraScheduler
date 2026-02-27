@@ -17,6 +17,7 @@ import { renderPatterns } from "../views/patternLibrary.js";
 import { renderBlasts } from "../views/blastOverview.js";
 import { renderGantt } from "../views/ganttView.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Main entry point — parse a .kap file
 function parseKAPFile(file) {
@@ -115,8 +116,9 @@ async function processKAPZip(arrayBuffer, fileName, log) {
       processConfigs(configsRaw, log);
     }
 
-    // Step 2i) Summary and import preview
+    // Step 2i) Summary, persist, and import preview
     log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:8px;\">KAP import complete</div>";
+    debouncedSave();
 
     if (APP.importedBlasts.length > 0) {
       log.innerHTML += "<div class=\"log-ok\">" + APP.importedBlasts.length + " blast(s) ready to merge into schedule</div>";

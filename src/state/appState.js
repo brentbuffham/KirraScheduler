@@ -9,6 +9,9 @@ var APP = {
   rigHours: 24,
   availability: 0.85,
   utilisation: 0.75,
+  planWeekStartDay: 3,      // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  planCycleWeeks: 4,        // Number of weeks per plan cycle (1..12)
+  planWeekColors: [],       // Optional per-week hex colors, length = planCycleWeeks. Empty = auto-alternate
   editingBlastIdx: null,
   ctxBlastIdx: null,
   ctxSection: null,
@@ -112,7 +115,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_214_411P", mode: "Manual", surfaceArea: 100, loadRate: 100000,
+      name: "S4_214_411P", mode: "Auto", surfaceArea: 100, loadRate: 100000,
       volume: 2400, expMass: 1440,
       drillStart: "2026-03-01", drillStartTime: "06:00", drillDays: 2, loadStart: "2026-03-05", loadDays: 1,
       blastDate: "2026-03-06", status: "planned",
@@ -124,7 +127,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_411", mode: "Manual", surfaceArea: 10240, loadRate: 100000,
+      name: "S4_226_411", mode: "Auto", surfaceArea: 10240, loadRate: 100000,
       volume: 122880, expMass: 245760,
       drillStart: "2026-03-02", drillDays: 6, loadStart: "2026-03-07", loadDays: 3,
       blastDate: "2026-03-10", status: "planned",
@@ -136,7 +139,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_214_412P", mode: "Manual", surfaceArea: 220, loadRate: 100000,
+      name: "S4_214_412P", mode: "Auto", surfaceArea: 220, loadRate: 100000,
       volume: 5280, expMass: 3168,
       drillStart: "2026-03-04", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
@@ -148,7 +151,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_413", mode: "Manual", surfaceArea: 5000, loadRate: 100000,
+      name: "S4_226_413", mode: "Auto", surfaceArea: 5000, loadRate: 100000,
       volume: 60000, expMass: 120000,
       drillStart: "2026-03-07", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
@@ -160,7 +163,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_407", mode: "Manual", surfaceArea: 11886, loadRate: 100000,
+      name: "S4_226_407", mode: "Auto", surfaceArea: 11886, loadRate: 100000,
       volume: 142632, expMass: 285264,
       drillStart: "2026-03-09", drillDays: 6, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",

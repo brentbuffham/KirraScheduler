@@ -19,6 +19,45 @@ import { editBlast } from "../dialogs/blastModal.js";
 import { getDelayType } from "../state/delayTypes.js";
 import { renderDelayPalette } from "../ui/delayPalette.js";
 import { buildConflictCellSet } from "../engine/fleetConflicts.js";
+import { recalcBlastAuto } from "../engine/autoCalc.js";
+import { debouncedSave } from "../state/schedulerDB.js";
+
+// Step 0-pre) Plan week banding helpers
+function getPlanWeekIdx(date) {
+  var startDay = APP.planWeekStartDay || 0;
+  var cycleLen = APP.planCycleWeeks || 1;
+  var planDate = new Date(APP.planStart);
+  // Step 0-pre-a) Align to previous planWeekStartDay
+  while (planDate.getDay() !== startDay) {
+    planDate.setDate(planDate.getDate() - 1);
+  }
+  var diffMs = date.getTime() - planDate.getTime();
+  var diffDays = Math.floor(diffMs / 86400000);
+  var weekIdx = Math.floor(diffDays / 7);
+  return ((weekIdx % cycleLen) + cycleLen) % cycleLen;
+}
+
+function getPlanBandStyle(date) {
+  var idx = getPlanWeekIdx(date);
+  var colors = APP.planWeekColors || [];
+  // Step 0-pre-b) Custom colour takes priority
+  if (colors[idx]) {
+    return "background:" + hexToRgba(colors[idx], 0.08) + ";";
+  }
+  // Step 0-pre-c) Default alternating band
+  return idx % 2 === 0 ? "" : "background:var(--plan-band-odd);";
+}
+
+function hexToRgba(hex, alpha) {
+  hex = hex.replace("#", "");
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  var r = parseInt(hex.substring(0, 2), 16);
+  var g = parseInt(hex.substring(2, 4), 16);
+  var b = parseInt(hex.substring(4, 6), 16);
+  return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+}
 
 // Step 0) Track collapsed sections between re-renders
 var _collapsedSections = {};
@@ -64,6 +103,18 @@ var EDIT_ICON = "<span class=\"gantt-edit-btn\" title=\"Edit\">" +
   "<path d=\"M11.5 1.5l3 3L5 14H2v-3z\"/><path d=\"M10 3l3 3\"/>" +
   "</svg></span>";
 
+// Step 0b-ii) Auto/Manual toggle switch builder
+//  Returns a small inline toggle that shows "A" (auto) or "M" (manual)
+function buildModeToggle(blastIdx, isManual) {
+  var checkedAttr = isManual ? " checked" : "";
+  var label = isManual ? "M" : "A";
+  var titleText = isManual ? "Manual mode — drag handles to adjust. Click to switch to Auto." : "Auto mode — rates calculated from equipment. Click to switch to Manual.";
+  return "<label class=\"gantt-mode-toggle\" title=\"" + titleText + "\">" +
+    "<input type=\"checkbox\" class=\"gantt-mode-cb\" data-blast-idx=\"" + blastIdx + "\"" + checkedAttr + ">" +
+    "<span class=\"gantt-mode-slider\"><span class=\"gantt-mode-label\">" + label + "</span></span>" +
+    "</label>";
+}
+
 // Step 1) Main Gantt rendering function
 function renderGantt() {
   // Step 1a) Read settings from UI
@@ -72,6 +123,10 @@ function renderGantt() {
   APP.rigHours = parseFloat(document.getElementById("rigHours").value);
   APP.availability = parseFloat(document.getElementById("rigAvail").value);
   APP.utilisation = parseFloat(document.getElementById("rigUtil").value);
+  var pwStartEl = document.getElementById("planWeekStartDay");
+  if (pwStartEl) APP.planWeekStartDay = parseInt(pwStartEl.value);
+  var pwCycleEl = document.getElementById("planCycleWeeks");
+  if (pwCycleEl) APP.planCycleWeeks = parseInt(pwCycleEl.value) || 1;
 
   var totalDays = APP.ganttWeeks * 7;
   var dates = [];
@@ -119,7 +174,7 @@ function renderGantt() {
   var html = "<thead>";
 
   // Month row
-  html += "<tr><th class=\"sticky-col\" rowspan=\"3\" style=\"text-align:left;min-width:180px;\">Blast</th>";
+  html += "<tr class=\"header-row-month\"><th class=\"sticky-col\" rowspan=\"3\" style=\"text-align:left;min-width:180px;\">Blast</th>";
   html += "<th class=\"sticky-col-2\" rowspan=\"3\" style=\"min-width:90px;\">Info</th>";
   var prevMonth = "";
   for (var mi = 0; mi < dates.length; mi++) {
@@ -138,7 +193,7 @@ function renderGantt() {
   html += "</tr>";
 
   // Week row
-  html += "<tr>";
+  html += "<tr class=\"header-row-week\">";
   var prevWeek = -1;
   for (var wi = 0; wi < dates.length; wi++) {
     var w = getWeekNumber(dates[wi]);
@@ -155,12 +210,15 @@ function renderGantt() {
   html += "</tr>";
 
   // Date row
-  html += "<tr>";
+  html += "<tr class=\"header-row-date\">";
   var dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
   for (var di = 0; di < dates.length; di++) {
     var dd = dates[di];
     var cls = isToday(dd) ? "today" : (isWeekend(dd) ? "weekend" : "");
-    html += "<th class=\"gantt-header-date " + cls + "\">" + dd.getDate() + "<br><span style=\"font-size:9px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
+    // Step 1d-iii) Plan-week boundary tick on the start day
+    var pwBorder = (dd.getDay() === (APP.planWeekStartDay || 0)) ? "border-left:2px solid var(--accent-cyan);" : "";
+    var pwBandBg = getPlanBandStyle(dd);
+    html += "<th class=\"gantt-header-date " + cls + "\" style=\"" + pwBorder + pwBandBg + "\">" + dd.getDate() + "<br><span style=\"font-size:9px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
   }
   html += "</tr></thead><tbody>";
 
@@ -227,7 +285,7 @@ function renderGantt() {
           }
         }
 
-        // Step) Add resize handles on first and last cells
+        // Step) Add resize handles on first and last cells (all modes — resize auto-switches to Manual)
         if (isFirstBar && sectionName !== "BLASTING") {
           barExtra += "<div class=\"gantt-resize-handle handle-left\"></div>";
         }
@@ -240,10 +298,11 @@ function renderGantt() {
         barClass = "milestone";
       }
 
-      var wkend = isWeekend(cd) ? "opacity:0.7;" : "";
+      // Step) Build cell background — priority: conflict > maintenance > plan band
+      //       Weekends are transparent so plan banding shows through (header text marks weekends)
+      var cellBg = getPlanBandStyle(cd);
 
       // Step) Check if any assigned drill is in maintenance on this date
-      var maintStyle = "";
       var checkDrills = blockDrills || blast.assignedDrills;
       if (sectionName === "DRILLING" && checkDrills && checkDrills.length > 0) {
         var anyInMaint = checkDrills.some(function(drillId) {
@@ -251,20 +310,19 @@ function renderGantt() {
           return drill && isDrillInMaintenance(drill, ds);
         });
         if (anyInMaint && ds >= (range.start || "") && ds <= (range.end || "")) {
-          maintStyle = "background:rgba(239,68,68,0.12);";
+          cellBg = "background:rgba(239,68,68,0.12);";
         }
       }
 
       // Step) Check for fleet conflict on this date (drill used on 2+ blasts)
-      var conflictStyle = "";
       if (sectionName === "DRILLING" && barClass) {
         var conflictKey = blast.name + "|" + ds;
         if (_conflictCells[conflictKey]) {
-          conflictStyle = "background:repeating-linear-gradient(-45deg,transparent,transparent 3px,rgba(239,68,68,0.25) 3px,rgba(239,68,68,0.25) 6px);";
+          cellBg = "background:repeating-linear-gradient(-45deg,transparent,transparent 3px,rgba(239,68,68,0.25) 3px,rgba(239,68,68,0.25) 6px);";
         }
       }
 
-      cellsHtml += "<td class=\"gantt-cell\" style=\"" + wkend + maintStyle + conflictStyle + "\">";
+      cellsHtml += "<td class=\"gantt-cell\" style=\"" + cellBg + "\">";
 
       // Step) Render main bar
       if (barClass) {
@@ -376,10 +434,10 @@ function renderGantt() {
           var blockPctBadge = (block.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(block.drillProgress * 100) + "%</span>" : "";
           var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockPctBadge + blockCrewHtml;
 
-          // Step) Block row with edit icon and indented name
+          // Step) Block row with edit icon, mode toggle, and indented name
           html += "<tr class=\"gantt-row gantt-block-row\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
           html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"drilling\" data-ctx-block=\"" + blockIdx + "\">";
-          html += EDIT_ICON + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name;
+          html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name;
           html += "</td>";
           html += "<td class=\"sticky-col-2\">" + blockInfo + "</td>";
           html += renderBarCells(blockRange, blast, idx, sectionName, deps, comp, block.assignedDrills, block.drillStartTime, block);
@@ -445,7 +503,7 @@ function renderGantt() {
 
       html += "<tr class=\"gantt-row\" data-blast=\"" + idx + "\" data-section=\"" + secKey + "\">";
       html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"" + secKey + "\">";
-      html += EDIT_ICON + blast.name;
+      html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name;
       html += "</td>";
       html += "<td class=\"sticky-col-2\">" + info + "</td>";
       html += renderBarCells(range, blast, idx, sectionName, deps, comp, null, null);
@@ -483,6 +541,21 @@ function renderGantt() {
 
   html += "</tbody>";
   document.getElementById("ganttTable").innerHTML = html;
+
+  // Step 1g-post) Measure actual header row heights and set sticky top offsets
+  var monthRow = document.querySelector(".header-row-month");
+  var weekRow  = document.querySelector(".header-row-week");
+  var dateRow  = document.querySelector(".header-row-date");
+  if (monthRow && weekRow && dateRow) {
+    var monthH = monthRow.getBoundingClientRect().height;
+    var weekH  = weekRow.getBoundingClientRect().height;
+    weekRow.querySelectorAll("th").forEach(function(th) {
+      th.style.top = monthH + "px";
+    });
+    dateRow.querySelectorAll("th").forEach(function(th) {
+      th.style.top = (monthH + weekH) + "px";
+    });
+  }
 
   // Step 1h) Attach bar tooltip events
   document.querySelectorAll(".gantt-bar").forEach(function(bar) {
@@ -533,6 +606,27 @@ function renderGantt() {
       } else {
         editBlast(idx);
       }
+    });
+  });
+
+  // Step 1i-d) Attach Auto/Manual mode toggle handlers
+  document.querySelectorAll(".gantt-mode-cb").forEach(function(cb) {
+    cb.addEventListener("change", function(e) {
+      e.stopPropagation();
+      var blastIdx = parseInt(cb.dataset.blastIdx);
+      var blast = APP.blasts[blastIdx];
+      if (!blast) return;
+
+      if (cb.checked) {
+        // Step) Switching to Manual — just set mode
+        blast.mode = "Manual";
+      } else {
+        // Step) Switching to Auto — recalculate remaining durations from rates
+        blast.mode = "Auto";
+        recalcBlastAuto(blast);
+      }
+      debouncedSave();
+      renderGantt();
     });
   });
 

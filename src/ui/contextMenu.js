@@ -12,6 +12,7 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
 import { CREW_ROLES, ensureCrewAllocated } from "../state/crewRoles.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Show context menu at cursor position (from sticky-col right-click)
 function showCtxMenu(e, idx, section, blockIdx) {
@@ -302,6 +303,7 @@ function editBlastFromCtx() {
 // Step 3) Set blast status from context menu
 function setBlastStatus(status) {
   APP.blasts[APP.ctxBlastIdx].status = status;
+  debouncedSave();
   renderGantt();
 }
 
@@ -311,6 +313,7 @@ function duplicateBlast() {
   b.name += "_copy";
   b.status = "planned";
   APP.blasts.push(b);
+  debouncedSave();
   renderGantt();
 }
 
@@ -318,6 +321,7 @@ function duplicateBlast() {
 function removeBlast() {
   if (confirm("Remove " + APP.blasts[APP.ctxBlastIdx].name + "?")) {
     APP.blasts.splice(APP.ctxBlastIdx, 1);
+    debouncedSave();
     renderGantt();
   }
 }
@@ -348,6 +352,7 @@ function splitDrillFromCtx() {
   }
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
 }
 
@@ -357,6 +362,7 @@ function mergeBlocksFromCtx() {
   if (!blast) return;
   mergeBlocks(blast);
   recalcDependencies();
+  debouncedSave();
   renderGantt();
 }
 

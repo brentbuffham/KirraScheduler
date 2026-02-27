@@ -1,9 +1,10 @@
 // ============================================================
 //  GANTT PALETTE
-//  Three-section drag-and-drop palette beside the Gantt:
-//    - DRILLS:  drag onto a drilling row to assign a drill
-//    - MPUs:    drag onto a loading row to assign an MPU
-//    - DELAYS:  drag onto any row to add a delay block
+//  Drag-and-drop palette beside the Gantt:
+//    - PATTERNS: drag onto any row to assign a drill pattern
+//    - DRILLS:   drag onto a drilling row to assign a drill
+//    - MPUs:     drag onto a loading row to assign an MPU
+//    - DELAYS:   drag onto any row to add a delay block
 // ============================================================
 
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
@@ -14,11 +15,13 @@ import { isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
+import { debouncedSave } from "../state/schedulerDB.js";
+import { showPatternAllocDialog } from "../views/blastOverview.js";
 
 var CELL_WIDTH = 32;
 
 // Step 1) Track collapsed palette sections between renders
-var _paletteCollapsed = { drills: false, mpus: false, ancillary: true, crew: false, delays: false };
+var _paletteCollapsed = { patterns: false, drills: false, mpus: false, ancillary: true, crew: false, delays: false };
 
 // Step 2) Render the full palette into its container
 function renderDelayPalette() {
@@ -26,6 +29,31 @@ function renderDelayPalette() {
   if (!container) return;
 
   var html = "";
+
+  // ---- PATTERNS SECTION ----
+  html += buildPaletteSectionHeader("patterns", "PATTERNS", "var(--accent-cyan)");
+  if (!_paletteCollapsed.patterns) {
+    html += "<div class=\"palette-chips\">";
+    if (APP.patterns.length === 0) {
+      html += "<div style=\"font-size:11px;color:var(--text-muted);padding:4px 8px;\">No patterns loaded</div>";
+    }
+    APP.patterns.forEach(function(p) {
+      var typeChar = p.type.charAt(0);
+      var chipColor = "var(--accent-cyan)";
+      if (p.type === "PRESPLIT") chipColor = "var(--presplit, var(--accent-purple))";
+      else if (p.type === "BUFFER") chipColor = "var(--accent-load)";
+      else if (p.type === "ORE") chipColor = "var(--ore, var(--accent-green))";
+      else if (p.type === "WASTE") chipColor = "var(--waste, var(--text-muted))";
+      html += "<div class=\"palette-chip pattern-chip\" draggable=\"true\" " +
+        "data-drag-type=\"pattern\" data-drag-id=\"" + p.id + "\" " +
+        "style=\"border-color:" + chipColor + ";\" " +
+        "title=\"" + p.id + " — " + p.type + " | " + p.diam + "mm B" + p.burden + " S" + p.spacing + " BH" + p.benchHt + "m PF" + p.pf + "\">";
+      html += "<span class=\"palette-chip-icon\" style=\"background:" + chipColor + ";\">" + typeChar + "</span>";
+      html += "<span class=\"palette-chip-text\">" + p.id + "</span>";
+      html += "</div>";
+    });
+    html += "</div>";
+  }
 
   // ---- DRILLS SECTION ----
   html += buildPaletteSectionHeader("drills", "DRILLS", "var(--accent-drill)");
@@ -225,7 +253,9 @@ function initGanttDropTarget() {
     if (!blast) return;
 
     // Step 4c) Route by drag type
-    if (dragType === "delay") {
+    if (dragType === "pattern") {
+      handlePatternDrop(blast, blastIdx, dragId);
+    } else if (dragType === "delay") {
       handleDelayDrop(blast, dragId, section, cell, row);
     } else if (dragType === "drill") {
       handleDrillDrop(blast, dragId, section, row);
@@ -254,7 +284,21 @@ function handleDelayDrop(blast, typeCode, section, cell, row) {
   var delay = createDelay(typeCode, dropDate, 1, section);
   blast.delays.push(delay);
 
+  debouncedSave();
   renderGantt();
+}
+
+// Step 5b) Handle pattern drop — open allocation dialog for pattern assignment
+function handlePatternDrop(blast, blastIdx, patternId) {
+  // Step 5b-i) Find the pattern by id
+  var pattern = APP.patterns.find(function(p) { return p.id === patternId; });
+  if (!pattern) {
+    showDropFeedback("Pattern " + patternId + " not found");
+    return;
+  }
+
+  // Step 5b-ii) Open the allocation dialog (shared with blast overview)
+  showPatternAllocDialog(blast, blastIdx, pattern);
 }
 
 // Step 6) Handle drill drop — assign drill to blast or block
@@ -297,6 +341,7 @@ function handleDrillDrop(blast, drillId, section, row) {
   }
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(drillId + " assigned to " + blast.name, true);
 }
@@ -318,6 +363,7 @@ function handleMPUDrop(blast, mpuId, section) {
   blast.assignedMPUs.push(mpuId);
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(mpuId + " assigned to " + blast.name, true);
 }
@@ -338,6 +384,7 @@ function handleAncillaryDrop(blast, unitId, section) {
   }
   blast.assignedAncillary.push(unitId);
 
+  debouncedSave();
   renderGantt();
   showDropFeedback(unitId + " assigned to " + blast.name + " prep", true);
 }
@@ -357,6 +404,7 @@ function handleCrewDrop(blast, roleCode, section) {
   // Step 7b-iii) Increment the role counter
   sectionCrew[roleCode] = (sectionCrew[roleCode] || 0) + 1;
 
+  debouncedSave();
   renderGantt();
   showDropFeedback("+" + roleCode + " on " + blast.name + " " + section, true);
 }
@@ -441,6 +489,7 @@ function handleDrillReassign(targetBlast, drillId, sourceBlastIdx, section, row)
   }
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(drillId + ": " + sourceBlast.name + " \u2192 " + targetBlast.name, true);
 }
@@ -470,6 +519,7 @@ function handleMPUReassign(targetBlast, mpuId, sourceBlastIdx, section) {
   }
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(mpuId + ": " + sourceBlast.name + " \u2192 " + targetBlast.name, true);
 }
@@ -540,6 +590,7 @@ function handleDrillReturn(blast, drillId, blockIdx) {
   }
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(drillId + " removed from " + blast.name, true);
 }
@@ -552,6 +603,7 @@ function handleMPUReturn(blast, mpuId) {
   blast.assignedMPUs = mpuArr;
 
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   showDropFeedback(mpuId + " removed from " + blast.name, true);
 }

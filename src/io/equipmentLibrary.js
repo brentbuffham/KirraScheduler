@@ -7,6 +7,7 @@
 import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { isoDate } from "../utils/dateUtils.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) CSV column headers — unified across all equipment categories
 var EQUIP_HEADERS = [
@@ -457,7 +458,8 @@ function importEquipmentCSV(file) {
       }
     }
 
-    // Step 16d) Re-render and report
+    // Step 16d) Persist, re-render, and report
+    debouncedSave();
     renderEquipment();
 
     var msg = "Equipment import complete:\n";

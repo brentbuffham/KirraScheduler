@@ -11,6 +11,7 @@ import { isoDate } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 0) Find a matching solid in APP.kirraProjectSolids by blast name
 function findMatchingSolid(blastName) {
@@ -404,7 +405,7 @@ function showAddBlastModal() {
   document.getElementById("blastModalTitle").textContent = "Add Blast";
   document.getElementById("blastModalSave").textContent = "Add Blast";
   document.getElementById("fBlastName").value = "";
-  document.getElementById("fBlastMode").value = "Manual";
+  document.getElementById("fBlastMode").value = "Auto";
   document.getElementById("fSurfaceArea").value = "";
   document.getElementById("fDrillStart").value = isoDate(APP.planStart);
   document.getElementById("fDrillStartTime").value = "06:00";
@@ -619,6 +620,7 @@ function saveBlast() {
 
   closeModal("blastModal");
   recalcDependencies();
+  debouncedSave();
   renderGantt();
   renderBlasts();
 }

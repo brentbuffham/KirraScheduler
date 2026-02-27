@@ -13,6 +13,7 @@ import { addDays, isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks, calcBlockDays } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 var CELL_WIDTH = 32;
 
@@ -114,14 +115,43 @@ function onResizeMove(e) {
   var dayOffset = Math.round(dx / CELL_WIDTH);
   resizeState.dayOffset = dayOffset;
 
-  // Step 4a) Visual feedback on the bar
+  // Step 4a) Visual feedback — highlight bar edge being resized
   if (resizeState.barEl) {
-    if (resizeState.edge === "right") {
-      resizeState.barEl.style.outline = "2px solid var(--accent-cyan)";
-    } else {
-      resizeState.barEl.style.outline = "2px solid var(--accent-purple)";
-    }
+    resizeState.barEl.classList.add("gantt-bar-resizing");
   }
+
+  // Step 4b) Show floating indicator with day offset near cursor
+  var newDays;
+  if (resizeState.edge === "right") {
+    newDays = Math.max(1, resizeState.originalDays + dayOffset);
+  } else {
+    newDays = Math.max(1, resizeState.originalDays - dayOffset);
+  }
+  var delta = newDays - resizeState.originalDays;
+  var sign = delta > 0 ? "+" : "";
+  var label = sign + delta + "d (" + newDays + " day" + (newDays !== 1 ? "s" : "") + ")";
+  showResizeIndicator(e.clientX + 14, e.clientY - 20, label);
+}
+
+// Step 4c) Create/update floating indicator element
+function showResizeIndicator(x, y, text) {
+  var el = document.getElementById("resizeIndicator");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "resizeIndicator";
+    el.className = "gantt-resize-indicator";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.style.display = "block";
+}
+
+// Step 4d) Hide the floating indicator
+function hideResizeIndicator() {
+  var el = document.getElementById("resizeIndicator");
+  if (el) el.style.display = "none";
 }
 
 // Step 5) End resize — apply the duration/rate change
@@ -132,6 +162,7 @@ function onResizeEnd(e) {
   var dayOffset = resizeState.dayOffset;
 
   // Step 5a) Clean up visual
+  hideResizeIndicator();
   if (resizeState.barEl) {
     resizeState.barEl.classList.remove("gantt-bar-resizing");
     resizeState.barEl.style.outline = "";
@@ -141,6 +172,11 @@ function onResizeEnd(e) {
   if (dayOffset !== 0 && resizeState.blastIdx !== null) {
     var blast = APP.blasts[resizeState.blastIdx];
     if (blast) {
+
+      // Step 5b-i) Auto-switch to Manual mode when user drags a resize handle
+      if (blast.mode !== "Manual") {
+        blast.mode = "Manual";
+      }
 
       // Step 5c) Delay resize — simple days adjustment
       if (resizeState.delayIdx !== null && blast.delays && blast.delays[resizeState.delayIdx]) {
@@ -182,6 +218,7 @@ function onResizeEnd(e) {
       }
 
       recalcDependencies();
+      debouncedSave();
       renderGantt();
     }
   }

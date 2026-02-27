@@ -12,6 +12,7 @@ import { drills as drillFleet } from "../state/equipmentState.js";
 import { calcBlockDays, syncBlastFromBlocks } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 // Step 1) Listen for editBlock custom events
 function initBlockEditModal() {
@@ -164,9 +165,10 @@ function showBlockEditor(blastIdx, blockIdx) {
     // Step) Sync blast-level values from blocks
     syncBlastFromBlocks(blast);
 
-    // Step) Cleanup and re-render
+    // Step) Cleanup, persist, and re-render
     overlay.remove();
     recalcDependencies();
+    debouncedSave();
     renderGantt();
   });
 }

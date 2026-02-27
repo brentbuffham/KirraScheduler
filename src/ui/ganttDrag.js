@@ -12,6 +12,7 @@ import { addDays, isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 var CELL_WIDTH = 32;
 
@@ -137,6 +138,11 @@ function onDragEnd(e) {
     var blast = APP.blasts[blastIdx];
     if (blast) {
 
+      // Step 4b-i) Auto-switch to Manual mode when user drags a bar
+      if (blast.mode !== "Manual") {
+        blast.mode = "Manual";
+      }
+
       if (section === "drilling" && blockIdx !== null) {
         // Step 4c) Block-level drag: shift only this block's drillStart
         var block = blast.drillBlocks && blast.drillBlocks[blockIdx];
@@ -179,6 +185,7 @@ function onDragEnd(e) {
       }
 
       recalcDependencies();
+      debouncedSave();
       renderGantt();
     }
   }

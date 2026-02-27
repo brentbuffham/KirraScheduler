@@ -6,6 +6,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
+import { debouncedSave } from "../state/schedulerDB.js";
 
 var typeColors = {
   WASTE: "var(--waste)",
@@ -29,7 +30,7 @@ function renderPatterns() {
 
   APP.patterns.forEach(function(p, idx) {
     var color = typeColors[p.type] || "var(--text-muted)";
-    html += "<div class=\"pattern-card\" data-pattern-idx=\"" + idx + "\">";
+    html += "<div class=\"pattern-card\" data-pattern-idx=\"" + idx + "\" draggable=\"true\" data-drag-type=\"pattern\" data-pattern-id=\"" + p.id + "\">";
     html += "  <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\">";
     html += "    <div class=\"pattern-id\">" + p.id + "</div>";
     html += "    <span class=\"badge\" style=\"background:" + color + "20;color:" + color + "\">" + p.type + "</span>";
@@ -52,6 +53,18 @@ function renderPatterns() {
   if (countEl) {
     countEl.textContent = APP.patterns.length + " pattern(s)";
   }
+
+  // Step 1c) Attach drag handlers to pattern cards
+  grid.querySelectorAll(".pattern-card[draggable]").forEach(function(card) {
+    card.addEventListener("dragstart", function(e) {
+      e.dataTransfer.setData("text/plain", "pattern:" + card.dataset.patternId);
+      e.dataTransfer.effectAllowed = "copy";
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", function() {
+      card.classList.remove("dragging");
+    });
+  });
 }
 
 // ============================================================
@@ -242,6 +255,7 @@ function importPatternCSV(file) {
     if (imported.length > 0) {
       // Step 6f) Replace existing patterns with imported ones
       APP.patterns = imported;
+      debouncedSave();
       renderPatterns();
       showPatternImportResult("Imported " + imported.length + " pattern(s) successfully." +
         (errors.length > 0 ? " (" + errors.length + " row(s) skipped)" : ""), "ok");

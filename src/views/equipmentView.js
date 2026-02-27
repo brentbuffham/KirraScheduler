@@ -6,7 +6,65 @@
 import { APP } from "../state/appState.js";
 import { drills, mpus, ancillary, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
-import { showEditEquipModal, duplicateEquip } from "../dialogs/equipmentModal.js";
+import { showEditEquipModal, showEditMaintenanceModal, duplicateEquip } from "../dialogs/equipmentModal.js";
+import { debouncedSave } from "../state/schedulerDB.js";
+
+// Step 0) Sort state per table — tracks which column is sorted and direction
+var sortState = {
+  drill:     { column: "id", direction: "asc" },
+  mpu:       { column: "id", direction: "asc" },
+  ancillary: { column: "id", direction: "asc" },
+  person:    { column: "id", direction: "asc" }
+};
+
+// Step 0b) Generic comparator for sortable columns
+function sortArray(arr, column, direction) {
+  var sorted = arr.slice();
+  sorted.sort(function(a, b) {
+    var va = a[column];
+    var vb = b[column];
+    if (va === undefined || va === null) va = "";
+    if (vb === undefined || vb === null) vb = "";
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    var cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return direction === "desc" ? -cmp : cmp;
+  });
+  return sorted;
+}
+
+// Step 0c) Build a sortable <th> with arrow indicator
+function sortTh(tableKey, column, label, extraClass) {
+  var s = sortState[tableKey];
+  var arrow = "";
+  if (s.column === column) {
+    arrow = s.direction === "asc" ? " \u25B2" : " \u25BC";
+  }
+  var cls = "sortable-th" + (extraClass ? " " + extraClass : "");
+  return "<th class=\"" + cls + "\" data-sort-table=\"" + tableKey + "\" data-sort-col=\"" + column + "\">" + label + arrow + "</th>";
+}
+
+// Step 0d) Attach sort click listeners after any table render
+function attachSortListeners() {
+  document.querySelectorAll(".sortable-th").forEach(function(th) {
+    th.addEventListener("click", function() {
+      var tableKey = th.dataset.sortTable;
+      var col = th.dataset.sortCol;
+      var s = sortState[tableKey];
+      if (s.column === col) {
+        s.direction = s.direction === "asc" ? "desc" : "asc";
+      } else {
+        s.column = col;
+        s.direction = "asc";
+      }
+      // Step 0d-i) Re-render only the affected table
+      if (tableKey === "drill") renderDrillTable();
+      else if (tableKey === "mpu") renderMPUTable();
+      else if (tableKey === "ancillary") renderAncillaryTable();
+      else if (tableKey === "person") renderPeopleTable();
+    });
+  });
+}
 
 // Step 1) Render the full equipment tab
 function renderEquipment() {
@@ -74,12 +132,18 @@ function renderEquipmentStats() {
 // Step 3) Drill rigs table
 function renderDrillTable() {
   var html = "<thead><tr>";
-  html += "<th>ID</th><th>Name</th><th>Type</th>";
+  html += sortTh("drill", "id", "ID");
+  html += sortTh("drill", "name", "Name");
+  html += sortTh("drill", "type", "Type");
   html += "<th class=\"num\">Min Diam (mm)</th><th class=\"num\">Max Diam (mm)</th>";
-  html += "<th class=\"num\">Rate (m/day)</th><th>Crew Req</th><th>Status</th><th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
+  html += sortTh("drill", "rateM_per_day", "Rate (m/day)", "num");
+  html += "<th>Crew Req</th>";
+  html += sortTh("drill", "status", "Status");
+  html += "<th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
-  drills.forEach(function(drill) {
+  var sorted = sortArray(drills, sortState.drill.column, sortState.drill.direction);
+  sorted.forEach(function(drill) {
     var assignments = APP.blasts.filter(function(b) {
       return (b.assignedDrills || []).indexOf(drill.id) !== -1;
     }).map(function(b) { return b.name; });
@@ -111,19 +175,26 @@ function renderDrillTable() {
   html += "</tbody>";
   document.getElementById("drillTable").innerHTML = html;
 
-  // Step 3b) Attach drill action event listeners
+  // Step 3b) Attach drill action event listeners and sort listeners
   attachEquipActionListeners("drill");
+  attachSortListeners();
 }
 
 // Step 4) MPU table
 function renderMPUTable() {
   var html = "<thead><tr>";
-  html += "<th>ID</th><th>Name</th><th>Type</th>";
-  html += "<th class=\"num\">Capacity (kg)</th><th class=\"num\">Rate (kg/day)</th>";
-  html += "<th>Crew Req</th><th>Status</th><th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
+  html += sortTh("mpu", "id", "ID");
+  html += sortTh("mpu", "name", "Name");
+  html += sortTh("mpu", "type", "Type");
+  html += "<th class=\"num\">Capacity (kg)</th>";
+  html += sortTh("mpu", "rateKg_per_day", "Rate (kg/day)", "num");
+  html += "<th>Crew Req</th>";
+  html += sortTh("mpu", "status", "Status");
+  html += "<th>Assigned To</th><th>Maintenance</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
-  mpus.forEach(function(mpu) {
+  var sorted = sortArray(mpus, sortState.mpu.column, sortState.mpu.direction);
+  sorted.forEach(function(mpu) {
     // Step 4a) Filter blasts assigned to this MPU (backward compat with legacy assignedMPU)
     var assignments = APP.blasts.filter(function(b) {
       return (b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : [])).indexOf(mpu.id) !== -1;
@@ -155,17 +226,22 @@ function renderMPUTable() {
   document.getElementById("mpuTable").innerHTML = html;
 
   attachEquipActionListeners("mpu");
+  attachSortListeners();
 }
 
 // Step 4b) Ancillary equipment table (Dozers, Graders, Loaders, Excavators, Rollers)
 function renderAncillaryTable() {
   var html = "<thead><tr>";
-  html += "<th>ID</th><th>Name</th><th>Type</th>";
-  html += "<th class=\"num\">Rate (m\u00B2/day)</th>";
-  html += "<th>Status</th><th>Assigned To</th><th>Actions</th>";
+  html += sortTh("ancillary", "id", "ID");
+  html += sortTh("ancillary", "name", "Name");
+  html += sortTh("ancillary", "type", "Type");
+  html += sortTh("ancillary", "rateM2_per_day", "Rate (m\u00B2/day)", "num");
+  html += sortTh("ancillary", "status", "Status");
+  html += "<th>Assigned To</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
-  ancillary.forEach(function(unit) {
+  var sorted = sortArray(ancillary, sortState.ancillary.column, sortState.ancillary.direction);
+  sorted.forEach(function(unit) {
     var assignments = APP.blasts.filter(function(b) {
       return (b.assignedAncillary || []).indexOf(unit.id) !== -1;
     }).map(function(b) { return b.name; });
@@ -189,15 +265,20 @@ function renderAncillaryTable() {
   if (el) el.innerHTML = html;
 
   attachEquipActionListeners("ancillary");
+  attachSortListeners();
 }
 
 // Step 5) People table
 function renderPeopleTable() {
   var html = "<thead><tr>";
-  html += "<th>ID</th><th>Name</th><th>Role</th><th>Certified Equipment Types</th><th>Actions</th>";
+  html += sortTh("person", "id", "ID");
+  html += sortTh("person", "name", "Name");
+  html += sortTh("person", "role", "Role");
+  html += "<th>Certified Equipment Types</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
-  people.forEach(function(p) {
+  var sorted = sortArray(people, sortState.person.column, sortState.person.direction);
+  sorted.forEach(function(p) {
     var certs = p.certifiedTypes.length > 0
       ? p.certifiedTypes.map(function(t) { return "<span class=\"badge badge-drill\">" + t + "</span>"; }).join(" ")
       : "<span style=\"color:var(--text-muted)\">\u2014</span>";
@@ -217,6 +298,7 @@ function renderPeopleTable() {
   document.getElementById("peopleTable").innerHTML = html;
 
   attachEquipActionListeners("person");
+  attachSortListeners();
 }
 
 // Step 6) Maintenance schedule table (aggregated from all equipment)
@@ -224,11 +306,13 @@ function renderMaintenanceTable() {
   var allMaint = [];
 
   drills.forEach(function(drill) {
-    (drill.maintenance || []).forEach(function(m) {
+    (drill.maintenance || []).forEach(function(m, mi) {
       allMaint.push({
         equipId: drill.id,
         equipName: drill.name,
-        equipType: "Drill",
+        equipType: "drill",
+        equipLabel: "Drill",
+        maintIdx: mi,
         start: m.start,
         end: m.end,
         reason: m.reason
@@ -237,11 +321,13 @@ function renderMaintenanceTable() {
   });
 
   mpus.forEach(function(mpu) {
-    (mpu.maintenance || []).forEach(function(m) {
+    (mpu.maintenance || []).forEach(function(m, mi) {
       allMaint.push({
         equipId: mpu.id,
         equipName: mpu.name,
-        equipType: "MPU",
+        equipType: "mpu",
+        equipLabel: "MPU",
+        maintIdx: mi,
         start: m.start,
         end: m.end,
         reason: m.reason
@@ -253,7 +339,7 @@ function renderMaintenanceTable() {
   allMaint.sort(function(a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
 
   var html = "<thead><tr>";
-  html += "<th>Equipment</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Reason</th><th>Conflicts</th>";
+  html += "<th>Equipment</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Reason</th><th>Conflicts</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
 
   allMaint.forEach(function(m) {
@@ -277,25 +363,68 @@ function renderMaintenanceTable() {
       ? "<span class=\"dep-warning\" title=\"Overlaps: " + conflicts.join(", ") + "\">!</span> " + conflicts.join(", ")
       : "<span class=\"badge badge-complete\">None</span>";
 
-    var typeBadge = m.equipType === "Drill" ? "badge-drill" : "badge-load";
+    var typeBadge = m.equipLabel === "Drill" ? "badge-drill" : "badge-load";
+
+    // Step 6b) Build edit/delete action buttons
+    var actionsHtml = "<button class=\"btn-maint-action btn-maint-edit\" " +
+      "data-equip-type=\"" + m.equipType + "\" data-equip-id=\"" + m.equipId + "\" data-maint-idx=\"" + m.maintIdx + "\" title=\"Edit\">" +
+      "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M11.5 1.5l3 3L5 14H2v-3z\"/></svg></button>";
+    actionsHtml += "<button class=\"btn-maint-action btn-maint-delete\" " +
+      "data-equip-type=\"" + m.equipType + "\" data-equip-id=\"" + m.equipId + "\" data-maint-idx=\"" + m.maintIdx + "\" title=\"Delete\">" +
+      "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10\"/></svg></button>";
 
     html += "<tr>";
     html += "<td style=\"font-weight:600;\">" + m.equipId + "</td>";
-    html += "<td><span class=\"badge " + typeBadge + "\">" + m.equipType + "</span></td>";
+    html += "<td><span class=\"badge " + typeBadge + "\">" + m.equipLabel + "</span></td>";
     html += "<td>" + formatDate(m.start) + "</td>";
     html += "<td>" + formatDate(m.end) + "</td>";
     html += "<td class=\"num\">" + days + "</td>";
     html += "<td>" + m.reason + "</td>";
     html += "<td style=\"font-size:12px;\">" + conflictHtml + "</td>";
+    html += "<td>" + actionsHtml + "</td>";
     html += "</tr>";
   });
 
   if (allMaint.length === 0) {
-    html += "<tr><td colspan=\"7\" style=\"text-align:center;color:var(--text-muted);padding:20px;\">No maintenance windows scheduled</td></tr>";
+    html += "<tr><td colspan=\"8\" style=\"text-align:center;color:var(--text-muted);padding:20px;\">No maintenance windows scheduled</td></tr>";
   }
 
   html += "</tbody>";
   document.getElementById("maintenanceTable").innerHTML = html;
+
+  // Step 6c) Attach edit/delete listeners for maintenance rows
+  attachMaintenanceActionListeners();
+}
+
+// Step 6d) Wire up maintenance Edit and Delete buttons
+function attachMaintenanceActionListeners() {
+  // Step 6d-i) Delete buttons
+  document.querySelectorAll(".btn-maint-delete").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var eqType = btn.dataset.equipType;
+      var eqId = btn.dataset.equipId;
+      var maintIdx = parseInt(btn.dataset.maintIdx);
+      var collection = eqType === "drill" ? drills : mpus;
+      var equip = collection.find(function(eq) { return eq.id === eqId; });
+      if (!equip || !equip.maintenance || !equip.maintenance[maintIdx]) return;
+      if (!confirm("Delete maintenance window for " + eqId + " (" + equip.maintenance[maintIdx].reason + ")?")) return;
+      equip.maintenance.splice(maintIdx, 1);
+      debouncedSave();
+      renderEquipment();
+    });
+  });
+
+  // Step 6d-ii) Edit buttons
+  document.querySelectorAll(".btn-maint-edit").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var eqType = btn.dataset.equipType;
+      var eqId = btn.dataset.equipId;
+      var maintIdx = parseInt(btn.dataset.maintIdx);
+      showEditMaintenanceModal(eqType, eqId, maintIdx);
+    });
+  });
 }
 
 // Step 6b) Format crewRequired object as badge string (e.g. "OP:1 SF:1")
@@ -375,6 +504,7 @@ function attachEquipActionListeners(equipType) {
       e.stopPropagation();
       var equipId = btn.dataset.equipId;
       mobiliseEquipment(collection, equipId);
+      debouncedSave();
       renderEquipment();
     });
   });
@@ -385,6 +515,7 @@ function attachEquipActionListeners(equipType) {
       e.stopPropagation();
       var equipId = btn.dataset.equipId;
       demobiliseEquipment(collection, equipId);
+      debouncedSave();
       renderEquipment();
     });
   });
@@ -396,6 +527,7 @@ function attachEquipActionListeners(equipType) {
       var equipId = btn.dataset.equipId;
       if (confirm("Remove " + equipId + "? This cannot be undone.")) {
         removeEquipment(collection, equipId);
+        debouncedSave();
         renderEquipment();
       }
     });
