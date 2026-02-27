@@ -8,6 +8,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
          sendPasswordResetEmail, multiFactor, TotpMultiFactorGenerator,
          TotpSecret, getMultiFactorResolver } from "firebase/auth";
 import { firebaseApp } from "./firebaseConfig.js";
+import QRCode from "qrcode";
 
 var auth = getAuth(firebaseApp);
 
@@ -253,9 +254,7 @@ function renderTotpEnrol(overlay, resolve) {
         "<h2 class=\"auth-title\">SET UP 2FA</h2>" +
         "<p class=\"auth-subtitle\">Scan this QR code in your authenticator app<br>(Google Authenticator, Authy, etc.)</p>" +
         "<div class=\"auth-divider\"></div>" +
-        "<div class=\"auth-qr-wrapper\">" +
-          "<img src=\"" + qrCodeImageUrl(qrUrl) + "\" width=\"180\" height=\"180\" alt=\"2FA QR code\">" +
-        "</div>" +
+        "<div class=\"auth-qr-wrapper\" id=\"qrWrapper\"></div>" +
         "<p class=\"auth-totp-hint\">After scanning, enter the 6-digit code shown in your authenticator app to verify and save.</p>" +
         "<form class=\"auth-form\" id=\"enrolForm\">" +
           "<div class=\"auth-field\">" +
@@ -267,6 +266,15 @@ function renderTotpEnrol(overlay, resolve) {
         "</form>" +
         "<div class=\"auth-toggle\" style=\"margin-top:12px\"><a id=\"skipMfa\">Skip for now (not recommended)</a></div>" +
       "</div>";
+
+    // Step 6b-i) Render QR code onto a canvas (client-side — TOTP secret
+    //            never leaves the browser)
+    var canvas = document.createElement("canvas");
+    QRCode.toCanvas(canvas, qrUrl, { width: 180, margin: 1 }, function(err) {
+      if (!err) {
+        overlay.querySelector("#qrWrapper").appendChild(canvas);
+      }
+    });
 
     // Step 6c) Verify and enrol
     overlay.querySelector("#enrolForm").addEventListener("submit", function(e) {
@@ -367,17 +375,7 @@ function closeOverlay(overlay, resolve) {
 }
 
 // ============================================================
-//  Step 9) Generate QR code image URL via Google Charts API
-//          (client-side only — no secret is sent, only the
-//          otpauth:// URL which is already visible to the user)
-// ============================================================
-function qrCodeImageUrl(otpauthUrl) {
-  return "https://chart.googleapis.com/chart?chs=180x180&cht=qr&chl=" +
-    encodeURIComponent(otpauthUrl);
-}
-
-// ============================================================
-//  Step 10) Human-readable Firebase Auth error messages
+//  Step 9) Human-readable Firebase Auth error messages
 // ============================================================
 function friendlyError(code) {
   var map = {
