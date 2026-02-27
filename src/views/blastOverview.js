@@ -39,7 +39,7 @@ function renderBlasts() {
   // Step 3) Build table
   var html = "<thead><tr>";
   html += "<th>Blast Name</th><th>Status</th><th>Mode</th><th>Pattern</th>";
-  html += "<th>Hole Types</th><th class=\"num\">Volume (bcm)</th><th class=\"num\">Exp. (kg)</th>";
+  html += "<th>Patterns</th><th class=\"num\">Volume (bcm)</th><th class=\"num\">Exp. (kg)</th>";
   html += "<th class=\"num\">PF (kg/bcm)</th><th class=\"num\">Drill (m)</th>";
   html += "<th>Drill Start</th><th>Load Start</th><th>Blast Date</th>";
   html += "<th style=\"color:var(--accent-purple)\">Deps</th>";

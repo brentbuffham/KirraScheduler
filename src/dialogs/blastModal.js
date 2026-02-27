@@ -47,7 +47,7 @@ function buildPatternSelect(selectedId) {
 }
 
 // Step 2) Add a hole type row to the table
-function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
+function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass, pctOfBlock) {
   var tbody = document.getElementById("holeTypeRows");
   var tr = document.createElement("tr");
   tr.style.borderBottom = "1px solid var(--border)";
@@ -60,6 +60,7 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
     autoLine = (t === "PRESPLIT" || t === "BUFFER");
   }
   var lineDrill = (isLineDrill !== undefined) ? isLineDrill : autoLine;
+  var pct = (pctOfBlock !== undefined && pctOfBlock !== null) ? pctOfBlock : 0;
   var holeCount = holes || 0;
   var meters = drillMeters || (holeCount * depth);
   var mass = expMass || 0;
@@ -67,6 +68,7 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
   tr.innerHTML =
     "<td style=\"padding:4px 2px;\">" + buildPatternSelect(patternId || "") + "</td>" +
     "<td style=\"padding:4px 2px;text-align:center;\"><input type=\"checkbox\" class=\"ht-line\"" + (lineDrill ? " checked" : "") + "></td>" +
+    "<td style=\"padding:4px 2px;\"><input type=\"number\" class=\"ht-pct\" value=\"" + pct + "\" min=\"0\" max=\"100\" step=\"1\" style=\"width:55px;text-align:right;font-size:11px;\"></td>" +
     "<td style=\"padding:4px 2px;\"><input type=\"number\" class=\"ht-holes\" value=\"" + holeCount + "\" min=\"0\" step=\"1\" style=\"width:60px;text-align:right;font-size:11px;\"></td>" +
     "<td class=\"ht-depth\" style=\"padding:4px 6px;text-align:right;color:var(--text-muted);\">" + depth.toFixed(2) + "</td>" +
     "<td class=\"ht-meters\" style=\"padding:4px 6px;text-align:right;\">" + Math.round(meters) + "</td>" +
@@ -78,6 +80,7 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
   // Step 2a) Wire up events
   var patSel = tr.querySelector(".ht-pattern");
   var lineChk = tr.querySelector(".ht-line");
+  var pctInp = tr.querySelector(".ht-pct");
   var holesInp = tr.querySelector(".ht-holes");
   var delBtn = tr.querySelector(".ht-del");
 
@@ -87,22 +90,72 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass) {
       var t = p.type.toUpperCase();
       lineChk.checked = (t === "PRESPLIT" || t === "BUFFER");
       tr.querySelector(".ht-depth").textContent = calcHoleDepth(p).toFixed(2);
-      // Step 2b) Auto-estimate holes for area-fill patterns
-      if (!lineChk.checked) {
-        var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
-        if (area > 0) {
-          holesInp.value = Math.round(area / (p.burden * p.spacing));
-        }
-      }
     }
-    recalcHoleTypes();
+    // Step 2b) Recalculate holes from current % when pattern changes
+    recalcHolesFromPct();
   });
-  lineChk.addEventListener("change", recalcHoleTypes);
+  lineChk.addEventListener("change", function() { recalcHolesFromPct(); });
+  pctInp.addEventListener("input", function() { recalcHolesFromPct(); });
   holesInp.addEventListener("input", recalcHoleTypes);
   delBtn.addEventListener("click", function() {
     tr.remove();
+    autoBalancePct();
     recalcHoleTypes();
   });
+}
+
+// Step 2c) Recalculate holes on all rows from their % Block values
+//  holes = (surfaceArea * pct/100) / (burden * spacing)
+function recalcHolesFromPct() {
+  var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
+  var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+
+  for (var i = 0; i < rows.length; i++) {
+    var tr = rows[i];
+    var patSel = tr.querySelector(".ht-pattern");
+    var pctInp = tr.querySelector(".ht-pct");
+    var holesInp = tr.querySelector(".ht-holes");
+
+    var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
+    var pct = parseFloat(pctInp.value) || 0;
+
+    if (p && area > 0 && pct > 0) {
+      var patternArea = area * pct / 100;
+      var holes = Math.round(patternArea / (p.burden * p.spacing));
+      holesInp.value = holes;
+    }
+  }
+  recalcHoleTypes();
+}
+
+// Step 2d) Auto-balance remaining % to the last row when a row is removed
+function autoBalancePct() {
+  var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+  if (rows.length === 0) return;
+
+  // Step 2d-i) Sum all current %
+  var totalPct = 0;
+  for (var i = 0; i < rows.length; i++) {
+    totalPct += parseFloat(rows[i].querySelector(".ht-pct").value) || 0;
+  }
+
+  // Step 2d-ii) If single row remaining, set it to 100
+  if (rows.length === 1) {
+    rows[0].querySelector(".ht-pct").value = 100;
+    recalcHolesFromPct();
+    return;
+  }
+
+  // Step 2d-iii) If total != 100, adjust the last row to make it balance
+  if (totalPct !== 100) {
+    var lastRow = rows[rows.length - 1];
+    var lastPct = parseFloat(lastRow.querySelector(".ht-pct").value) || 0;
+    var remainder = 100 - (totalPct - lastPct);
+    if (remainder >= 0 && remainder <= 100) {
+      lastRow.querySelector(".ht-pct").value = Math.round(remainder);
+      recalcHolesFromPct();
+    }
+  }
 }
 
 // Step 3) Recalculate all hole type rows and update totals
@@ -110,17 +163,20 @@ function recalcHoleTypes() {
   var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
   var totalMeters = 0;
   var totalMass = 0;
+  var totalPct = 0;
 
   for (var i = 0; i < rows.length; i++) {
     var tr = rows[i];
     var patSel = tr.querySelector(".ht-pattern");
     var holesInp = tr.querySelector(".ht-holes");
+    var pctInp = tr.querySelector(".ht-pct");
     var depthCell = tr.querySelector(".ht-depth");
     var metersCell = tr.querySelector(".ht-meters");
     var massCell = tr.querySelector(".ht-mass");
 
     var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
     var holes = parseInt(holesInp.value) || 0;
+    totalPct += parseFloat(pctInp.value) || 0;
 
     if (p) {
       // Step 3a) Pattern is known — recalculate from pattern specs
@@ -145,6 +201,17 @@ function recalcHoleTypes() {
       totalMeters += parseFloat(metersCell.textContent) || 0;
       totalMass += parseFloat(massCell.textContent) || 0;
     }
+  }
+
+  // Step 3b-ii) Update % total with colour warning
+  var pctEl = document.getElementById("htTotalPct");
+  pctEl.textContent = Math.round(totalPct) + "%";
+  if (totalPct > 100) {
+    pctEl.style.color = "var(--accent-blast)";
+  } else if (totalPct === 100) {
+    pctEl.style.color = "var(--accent-green)";
+  } else {
+    pctEl.style.color = "var(--text-muted)";
   }
 
   document.getElementById("htTotalMeters").textContent = Math.round(totalMeters);
@@ -207,6 +274,7 @@ function collectHoleTypes() {
     var p = APP.patterns.find(function(pp) { return pp.id === patId; });
     var holes = parseInt(tr.querySelector(".ht-holes").value) || 0;
     var isLine = tr.querySelector(".ht-line").checked;
+    var pct = parseFloat(tr.querySelector(".ht-pct").value) || 0;
 
     var depth, meters, mass;
     if (p) {
@@ -235,6 +303,7 @@ function collectHoleTypes() {
       burden: p ? p.burden : 0,
       spacing: p ? p.spacing : 0,
       isLineDrill: isLine,
+      pctOfBlock: pct,
       holes: holes,
       holeDepth: Math.round(depth * 100) / 100,
       drillMeters: Math.round(meters * 10) / 10,
@@ -249,6 +318,11 @@ function clearHoleTypeTable() {
   document.getElementById("holeTypeRows").innerHTML = "";
   document.getElementById("htTotalMeters").textContent = "0";
   document.getElementById("htTotalMass").textContent = "0";
+  var pctEl = document.getElementById("htTotalPct");
+  if (pctEl) {
+    pctEl.textContent = "0%";
+    pctEl.style.color = "var(--text-muted)";
+  }
 }
 
 // Step 4c) Populate hole type table from existing blast holeTypes
@@ -257,7 +331,7 @@ function populateHoleTypeTable(holeTypes) {
   if (!holeTypes || holeTypes.length === 0) return;
   for (var i = 0; i < holeTypes.length; i++) {
     var ht = holeTypes[i];
-    addHoleTypeRow(ht.patternId || "", ht.isLineDrill, ht.holes, ht.drillMeters, ht.expMass);
+    addHoleTypeRow(ht.patternId || "", ht.isLineDrill, ht.holes, ht.drillMeters, ht.expMass, ht.pctOfBlock);
   }
   recalcHoleTypes();
 }
@@ -556,14 +630,25 @@ function initBlastModal() {
   document.getElementById("btnCloseBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
   document.getElementById("btnCancelBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
 
-  // Step 9a) Add Hole Type button
+  // Step 9a) Add Pattern button — new row gets the remaining % to reach 100
   document.getElementById("btnAddHoleType").addEventListener("click", function() {
-    addHoleTypeRow("", false, 0, 0, 0);
+    var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+    var usedPct = 0;
+    for (var i = 0; i < rows.length; i++) {
+      usedPct += parseFloat(rows[i].querySelector(".ht-pct").value) || 0;
+    }
+    var remainPct = Math.max(0, Math.round(100 - usedPct));
+    addHoleTypeRow("", false, 0, 0, 0, remainPct);
   });
 
   // Step 9b) Update drill-day estimate when drill assignment changes
   document.getElementById("fAssignedDrills").addEventListener("change", function() {
     updateDrillDayEstimate();
+  });
+
+  // Step 9c) Recalculate holes from % when surface area changes
+  document.getElementById("fSurfaceArea").addEventListener("input", function() {
+    recalcHolesFromPct();
   });
 }
 

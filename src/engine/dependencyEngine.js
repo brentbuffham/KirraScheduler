@@ -4,7 +4,7 @@
 //  Block-aware: uses latest block end when blast has drillBlocks
 // ============================================================
 
-import { APP } from "../state/appState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
 import { hasBlocks, syncBlastFromBlocks, getLatestBlockEnd } from "../engine/blockHelpers.js";
 import { addDays, isoDate, formatDate } from "../utils/dateUtils.js";
@@ -37,6 +37,22 @@ function recalcDependencies() {
     // Step 2b-i) Sync block-level derived values if blast has blocks
     if (hasBlocks(blast)) {
       syncBlastFromBlocks(blast);
+    }
+
+    // Step 2b-ii) Recalculate drillDays for non-block blasts from assigned drill rates
+    if (!hasBlocks(blast) && blast.assignedDrills && blast.assignedDrills.length > 0) {
+      var totalMeters = getTotalDrillMeters(blast);
+      if (totalMeters > 0) {
+        var effHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
+        var combinedDrillRate = 0;
+        for (var di = 0; di < blast.assignedDrills.length; di++) {
+          var drillObj = drills.find(function(d) { return d.id === blast.assignedDrills[di]; });
+          if (drillObj) combinedDrillRate += (drillObj.rateM_per_day || 0) * effHrs;
+        }
+        if (combinedDrillRate > 0) {
+          blast.drillDays = Math.ceil(totalMeters / combinedDrillRate);
+        }
+      }
     }
 
     if (!blast.drillStart || !blast.drillDays) return;

@@ -735,102 +735,137 @@
       <button class="modal-close" id="btnCloseBlastModal">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-field">
-          <label>Blast Name</label>
-          <input type="text" id="fBlastName" placeholder="e.g. S4_226_413">
-        </div>
-        <div class="form-field">
-          <label>Mode</label>
-          <select id="fBlastMode">
-            <option value="Manual">Manual</option>
-            <option value="Auto">Auto</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Surface Area (m2)</label>
-          <input type="number" id="fSurfaceArea" placeholder="0">
-        </div>
-        <div class="form-field">
-          <label>Drill Start Date</label>
-          <input type="date" id="fDrillStart">
-        </div>
-        <div class="form-field" style="min-width:110px;">
-          <label>Start Time</label>
-          <input type="time" id="fDrillStartTime" value="06:00" step="1800">
-        </div>
+      <!-- Tab Navigation -->
+      <div class="modal-tabs" id="blastModalTabs">
+        <div class="modal-tab active" data-tab="blastTabPatterns">Blast &amp; Patterns</div>
+        <div class="modal-tab" data-tab="blastTabEquipment">Equipment &amp; Progress</div>
+        <div class="modal-tab" data-tab="blastTabDeps">Prep &amp; Dependencies</div>
       </div>
 
-      <!-- Hole Types — multi-pattern assignment -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gantt-drill);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-          Hole Types <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign patterns to this blast</span>
-        </div>
-        <div id="holeTypeTableWrap" style="overflow-x:auto;">
-          <table id="holeTypeTable" style="width:100%;font-size:12px;font-family:'JetBrains Mono',monospace;border-collapse:collapse;">
-            <thead>
-              <tr style="color:var(--text-muted);text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">
-                <th style="padding:4px 6px;">Pattern</th>
-                <th style="padding:4px 4px;text-align:center;">Line</th>
-                <th style="padding:4px 6px;text-align:right;">Holes</th>
-                <th style="padding:4px 6px;text-align:right;">Depth (m)</th>
-                <th style="padding:4px 6px;text-align:right;">Meters</th>
-                <th style="padding:4px 6px;text-align:right;">Mass (kg)</th>
-                <th style="padding:4px 2px;"></th>
-              </tr>
-            </thead>
-            <tbody id="holeTypeRows"></tbody>
-            <tfoot>
-              <tr style="border-top:1px solid var(--border);font-weight:700;">
-                <td colspan="4" style="padding:6px;text-align:right;color:var(--text-muted);">Totals:</td>
-                <td id="htTotalMeters" style="padding:6px;text-align:right;">0</td>
-                <td id="htTotalMass" style="padding:6px;text-align:right;">0</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <button type="button" id="btnAddHoleType" class="btn" style="margin-top:8px;font-size:11px;padding:4px 10px;">
-          + Add Hole Type
-        </button>
-      </div>
-
-      <div class="form-row" style="margin-top:12px;">
-        <div class="form-field">
-          <label>Loading Rate (kg/day)</label>
-          <input type="number" id="fLoadRate" value="100000">
-        </div>
-        <div class="form-field">
-          <label>Volume (bcm) — auto-summed from hole types</label>
-          <input type="number" id="fVolume" placeholder="Auto from patterns">
-        </div>
-        <div class="form-field">
-          <label>Explosive Mass (kg) — auto-summed</label>
-          <input type="number" id="fExpMass" placeholder="Auto from patterns">
-        </div>
-      </div>
-
-      <!-- Progress Tracking -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-          Progress <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— % complete (0-100), or imported from actuals</span>
+      <!-- TAB 1: Blast & Patterns -->
+      <div class="modal-tab-pane active" id="blastTabPatterns">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Blast Name</label>
+            <input type="text" id="fBlastName" placeholder="e.g. S4_226_413">
+          </div>
+          <div class="form-field">
+            <label>Mode</label>
+            <select id="fBlastMode">
+              <option value="Manual">Manual</option>
+              <option value="Auto">Auto</option>
+            </select>
+          </div>
         </div>
         <div class="form-row">
           <div class="form-field">
-            <label>Drill Progress (%)</label>
-            <input type="number" id="fDrillProgress" min="0" max="100" step="1" placeholder="0">
+            <label>Surface Area (m2)</label>
+            <input type="number" id="fSurfaceArea" placeholder="0">
           </div>
           <div class="form-field">
-            <label>Load Progress (%)</label>
-            <input type="number" id="fLoadProgress" min="0" max="100" step="1" placeholder="0">
+            <label>Drill Start Date</label>
+            <input type="date" id="fDrillStart">
+          </div>
+          <div class="form-field" style="min-width:110px;">
+            <label>Start Time</label>
+            <input type="time" id="fDrillStartTime" value="06:00" step="1800">
+          </div>
+        </div>
+
+        <!-- Pattern Assignment — multi-pattern volume allocation -->
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gantt-drill);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+            Pattern Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign patterns to this blast (% must total 100)</span>
+          </div>
+          <div id="holeTypeTableWrap" style="overflow-x:auto;">
+            <table id="holeTypeTable" style="width:100%;font-size:12px;font-family:'JetBrains Mono',monospace;border-collapse:collapse;">
+              <thead>
+                <tr style="color:var(--text-muted);text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">
+                  <th style="padding:4px 6px;">Pattern</th>
+                  <th style="padding:4px 4px;text-align:center;">Line</th>
+                  <th style="padding:4px 6px;text-align:right;">% Block</th>
+                  <th style="padding:4px 6px;text-align:right;">Holes</th>
+                  <th style="padding:4px 6px;text-align:right;">Depth (m)</th>
+                  <th style="padding:4px 6px;text-align:right;">Meters</th>
+                  <th style="padding:4px 6px;text-align:right;">Mass (kg)</th>
+                  <th style="padding:4px 2px;"></th>
+                </tr>
+              </thead>
+              <tbody id="holeTypeRows"></tbody>
+              <tfoot>
+                <tr style="border-top:1px solid var(--border);font-weight:700;">
+                  <td colspan="2" style="padding:6px;text-align:right;color:var(--text-muted);">Totals:</td>
+                  <td id="htTotalPct" style="padding:6px;text-align:right;">0%</td>
+                  <td></td>
+                  <td style="padding:6px;"></td>
+                  <td id="htTotalMeters" style="padding:6px;text-align:right;">0</td>
+                  <td id="htTotalMass" style="padding:6px;text-align:right;">0</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <button type="button" id="btnAddHoleType" class="btn" style="margin-top:8px;font-size:11px;padding:4px 10px;">
+            + Add Pattern
+          </button>
+        </div>
+
+        <div class="form-row" style="margin-top:12px;">
+          <div class="form-field">
+            <label>Loading Rate (kg/day)</label>
+            <input type="number" id="fLoadRate" value="100000">
+          </div>
+          <div class="form-field">
+            <label>Volume (bcm) — auto-summed from hole types</label>
+            <input type="number" id="fVolume" placeholder="Auto from patterns">
+          </div>
+          <div class="form-field">
+            <label>Explosive Mass (kg) — auto-summed</label>
+            <input type="number" id="fExpMass" placeholder="Auto from patterns">
           </div>
         </div>
       </div>
 
-      <!-- Pattern Preparation -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <!-- TAB 2: Equipment & Progress -->
+      <div class="modal-tab-pane" id="blastTabEquipment">
+        <!-- Equipment Assignment -->
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+          Equipment Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign drills and MPUs to this blast</span>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Assigned Drills (multi-select)</label>
+            <select id="fAssignedDrills" multiple style="height:100px;"></select>
+          </div>
+          <div class="form-field">
+            <label>Assigned MPUs (multi-select)</label>
+            <select id="fAssignedMPUs" multiple style="height:100px;"></select>
+          </div>
+        </div>
+        <div id="drillDayEstimate" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-cyan);margin-top:6px;padding:6px 8px;background:rgba(0,200,200,0.08);border-radius:4px;display:none;">
+        </div>
+
+        <!-- Progress Tracking -->
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+            Progress <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— % complete (0-100), or imported from actuals</span>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Drill Progress (%)</label>
+              <input type="number" id="fDrillProgress" min="0" max="100" step="1" placeholder="0">
+            </div>
+            <div class="form-field">
+              <label>Load Progress (%)</label>
+              <input type="number" id="fLoadProgress" min="0" max="100" step="1" placeholder="0">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Prep & Dependencies -->
+      <div class="modal-tab-pane" id="blastTabDeps">
+        <!-- Pattern Preparation -->
         <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-prep);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
           Pattern Preparation <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— floor prep before drilling (optional)</span>
         </div>
@@ -851,66 +886,47 @@
             <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:4px;">Excavator &rarr; Loader &rarr; Dozer &rarr; Grader &rarr; Roller</div>
           </div>
         </div>
-      </div>
 
-      <!-- Equipment Assignment -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-          Equipment Assignment <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— assign drills and MPUs to this blast</span>
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>Assigned Drills (multi-select)</label>
-            <select id="fAssignedDrills" multiple style="height:80px;"></select>
+        <!-- Dependency Overrides -->
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+            Dependency Overrides <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— leave blank to use global defaults</span>
           </div>
-          <div class="form-field">
-            <label>Assigned MPUs (multi-select)</label>
-            <select id="fAssignedMPUs" multiple style="height:80px;"></select>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Drill % to Start Loading</label>
+              <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="1" step="0.05">
+            </div>
+            <div class="form-field">
+              <label>Drill % to Blast</label>
+              <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="1" step="0.05">
+            </div>
           </div>
-        </div>
-        <div id="drillDayEstimate" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-cyan);margin-top:6px;padding:6px 8px;background:rgba(0,200,200,0.08);border-radius:4px;display:none;">
-        </div>
-      </div>
-
-      <!-- Dependency Overrides -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
-          Dependency Overrides <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— leave blank to use global defaults</span>
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>Drill % to Start Loading</label>
-            <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="1" step="0.05">
+          <div class="form-row">
+            <div class="form-field" style="opacity:0.5;" title="Loading must be 100% complete before blasting — this cannot be overridden">
+              <label>Load % to Blast</label>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent-blast);font-weight:700;padding:7px 10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border);">100% — HARD CONSTRAINT</div>
+            </div>
+            <div class="form-field">
+              <label>Min Lead Days (Load to Blast)</label>
+              <input type="number" id="fDepMinLead" placeholder="Global: 0" min="0" max="30">
+            </div>
           </div>
-          <div class="form-field">
-            <label>Drill % to Blast</label>
-            <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="1" step="0.05">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-field" style="opacity:0.5;" title="Loading must be 100% complete before blasting — this cannot be overridden">
-            <label>Load % to Blast</label>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent-blast);font-weight:700;padding:7px 10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border);">100% — HARD CONSTRAINT</div>
-          </div>
-          <div class="form-field">
-            <label>Min Lead Days (Load to Blast)</label>
-            <input type="number" id="fDepMinLead" placeholder="Global: 0" min="0" max="30">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>Predecessor Blast</label>
-            <select id="fDepPredecessor">
-              <option value="">— None —</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Predecessor Constraint</label>
-            <select id="fDepPredType">
-              <option value="blast-before-drill">Predecessor must fire before drill starts</option>
-              <option value="blast-before-load">Predecessor must fire before loading starts</option>
-              <option value="drill-before-drill">Predecessor drill done before this drill</option>
-            </select>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Predecessor Blast</label>
+              <select id="fDepPredecessor">
+                <option value="">— None —</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Predecessor Constraint</label>
+              <select id="fDepPredType">
+                <option value="blast-before-drill">Predecessor must fire before drill starts</option>
+                <option value="blast-before-load">Predecessor must fire before loading starts</option>
+                <option value="drill-before-drill">Predecessor drill done before this drill</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
