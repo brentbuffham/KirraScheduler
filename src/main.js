@@ -7,6 +7,7 @@
 // Step 1) Import styles
 import "./styles/main.css";
 import "./styles/playback.css";
+import "./styles/auth.css";
 
 // Step 2) Import modules
 import { APP } from "./state/appState.js";
@@ -38,6 +39,7 @@ import { initEquipmentLibrary } from "./io/equipmentLibrary.js";
 import { initPlaybackView } from "./views/playbackView.js";
 import { shouldShowStartup, showStartupDialog, clearSeedData, markStartupComplete } from "./dialogs/startupDialog.js";
 import { loadState, debouncedSave, syncUIFromState } from "./state/schedulerDB.js";
+import { requireAuth, attachSignOutButton } from "./auth/authGate.js";
 
 // Step 3) Initialise UI event listeners (safe before data decisions)
 initThemeToggle();
@@ -180,9 +182,13 @@ setupDropZone("dxfDropZone", "dxfFileInput", parseDXFFile);
 setupDropZone("kirraDropZone", "kirraFileInput", parseKirraConfig);
 setupDropZone("kirraProjectDropZone", "kirraProjectInput", parseKirraProject);
 
-// Step 6) Startup gate — try IndexedDB first, fall back to startup dialog
-//  Priority: IndexedDB saved state > startup dialog > seed/fresh data
-(function boot() {
+// Step 6) Auth gate — require sign-in + active subscription before booting
+requireAuth().then(function() {
+  attachSignOutButton();
+
+  // Step 6 inner) Startup gate — try IndexedDB first, fall back to startup dialog
+  //  Priority: IndexedDB saved state > startup dialog > seed/fresh data
+  (function boot() {
   loadState().then(function(hadSavedData) {
     if (hadSavedData) {
       // Step 6a) Restored from IndexedDB — sync UI inputs and render
@@ -212,7 +218,9 @@ setupDropZone("kirraProjectDropZone", "kirraProjectInput", parseKirraProject);
     // Step 6d) DB error — fall back to normal startup
     firstRender();
   });
-})();
+  })();
+
+}); // end requireAuth
 
 function firstRender() {
   // Step 7) Initial calculations and render
