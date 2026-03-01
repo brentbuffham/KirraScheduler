@@ -338,6 +338,9 @@ function handleDrillDrop(blast, drillId, section, row) {
     }
     if (!blast.assignedDrills) blast.assignedDrills = [];
     blast.assignedDrills.push(drillId);
+
+    // Step 6e-i) Clear per-blast drill rate overrides so recalc uses fleet defaults
+    delete blast.drillRates;
   }
 
   recalcDependencies();
@@ -362,6 +365,9 @@ function handleMPUDrop(blast, mpuId, section) {
   }
   blast.assignedMPUs.push(mpuId);
 
+  // Step 7b-i) Clear per-blast MPU rate overrides so recalc uses fleet defaults
+  delete blast.mpuRates;
+
   recalcDependencies();
   debouncedSave();
   renderGantt();
@@ -383,6 +389,9 @@ function handleAncillaryDrop(blast, unitId, section) {
     return;
   }
   blast.assignedAncillary.push(unitId);
+
+  // Step 7a-ii-c) Clear per-blast ancillary rate overrides so recalc uses fleet defaults
+  delete blast.ancillaryRates;
 
   debouncedSave();
   renderGantt();

@@ -7,8 +7,8 @@
 //  - Delay blocks: simple duration change
 // ============================================================
 
-import { APP } from "../state/appState.js";
-import { drills as drillFleet, mpus as mpuFleet } from "../state/equipmentState.js";
+import { APP, getTotalDrillMeters } from "../state/appState.js";
+import { drills as drillFleet, mpus as mpuFleet, ancillary as ancillaryFleet } from "../state/equipmentState.js";
 import { addDays, isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks, calcBlockDays } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
@@ -192,12 +192,23 @@ function onResizeEnd(e) {
           }
         }
 
-      // Step 5c-ii) Pattern Prep resize — adjust prepDays and prepStart
+      // Step 5c-ii) Pattern Prep resize — adjust prepDays, prepStart, and derate ancillary
       } else if (resizeState.section === "pattern prep") {
         var newPrepDays = Math.max(resizeState.originalDays + (resizeState.edge === "right" ? dayOffset : -dayOffset), 1);
         blast.prepDays = newPrepDays;
         if (resizeState.edge === "left") {
           blast.prepStart = isoDate(addDays(new Date(resizeState.originalStart), dayOffset));
+        }
+
+        // Step 5c-iii) Back-calculate per-ancillary rate overrides (m2/day) for new duration
+        var ancList = blast.assignedAncillary || [];
+        var surfArea = blast.surfaceArea || 0;
+        if (ancList.length > 0 && surfArea > 0 && newPrepDays > 0) {
+          var ratePerAnc = Math.round(surfArea / newPrepDays / ancList.length);
+          if (!blast.ancillaryRates) blast.ancillaryRates = {};
+          for (var ai = 0; ai < ancList.length; ai++) {
+            blast.ancillaryRates[ancList[ai]] = ratePerAnc;
+          }
         }
 
       // Step 5d) Drill block resize — adjust pen rates
@@ -262,7 +273,7 @@ function applyDrillResize(block, dayOffset, edge, originalDays, originalStart) {
   }
 }
 
-// Step 7) Apply blast-level drill resize — adjust rates across the blast
+// Step 7) Apply blast-level drill resize — adjust per-drill pen rates to match new duration
 function applyBlastDrillResize(blast, dayOffset, edge, originalDays, originalStart) {
   var newDays;
   if (edge === "right") {
@@ -275,10 +286,23 @@ function applyBlastDrillResize(blast, dayOffset, edge, originalDays, originalSta
   }
   blast.drillDays = newDays;
 
-  // Step 7a) drillDays already updated above — no per-rig rate fields to back-calculate
+  // Step 7a) Back-calculate per-drill pen rates so meters fit in the new duration
+  var totalMeters = getTotalDrillMeters(blast);
+  var effectiveHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
+  var numDrills = (blast.assignedDrills || []).length;
+  if (numDrills > 0 && totalMeters > 0 && effectiveHrs > 0) {
+    var requiredMPerDay = totalMeters / newDays;
+    var newPenRate = Math.round((requiredMPerDay / (numDrills * effectiveHrs)) * 10) / 10;
+    newPenRate = Math.max(0.1, newPenRate);
+
+    if (!blast.drillRates) blast.drillRates = {};
+    for (var ri = 0; ri < blast.assignedDrills.length; ri++) {
+      blast.drillRates[blast.assignedDrills[ri]] = newPenRate;
+    }
+  }
 }
 
-// Step 8) Apply loading resize — adjust MPU kg/day rate
+// Step 8) Apply loading resize — derate MPU kg/day rates to match new duration
 function applyLoadResize(blast, dayOffset, edge, originalDays, originalStart) {
   var newDays;
   if (edge === "right") {
@@ -290,10 +314,20 @@ function applyLoadResize(blast, dayOffset, edge, originalDays, originalStart) {
   }
   blast.loadDays = newDays;
 
-  // Step 8a) Back-calculate MPU rate from explosive mass and new duration
+  // Step 8a) Back-calculate generic load rate from explosive mass and new duration
   var expMass = blast.expMass || 0;
   if (expMass > 0 && newDays > 0) {
     blast.loadRate = Math.round(expMass / newDays);
+  }
+
+  // Step 8b) Back-calculate per-MPU rate overrides so assigned MPUs match new duration
+  var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+  if (mpuList.length > 0 && expMass > 0 && newDays > 0) {
+    var ratePerMpu = Math.round(expMass / newDays / mpuList.length);
+    if (!blast.mpuRates) blast.mpuRates = {};
+    for (var mi = 0; mi < mpuList.length; mi++) {
+      blast.mpuRates[mpuList[mi]] = ratePerMpu;
+    }
   }
 }
 

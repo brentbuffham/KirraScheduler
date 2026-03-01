@@ -201,11 +201,12 @@ function buildDynamicEquipItems(menu, blast, section, blockIdx) {
       mpuItem.style.color = "var(--accent-blast)";
       mpuItem.innerHTML = "\u2716 Remove " + mpuId;
       mpuItem.addEventListener("click", function() {
-        // Step 1g-iii-a) Remove this MPU from the array
+        // Step 1g-iii-a) Remove this MPU from the array and clear rate overrides
         var arr = blast.assignedMPUs || [];
         var ri = arr.indexOf(mpuId);
         if (ri !== -1) arr.splice(ri, 1);
         blast.assignedMPUs = arr;
+        delete blast.mpuRates;
         recalcDependencies();
         renderGantt();
       });
@@ -289,6 +290,8 @@ function removeDrillFromBlast(blast, drillId, blockIdx) {
   } else {
     var idx2 = (blast.assignedDrills || []).indexOf(drillId);
     if (idx2 !== -1) blast.assignedDrills.splice(idx2, 1);
+    // Step 1h-i) Clear per-blast drill rate overrides when equipment changes
+    delete blast.drillRates;
   }
 
   recalcDependencies();

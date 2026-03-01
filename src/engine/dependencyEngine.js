@@ -40,14 +40,20 @@ function recalcDependencies() {
     }
 
     // Step 2b-ii) Recalculate drillDays for non-block blasts from assigned drill rates
+    //             Uses per-blast drillRates overrides (from resize) when present, else fleet defaults
     if (!hasBlocks(blast) && blast.assignedDrills && blast.assignedDrills.length > 0) {
       var totalMeters = getTotalDrillMeters(blast);
       if (totalMeters > 0) {
         var effHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
         var combinedDrillRate = 0;
         for (var di = 0; di < blast.assignedDrills.length; di++) {
-          var drillObj = drills.find(function(d) { return d.id === blast.assignedDrills[di]; });
-          if (drillObj) combinedDrillRate += (drillObj.rateM_per_day || 0) * effHrs;
+          var drillId = blast.assignedDrills[di];
+          if (blast.drillRates && blast.drillRates[drillId] !== undefined) {
+            combinedDrillRate += blast.drillRates[drillId] * effHrs;
+          } else {
+            var drillObj = drills.find(function(d) { return d.id === drillId; });
+            if (drillObj) combinedDrillRate += (drillObj.rateM_per_day || 0) * effHrs;
+          }
         }
         if (combinedDrillRate > 0) {
           blast.drillDays = Math.ceil(totalMeters / combinedDrillRate);
@@ -141,12 +147,18 @@ function recalcDependencies() {
     }
 
     // Step 2f-i) Multi-MPU loading: sum the daily rates of all assigned MPUs
+    //             Uses per-blast mpuRates overrides (from resize) when present, else fleet defaults
     var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
     var combinedLoadRate = 0;
     if (mpuList.length > 0) {
       for (var mi = 0; mi < mpuList.length; mi++) {
-        var mpu = mpus.find(function(m) { return m.id === mpuList[mi]; });
-        if (mpu) combinedLoadRate += (mpu.rateKg_per_day || 0);
+        var mpuId = mpuList[mi];
+        if (blast.mpuRates && blast.mpuRates[mpuId] !== undefined) {
+          combinedLoadRate += blast.mpuRates[mpuId];
+        } else {
+          var mpu = mpus.find(function(m) { return m.id === mpuId; });
+          if (mpu) combinedLoadRate += (mpu.rateKg_per_day || 0);
+        }
       }
     }
     var effectiveLoadRate = combinedLoadRate > 0 ? combinedLoadRate : (blast.loadRate || 100000);
