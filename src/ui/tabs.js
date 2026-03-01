@@ -9,6 +9,7 @@ import { renderPatterns } from "../views/patternLibrary.js";
 import { renderForecast } from "../views/forecastView.js";
 import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
+import { renderBlastCalendar } from "../views/blastCalendar.js";
 
 // Step 1) Initialise tab click handlers
 function initTabs() {
@@ -26,7 +27,12 @@ function initTabs() {
       // Step 4) Render the corresponding view on switch
       var id = tab.dataset.tab;
       if (id === "gantt") renderGantt();
-      else if (id === "blasts") renderBlasts();
+      else if (id === "blasts") {
+        renderBlasts();
+        // Step 4a) Also render calendar if its sub-tab is active
+        var calTab = document.querySelector(".blast-sub-tab[data-subtab='blastCalendarPane'].active");
+        if (calTab) renderBlastCalendar();
+      }
       else if (id === "patterns") renderPatterns();
       else if (id === "forecast") renderForecast();
       else if (id === "conformance") renderConformance();

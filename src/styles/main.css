@@ -2260,3 +2260,211 @@ select[multiple] option:checked {
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
+
+/* ============================================================
+   Step 42) Blast Calendar View — sub-tabs, grid, bars
+   ============================================================ */
+
+/* Step 42a) Sub-tab bar within Blast Overview */
+.blast-sub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 8px;
+}
+.blast-sub-tab {
+  padding: 8px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.blast-sub-tab:hover { color: var(--text-primary); }
+.blast-sub-tab.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+.blast-sub-pane { display: none; }
+.blast-sub-pane.active { display: flex; flex-direction: column; }
+
+/* Step 42a-ii) Calendar pane fills available height */
+#blastCalendarPane.active {
+  height: calc(100vh - 260px);
+  min-height: 500px;
+}
+
+/* Step 42b) Calendar toolbar — nav + filter toggles */
+.blast-cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.blast-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.blast-cal-month-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-left: 12px;
+}
+.blast-cal-filters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.blast-cal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--toggle-color, var(--text-muted));
+  cursor: pointer;
+  user-select: none;
+}
+.blast-cal-toggle input[type="checkbox"] {
+  accent-color: var(--toggle-color, var(--accent-cyan));
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+/* Step 42c) Calendar month grid — fills remaining height */
+.blast-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: auto;
+  grid-auto-rows: 1fr;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+.blast-cal-header {
+  padding: 8px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Step 42d) Individual day cells — stretch to fill grid row */
+.blast-cal-cell {
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 3px;
+  background: var(--bg-primary);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.blast-cal-cell:nth-child(7n+7) { border-right: none; }
+.blast-cal-cell.outside {
+  background: var(--bg-secondary);
+  opacity: 0.4;
+}
+.blast-cal-cell.today {
+  background: rgba(6, 182, 212, 0.08);
+  box-shadow: inset 0 0 0 2px var(--accent-cyan);
+}
+.blast-cal-day-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 2px 4px 2px;
+  line-height: 1;
+}
+.blast-cal-cell.today .blast-cal-day-num {
+  color: var(--accent-cyan);
+  font-weight: 800;
+}
+.blast-cal-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+/* Step 42e) Activity bars — taller, bolder, more readable */
+.blast-cal-bar {
+  height: 22px;
+  line-height: 22px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  border-radius: 0;
+  transition: filter 0.12s, box-shadow 0.12s;
+}
+.blast-cal-bar:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.blast-cal-bar.spacer {
+  visibility: hidden;
+  cursor: default;
+}
+
+/* Step 42f) Bar start/end rounding for continuous band look */
+.blast-cal-bar.bar-start { border-radius: 4px 0 0 4px; margin-left: 2px; }
+.blast-cal-bar.bar-end   { border-radius: 0 4px 4px 0; margin-right: 2px; }
+.blast-cal-bar.bar-start.bar-end { border-radius: 4px; margin-left: 2px; margin-right: 2px; }
+
+/* Step 42g) Section-specific bar colors — strong, high-contrast for light & dark mode */
+.blast-cal-bar.prep {
+  background: #14b8a6;
+  color: #fff;
+}
+.blast-cal-bar.drill {
+  background: #3b82f6;
+  color: #fff;
+}
+.blast-cal-bar.load {
+  background: #f59e0b;
+  color: #1a1a1a;
+}
+.blast-cal-bar.blast {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Step 42h) Small button variant for calendar nav */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 11px;
+  min-width: unset;
+}
+
+/* Step 42i) Legend color swatch next to filter labels */
+.cal-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 1px;
+}

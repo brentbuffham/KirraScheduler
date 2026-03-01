@@ -2,6 +2,7 @@
 //  BLAST OVERVIEW
 //  Renders the blast overview table and stats
 //  Supports drag-and-drop pattern assignment from Pattern Library
+//  Sub-tabs: Table (data table) and Calendar (month grid)
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
@@ -10,9 +11,41 @@ import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { renderGantt } from "./ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { renderBlastCalendar, initBlastCalendar } from "./blastCalendar.js";
+
+var _subTabsInited = false;
+
+// Step 0) Initialise sub-tab switching (Table / Calendar)
+function initSubTabs() {
+  if (_subTabsInited) return;
+  _subTabsInited = true;
+
+  var tabBar = document.getElementById("blastSubTabs");
+  if (!tabBar) return;
+
+  tabBar.querySelectorAll(".blast-sub-tab").forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      // Step 0a) Deactivate all sub-tabs and panes
+      tabBar.querySelectorAll(".blast-sub-tab").forEach(function(t) { t.classList.remove("active"); });
+      document.querySelectorAll("#tab-blasts .blast-sub-pane").forEach(function(p) { p.classList.remove("active"); });
+
+      // Step 0b) Activate the clicked tab and its pane
+      tab.classList.add("active");
+      var pane = document.getElementById(tab.dataset.subtab);
+      if (pane) pane.classList.add("active");
+
+      // Step 0c) Render the appropriate view
+      if (tab.dataset.subtab === "blastCalendarPane") {
+        initBlastCalendar();
+        renderBlastCalendar();
+      }
+    });
+  });
+}
 
 // Step 1) Render blast overview tab
 function renderBlasts() {
+  initSubTabs();
   var totalVol = APP.blasts.reduce(function(s, b) { return s + (b.volume || 0); }, 0);
   var totalExp = APP.blasts.reduce(function(s, b) { return s + (b.expMass || 0); }, 0);
   var totalHoles = APP.blasts.reduce(function(s, b) {
