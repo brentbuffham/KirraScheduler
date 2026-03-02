@@ -297,7 +297,19 @@ function handlePatternDrop(blast, blastIdx, patternId) {
     return;
   }
 
-  // Step 5b-ii) Open the allocation dialog (shared with blast overview)
+  // Step 5b-ii) Check if this is a subsequent pattern and warn user
+  var alreadyAssigned = blast.holeTypes && blast.holeTypes.length > 0;
+  var isUpdate = false;
+  if (alreadyAssigned) {
+    for (var i = 0; i < blast.holeTypes.length; i++) {
+      if (blast.holeTypes[i].patternId === patternId) { isUpdate = true; break; }
+    }
+  }
+  if (alreadyAssigned && !isUpdate) {
+    showDropFeedback("Additional pattern - % Block defaults to 0%. Adjust in Edit Blast.", false);
+  }
+
+  // Step 5b-iii) Open the allocation dialog (shared with blast overview)
   showPatternAllocDialog(blast, blastIdx, pattern);
 }
 

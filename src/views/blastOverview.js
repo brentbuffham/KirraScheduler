@@ -179,7 +179,6 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   var isLineDrill = (pattern.type === "PRESPLIT" || pattern.type === "BUFFER");
 
   // Step 6c) Calculate hole depth from pattern data
-  //   holeDepth = (benchHt + subdrill) / sin(holeAngle)
   var angleRad = ((pattern.holeAngle || 90) * Math.PI) / 180;
   var sinAngle = Math.sin(angleRad);
   if (sinAngle < 0.01) sinAngle = 1;
@@ -192,6 +191,23 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   }
   var defaultHoles = existingIdx >= 0 ? blast.holeTypes[existingIdx].holes : 100;
 
+  // Step 6d-ii) Determine % Block: first pattern = 100%, subsequent = 0%
+  var isFirstPattern = (blast.holeTypes.length === 0 && existingIdx < 0);
+  var defaultPct;
+  if (existingIdx >= 0) {
+    defaultPct = blast.holeTypes[existingIdx].pctOfBlock || 0;
+  } else if (isFirstPattern) {
+    defaultPct = 100;
+  } else {
+    defaultPct = 0;
+  }
+
+  // Step 6d-iii) Recalculate holes from % if first pattern and blast has surface area
+  if (isFirstPattern && blast.surfaceArea > 0) {
+    var holesFromPct = Math.round((defaultPct / 100) * blast.surfaceArea / (pattern.burden * pattern.spacing));
+    if (holesFromPct > 0) defaultHoles = holesFromPct;
+  }
+
   // Step 6e) Build dialog HTML
   var html = "<div class=\"pattern-alloc-overlay\" id=\"patternAllocOverlay\">";
   html += "<div class=\"pattern-alloc-dialog\">";
@@ -202,7 +218,9 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   html += " | BH " + pattern.benchHt + "m | PF " + pattern.pf + " kg/bcm";
   html += "</div>";
 
+  // Step 6e-i) % Block and Holes row
   html += "<div class=\"form-row\">";
+  html += "<div class=\"form-field\"><label>% Block</label><input type=\"number\" id=\"allocPct\" value=\"" + defaultPct + "\" min=\"0\" max=\"100\" step=\"1\"></div>";
   html += "<div class=\"form-field\"><label>Number of Holes</label><input type=\"number\" id=\"allocHoles\" value=\"" + defaultHoles + "\" min=\"1\"></div>";
   html += "<div class=\"form-field\"><label>Hole Depth (m)</label><input type=\"number\" id=\"allocDepth\" value=\"" + holeDepth + "\" step=\"0.01\"></div>";
   html += "</div>";
@@ -217,6 +235,14 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   html += "<div class=\"form-field\"><label>Hole Type</label><input type=\"text\" id=\"allocType\" value=\"" + pattern.type + "\" readonly style=\"opacity:0.7;\"></div>";
   html += "</div>";
 
+  // Step 6e-ii) Info banner for subsequent patterns
+  if (!isFirstPattern && existingIdx < 0) {
+    html += "<div style=\"margin:10px 0 6px;padding:8px 12px;background:#f59e0b22;border:1px solid #f59e0b;border-radius:var(--radius);font-size:11px;color:var(--text-primary);\">";
+    html += "<strong>Note:</strong> This blast already has pattern(s) assigned. The % Block for this pattern defaults to 0%. ";
+    html += "Adjust the % Block values in the <em>Edit Blast</em> modal to distribute the block across patterns.";
+    html += "</div>";
+  }
+
   html += "<div class=\"alloc-actions\">";
   html += "<button class=\"btn-alloc-cancel\" id=\"allocCancel\">Cancel</button>";
   html += "<button class=\"btn-alloc-save\" id=\"allocSave\">" + (existingIdx >= 0 ? "Update" : "Add") + " Pattern</button>";
@@ -230,6 +256,19 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
 
   // Step 6g) Calculate initial explosive mass and wire up live recalc
   recalcAllocFields(pattern);
+
+  // Step 6g-ii) When % Block changes, recalculate holes from surface area
+  document.getElementById("allocPct").addEventListener("input", function() {
+    var pct = parseFloat(this.value) || 0;
+    if (pct > 100) { pct = 100; this.value = 100; }
+    if (pct < 0) { pct = 0; this.value = 0; }
+    var area = blast.surfaceArea || 0;
+    if (area > 0 && pattern.burden > 0 && pattern.spacing > 0) {
+      var calcHoles = Math.round((pct / 100) * area / (pattern.burden * pattern.spacing));
+      document.getElementById("allocHoles").value = calcHoles > 0 ? calcHoles : 0;
+    }
+    recalcAllocFields(pattern);
+  });
 
   document.getElementById("allocHoles").addEventListener("input", function() { recalcAllocFields(pattern); });
   document.getElementById("allocDepth").addEventListener("input", function() { recalcAllocFields(pattern); });
@@ -247,6 +286,7 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
     var drillMeters = Math.round(holes * depth * 10) / 10;
     var expMass = parseFloat(document.getElementById("allocExpMass").value) || 0;
     var isLine = document.getElementById("allocLineDrill").value === "true";
+    var pctVal = parseFloat(document.getElementById("allocPct").value) || 0;
 
     if (holes <= 0) { alert("Number of holes must be greater than zero."); return; }
 
@@ -257,6 +297,7 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
       burden: pattern.burden,
       spacing: pattern.spacing,
       isLineDrill: isLine,
+      pctOfBlock: pctVal,
       holes: holes,
       holeDepth: depth,
       drillMeters: drillMeters,
