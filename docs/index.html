@@ -13,7 +13,7 @@
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="./icons/kirra-32.png">
-  <script type="module" crossorigin src="./assets/index-2yAMSqQt.js"></script>
+  <script type="module" crossorigin src="./assets/index-Lx5ZTmCy.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-BmCP_lQj.css">
 </head>
 <body>
@@ -204,6 +204,7 @@
           <label class="blast-cal-toggle" style="--toggle-color:#ef4444;">
             <input type="checkbox" id="calToggleBlast" checked> <span class="cal-legend-swatch" style="background:#ef4444;"></span> Blast
           </label>
+          <button class="btn btn-sm" id="calExportBtn" title="Export schedule to iCal or CSV" style="margin-left:auto;">Export</button>
         </div>
       </div>
       <div id="blastCalendarGrid" class="blast-calendar"></div>
@@ -616,6 +617,21 @@
       <div style="padding:12px 16px; border-top:1px solid var(--border);">
         <button class="btn btn-success" id="btnMergeImported">Merge into Schedule</button>
         <button class="btn" id="btnClearImported" style="margin-left:8px;">Discard</button>
+      </div>
+    </div>
+
+    <!-- Schedule Export section -->
+    <div class="data-table-container mt-8" style="padding:16px;">
+      <div class="table-title" style="margin-bottom:12px;">Schedule Export</div>
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <label style="cursor:pointer; font-size:12px; color:var(--text-secondary);">
+          <input type="radio" name="tabExportMode" value="per-phase" checked> One event per phase
+        </label>
+        <label style="cursor:pointer; font-size:12px; color:var(--text-secondary);">
+          <input type="radio" name="tabExportMode" value="per-blast"> One event per blast
+        </label>
+        <button class="btn" id="tabExportICS" style="margin-left:auto;">Export iCal (.ics)</button>
+        <button class="btn" id="tabExportCSV">Export CSV (.csv)</button>
       </div>
     </div>
   </div>

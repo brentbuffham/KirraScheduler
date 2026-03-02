@@ -28,6 +28,7 @@ import { setupDropZone } from "./io/dropZone.js";
 import { parseDXFFile } from "./io/dxfImport.js";
 import { parseKirraConfig, parseKirraProject } from "./io/kirraImport.js";
 import { initKAPImport } from "./io/kapImport.js";
+import { initCalendarExport } from "./io/calendarExport.js";
 import { renderGantt } from "./views/ganttView.js";
 import { renderBlasts } from "./views/blastOverview.js";
 import { renderPatterns, initPatternLibrary } from "./views/patternLibrary.js";
@@ -53,6 +54,7 @@ initResetDialog();
 initPatternLibrary();
 initEquipmentLibrary();
 initConformance();
+initCalendarExport();
 
 // Step 4) Wire up Gantt toolbar buttons
 document.getElementById("btnRefreshGantt").addEventListener("click", function() {
