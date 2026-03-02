@@ -13,8 +13,8 @@
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="./icons/kirra-32.png">
-  <script type="module" crossorigin src="./assets/index-DksWLR4O.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CJduBxWI.css">
+  <script type="module" crossorigin src="./assets/index-C7VcDWz2.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CD-zsSM5.css">
 </head>
 <body>
 
@@ -593,6 +593,11 @@
           <div class="drop-text">Drop Kirra .kap file</div>
           <div class="drop-sub">Imports surfaces (pit shells), blast holes, drawings, and charge configs from Kirra App</div>
           <input type="file" id="kapFileInput" accept=".kap,.zip">
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin:10px 0 6px 0; font-size:12px; color:var(--text-secondary);">
+          <span style="font-weight:600;">Solid Normals:</span>
+          <button type="button" id="kapNormalsOut" class="kap-normals-btn kap-normals-active" title="Keep normals as-is (pointing outward — standard convention)">OUT</button>
+          <button type="button" id="kapNormalsIn" class="kap-normals-btn" title="Reverse winding so normals point inward">IN</button>
         </div>
         <div class="import-log" id="kapProjectLog">
           <span class="log-info">Ready for KAP import...</span>

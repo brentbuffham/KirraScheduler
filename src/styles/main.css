@@ -29,6 +29,14 @@
   --waste: #6b7280;
   --ore: #fbbf24;
   --yellow-zone: #eab308;
+  --batter: #ef4444;
+  --stab: #a78bfa;
+  --face: #22c55e;
+  --contour: #ec4899;
+  --toe: #14b8a6;
+  --ramp: #8b5cf6;
+  --sump: #06b6d4;
+  --custom-type: #94a3b8;
   --gantt-prep: #14b8a6;
   --gantt-drill: #3b82f6;
   --gantt-load: #f59e0b;
@@ -839,6 +847,29 @@ body {
   color: var(--text-muted);
 }
 .drop-zone input[type="file"] { display: none; }
+
+/* Step 16b) KAP normals alignment toggle buttons */
+.kap-normals-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 14px;
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.kap-normals-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+.kap-normals-btn.kap-normals-active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #fff;
+}
 
 /* Step 17) Modal */
 .modal-overlay {

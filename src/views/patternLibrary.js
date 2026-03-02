@@ -10,10 +10,20 @@ import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDelayPalette } from "../ui/delayPalette.js";
 
 var typeColors = {
-  WASTE: "var(--waste)",
-  YELLOW: "var(--yellow-zone)",
+  PRODUCTION: "var(--production)",
+  BUFFER: "var(--buffer)",
+  BATTER: "var(--batter)",
+  STAB: "var(--stab)",
+  FACE: "var(--face)",
+  CONTOUR: "var(--contour)",
+  TOE: "var(--toe)",
+  RAMP: "var(--ramp)",
+  SUMP: "var(--sump)",
   ORE: "var(--ore)",
-  PRESPLIT: "var(--presplit)"
+  WASTE: "var(--waste)",
+  CUSTOM: "var(--custom-type)",
+  PRESPLIT: "var(--presplit)",
+  YELLOW: "var(--yellow-zone)"
 };
 
 // ============================================================
@@ -41,12 +51,25 @@ function showPatternDialog(editIdx, prefill) {
   html += "<div class=\"form-row\">";
   html += "<div class=\"form-field\"><label>Pattern ID</label><input type=\"text\" id=\"pdId\" value=\"" + (p ? p.id : "") + "\"></div>";
   html += "<div class=\"form-field\"><label>Type</label><select id=\"pdType\">";
-  var types = ["WASTE", "YELLOW", "ORE", "PRESPLIT", "BUFFER"];
+  var types = ["PRODUCTION", "BUFFER", "BATTER", "STAB", "FACE", "CONTOUR", "TOE", "RAMP", "SUMP", "ORE", "WASTE", "CUSTOM"];
+  // Step 0a-i) Determine if the existing type is a known type or custom
+  var isCustomType = false;
+  if (p && types.indexOf(p.type) === -1) {
+    isCustomType = true;
+  }
   for (var ti = 0; ti < types.length; ti++) {
-    var sel = (p && p.type === types[ti]) ? " selected" : "";
+    var sel = "";
+    if (isCustomType && types[ti] === "CUSTOM") sel = " selected";
+    else if (p && p.type === types[ti]) sel = " selected";
     html += "<option value=\"" + types[ti] + "\"" + sel + ">" + types[ti] + "</option>";
   }
   html += "</select></div>";
+  html += "</div>";
+  // Step 0a-ii) Custom type text input (visible only when CUSTOM selected)
+  var customVal = isCustomType ? p.type : "";
+  var customVis = isCustomType ? "" : " style=\"display:none;\"";
+  html += "<div class=\"form-row\" id=\"pdCustomRow\"" + customVis + ">";
+  html += "<div class=\"form-field\"><label>Custom Type Name</label><input type=\"text\" id=\"pdCustomType\" value=\"" + customVal + "\" placeholder=\"Enter custom type name\"></div>";
   html += "</div>";
 
   html += "<div class=\"form-row\">";
@@ -80,6 +103,16 @@ function showPatternDialog(editIdx, prefill) {
   container.innerHTML = html;
   document.body.appendChild(container.firstChild);
 
+  // Step 0b-ii) Toggle custom type input visibility when dropdown changes
+  document.getElementById("pdType").addEventListener("change", function() {
+    var customRow = document.getElementById("pdCustomRow");
+    if (this.value === "CUSTOM") {
+      customRow.style.display = "";
+    } else {
+      customRow.style.display = "none";
+    }
+  });
+
   // Step 0c) Cancel
   document.getElementById("pdCancel").addEventListener("click", function() {
     document.getElementById("patternDialogOverlay").remove();
@@ -90,9 +123,17 @@ function showPatternDialog(editIdx, prefill) {
     var id = document.getElementById("pdId").value.trim();
     if (!id) { alert("Pattern ID is required."); return; }
 
+    // Step 0d-0) Resolve type — use custom text if CUSTOM selected
+    var selectedType = document.getElementById("pdType").value;
+    if (selectedType === "CUSTOM") {
+      var customName = document.getElementById("pdCustomType").value.trim().toUpperCase();
+      if (!customName) { alert("Please enter a custom type name."); return; }
+      selectedType = customName;
+    }
+
     var newP = {
       id: id,
-      type: document.getElementById("pdType").value,
+      type: selectedType,
       benchHt: parseFloat(document.getElementById("pdBenchHt").value) || 12,
       diam: parseFloat(document.getElementById("pdDiam").value) || 229,
       burden: parseFloat(document.getElementById("pdBurden").value) || 4.5,
@@ -145,7 +186,7 @@ function renderPatterns() {
   }
 
   APP.patterns.forEach(function(p, idx) {
-    var color = typeColors[p.type] || "var(--text-muted)";
+    var color = typeColors[p.type] || "var(--custom-type)";
     var isHidden = (p.visibleToGantt === false);
     var dimStyle = isHidden ? " opacity:0.5;" : "";
 
@@ -259,10 +300,10 @@ var PATTERN_HEADERS = [
 
 // Step 3) Example rows to seed the template so users understand the format
 var EXAMPLE_ROWS = [
-  ["EXAMPLE-W01",   12,  229,  0.7,  7.1,  8.2,  1.5,  4.0,  "WASTE",    90],
-  ["EXAMPLE-O01",   12,  229,  1.5,  4.85, 5.6,  1.5,  4.0,  "ORE",      90],
-  ["EXAMPLE-PS01",  12,  127,  0.6,  1.0,  1.6,  0.6,  2.2,  "PRESPLIT",  80],
-  ["EXAMPLE-Y01",   10,  165,  1.1,  5.65, 6.55, 1.5,  3.8,  "YELLOW",   90]
+  ["EXAMPLE-P01",   12,  229,  0.7,  7.1,  8.2,  1.5,  4.0,  "PRODUCTION", 90],
+  ["EXAMPLE-O01",   12,  229,  1.5,  4.85, 5.6,  1.5,  4.0,  "ORE",        90],
+  ["EXAMPLE-BT01",  12,  165,  0.6,  3.0,  3.5,  0.8,  3.0,  "BATTER",     80],
+  ["EXAMPLE-BF01",  10,  165,  1.1,  5.65, 6.55, 1.5,  3.8,  "BUFFER",     90]
 ];
 
 // Step 4) Export the template CSV
@@ -271,7 +312,7 @@ function exportPatternTemplate() {
 
   rows.push("# Kirra Scheduler - Pattern Library Template");
   rows.push("# Fill in your site drill & blast patterns below.");
-  rows.push("# Type must be one of: WASTE, YELLOW, ORE, PRESPLIT, BUFFER");
+  rows.push("# Type must be one of: PRODUCTION, BUFFER, BATTER, STAB, FACE, CONTOUR, TOE, RAMP, SUMP, ORE, WASTE, or any custom name");
   rows.push("# Hole Angle: degrees from horizontal (90 = vertical, 80 = inclined). Default 90 if omitted.");
   rows.push("# Diameter is in mm (e.g. 229, 165, 127, 311)");
   rows.push("# Delete the EXAMPLE rows before importing.");
@@ -378,9 +419,8 @@ function importPatternCSV(file) {
         continue;
       }
 
-      var validTypes = ["WASTE", "YELLOW", "ORE", "PRESPLIT", "BUFFER"];
-      if (validTypes.indexOf(type) === -1) {
-        errors.push("Row " + (i + 1) + " (" + patternId + "): type '" + type + "' not valid. Use: " + validTypes.join(", "));
+      if (!type) {
+        errors.push("Row " + (i + 1) + " (" + patternId + "): type is required");
         continue;
       }
 

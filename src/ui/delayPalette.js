@@ -41,11 +41,22 @@ function renderDelayPalette() {
       // Step 2b-i) Skip patterns hidden from Gantt
       if (p.visibleToGantt === false) return;
       var typeChar = p.type.charAt(0);
-      var chipColor = "var(--accent-cyan)";
-      if (p.type === "PRESPLIT") chipColor = "var(--presplit, var(--accent-purple))";
-      else if (p.type === "BUFFER") chipColor = "var(--accent-load)";
-      else if (p.type === "ORE") chipColor = "var(--ore, var(--accent-green))";
-      else if (p.type === "WASTE") chipColor = "var(--waste, var(--text-muted))";
+      var chipColorMap = {
+        PRODUCTION: "var(--production)",
+        BUFFER: "var(--buffer)",
+        BATTER: "var(--batter)",
+        STAB: "var(--stab)",
+        FACE: "var(--face)",
+        CONTOUR: "var(--contour)",
+        TOE: "var(--toe)",
+        RAMP: "var(--ramp)",
+        SUMP: "var(--sump)",
+        ORE: "var(--ore)",
+        WASTE: "var(--waste)",
+        PRESPLIT: "var(--presplit)",
+        YELLOW: "var(--yellow-zone)"
+      };
+      var chipColor = chipColorMap[p.type] || "var(--custom-type)";
       html += "<div class=\"palette-chip pattern-chip\" draggable=\"true\" " +
         "data-drag-type=\"pattern\" data-drag-id=\"" + p.id + "\" " +
         "style=\"border-color:" + chipColor + ";\" " +

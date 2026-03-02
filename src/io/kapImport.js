@@ -80,12 +80,19 @@ async function processKAPZip(arrayBuffer, fileName, log) {
       }
     }
 
-    // Step 2d) Parse surfaces (pit surfaces AND blast solids)
+        // Step 2d) Parse surfaces (pit surfaces AND blast solids)
+    var btnIn = document.getElementById("kapNormalsIn");
+    var alignIn = btnIn ? btnIn.classList.contains("kap-normals-active") : false;
+
     var surfacesFile = zip.file("surfaces.json");
     if (surfacesFile) {
       log.innerHTML += "<div class=\"log-info\">Parsing surfaces (may take a moment for large data)...</div>";
+      log.innerHTML += "<div class=\"log-info\">Normal alignment: " + (alignIn ? "IN" : "OUT") + "</div>";
+      if (alignIn) {
+        log.innerHTML += "<div class=\"log-info\">Align IN selected — reversing triangle winding order</div>";
+      }
       var surfacesRaw = JSON.parse(await surfacesFile.async("string"));
-      processSurfaces(surfacesRaw, blastSolidLayerIds, log);
+      processSurfaces(surfacesRaw, blastSolidLayerIds, log, alignIn);
     }
 
     // Step 2e) Parse holes
@@ -136,11 +143,45 @@ async function processKAPZip(arrayBuffer, fileName, log) {
 }
 
 // ============================================================
+//  Step 3-UTIL) Flip triangle winding order — swaps the
+//  second and third vertex of each triangle, reversing
+//  the face normal direction (IN <-> OUT).
+// ============================================================
+function flipTriangleWinding(tris, isVertexPerTri) {
+  var flipped = [];
+  for (var i = 0; i < tris.length; i++) {
+    var tri = tris[i];
+    if (isVertexPerTri) {
+      // Step FLIP-a) Vertex-per-triangle: swap vertices[1] and vertices[2]
+      var v = tri.vertices;
+      if (!v || v.length < 3) { flipped.push(tri); continue; }
+      var newTri = {};
+      for (var k in tri) { newTri[k] = tri[k]; }
+      newTri.vertices = [v[0], v[2], v[1]];
+      flipped.push(newTri);
+    } else if (Array.isArray(tri)) {
+      // Step FLIP-b) Index array [a, b, c] -> [a, c, b]
+      flipped.push([tri[0], tri[2], tri[1]]);
+    } else if (tri.a !== undefined) {
+      // Step FLIP-c) Object { a, b, c } -> swap b and c
+      var newTri = {};
+      for (var k in tri) { newTri[k] = tri[k]; }
+      newTri.b = tri.c;
+      newTri.c = tri.b;
+      flipped.push(newTri);
+    } else {
+      flipped.push(tri);
+    }
+  }
+  return flipped;
+}
+
+// ============================================================
 //  Step 3) Process surfaces — separate pit surfaces from
 //  blast solids. Compute volume for solids and create
 //  importedBlasts entries.
 // ============================================================
-function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
+function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
   if (!Array.isArray(surfacesRaw) || surfacesRaw.length === 0) {
     log.innerHTML += "<div class=\"log-info\">No surfaces in KAP file</div>";
     return;
@@ -155,6 +196,11 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
     var pts = s.points || [];
     var tris = s.triangles || [];
     var isVertexPerTri = tris.length > 0 && tris[0] && tris[0].vertices !== undefined;
+
+    // Step 3-FLIP) Reverse winding order if Flip Normals is enabled
+    if (flipNormals && tris.length > 0) {
+      tris = flipTriangleWinding(tris, isVertexPerTri);
+    }
 
     // Step 3a) Compute bounds
     var bounds = computeBounds(pts, tris, isVertexPerTri, s.meshBounds);
@@ -181,7 +227,8 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log) {
       visible: s.visible !== false,
       opacity: s.transparency !== undefined ? s.transparency : 0.85,
       hillshadeColor: s.hillshadeColor || null,
-      layerId: s.layerId || null
+      layerId: s.layerId || null,
+      normalAlignment: flipNormals ? "IN" : "OUT"
     };
 
     if (isBlastSolid) {
@@ -630,6 +677,20 @@ function initKAPImport() {
     if (e.target === fileInput) return;
     fileInput.click();
   });
+
+  // Step 7d) Normal alignment toggle buttons (OUT / IN)
+  var btnOut = document.getElementById("kapNormalsOut");
+  var btnIn = document.getElementById("kapNormalsIn");
+  if (btnOut && btnIn) {
+    btnOut.addEventListener("click", function() {
+      btnOut.classList.add("kap-normals-active");
+      btnIn.classList.remove("kap-normals-active");
+    });
+    btnIn.addEventListener("click", function() {
+      btnIn.classList.add("kap-normals-active");
+      btnOut.classList.remove("kap-normals-active");
+    });
+  }
 }
 
 export { parseKAPFile, initKAPImport };
