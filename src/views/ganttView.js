@@ -704,4 +704,4 @@ function renderGantt() {
   renderDelayPalette();
 }
 
-export { renderGantt };
+export { renderGantt, getPlanWeekIdx, getPlanBandStyle, hexToRgba };
