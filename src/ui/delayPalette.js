@@ -38,6 +38,8 @@ function renderDelayPalette() {
       html += "<div style=\"font-size:11px;color:var(--text-muted);padding:4px 8px;\">No patterns loaded</div>";
     }
     APP.patterns.forEach(function(p) {
+      // Step 2b-i) Skip patterns hidden from Gantt
+      if (p.visibleToGantt === false) return;
       var typeChar = p.type.charAt(0);
       var chipColor = "var(--accent-cyan)";
       if (p.type === "PRESPLIT") chipColor = "var(--presplit, var(--accent-purple))";

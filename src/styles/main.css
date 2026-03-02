@@ -764,6 +764,53 @@ body {
 .pattern-card .pattern-detail .label { color: var(--text-muted); }
 .pattern-card .pattern-detail .value { color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
 
+/* Step 15b) Pattern card action toolbar */
+.pattern-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.pat-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.pat-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+  background: var(--bg-tertiary);
+}
+.pat-action-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--text-muted);
+  user-select: none;
+}
+.pat-action-toggle input[type="checkbox"] {
+  accent-color: var(--accent-cyan);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
 /* Step 16) File drop zone */
 .drop-zone {
   border: 2px dashed var(--border-active);
