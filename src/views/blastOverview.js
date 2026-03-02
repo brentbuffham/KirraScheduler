@@ -49,7 +49,7 @@ function renderBlasts() {
   var totalVol = APP.blasts.reduce(function(s, b) { return s + (b.volume || 0); }, 0);
   var totalExp = APP.blasts.reduce(function(s, b) { return s + (b.expMass || 0); }, 0);
   var totalHoles = APP.blasts.reduce(function(s, b) {
-    return s + b.holeTypes.reduce(function(h, ht) { return h + (ht.holes || 0); }, 0);
+    return s + (b.holeTypes || []).reduce(function(h, ht) { return h + (ht.holes || 0); }, 0);
   }, 0);
 
   // Step 2) Stats cards
@@ -85,7 +85,7 @@ function renderBlasts() {
     var pf = b.volume ? (b.expMass / b.volume).toFixed(2) : "\u2014";
     var drillM = getTotalDrillMeters(b);
     var statusBadge = b.status === "active" ? "badge-active" : b.status === "fired" ? "badge-blast" : "badge-drill";
-    var holeTypeSummary = b.holeTypes.map(function(ht) {
+    var holeTypeSummary = (b.holeTypes || []).map(function(ht) {
       var badge = ht.type === "PRESPLIT" ? "badge-presplit" : ht.type === "BUFFER" ? "badge-buffer" : "badge-production";
       return "<span class=\"badge " + badge + "\">" + ht.type + "</span>";
     }).join(" ");
@@ -184,7 +184,10 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   if (sinAngle < 0.01) sinAngle = 1;
   var holeDepth = Math.round(((pattern.benchHt + (pattern.subdrill || 0)) / sinAngle) * 100) / 100;
 
-  // Step 6d) Check if this pattern is already assigned — pre-fill if so
+  // Step 6d) Ensure holeTypes array exists
+  if (!blast.holeTypes) blast.holeTypes = [];
+
+  // Step 6d-i) Check if this pattern is already assigned — pre-fill if so
   var existingIdx = -1;
   for (var i = 0; i < blast.holeTypes.length; i++) {
     if (blast.holeTypes[i].patternId === pattern.id) { existingIdx = i; break; }
@@ -344,6 +347,7 @@ function recalcAllocFields(pattern) {
 
 // Step 8) Recalculate blast-level totals from holeTypes array
 function recalcBlastFromHoleTypes(blast) {
+  if (!blast.holeTypes) blast.holeTypes = [];
   var totalExpMass = 0;
   for (var i = 0; i < blast.holeTypes.length; i++) {
     totalExpMass += blast.holeTypes[i].expMass || 0;

@@ -297,8 +297,9 @@ function handlePatternDrop(blast, blastIdx, patternId) {
     return;
   }
 
-  // Step 5b-ii) Check if this is a subsequent pattern and warn user
-  var alreadyAssigned = blast.holeTypes && blast.holeTypes.length > 0;
+  // Step 5b-ii) Ensure holeTypes exists, then check if subsequent pattern
+  if (!blast.holeTypes) blast.holeTypes = [];
+  var alreadyAssigned = blast.holeTypes.length > 0;
   var isUpdate = false;
   if (alreadyAssigned) {
     for (var i = 0; i < blast.holeTypes.length; i++) {
