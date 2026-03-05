@@ -11,6 +11,10 @@ import { getScene, toLocal } from "./PlaybackScene.js";
 // Step 1) Map of surfaceName -> { mesh, wireframe, data }
 var _surfaceMeshes = {};
 
+// Step 1b) Color mode — "spectrum" uses elevation gradient, "single" uses flat Phong
+var _colorMode = "spectrum";
+var _singleColor = 0x7799bb;
+
 // Step 2) Elevation colour gradient — terrain-style
 function elevationColor(t) {
   // t is 0..1 normalised elevation
@@ -258,6 +262,40 @@ function getSurfaceEntry(name) {
   return _surfaceMeshes[name] || null;
 }
 
+// Step 11) Switch color mode for all surfaces
+//   mode = "spectrum" — elevation gradient via vertex colors
+//   mode = "single"   — flat Phong with _singleColor
+function setSurfaceColorMode(mode, hexColor) {
+  _colorMode = mode;
+  if (hexColor !== undefined) _singleColor = hexColor;
+
+  var names = Object.keys(_surfaceMeshes);
+  for (var i = 0; i < names.length; i++) {
+    var entry = _surfaceMeshes[names[i]];
+    var mat = entry.mesh.material;
+
+    if (mode === "single") {
+      // Step 11a) Disable vertex colors, apply flat Phong color
+      mat.vertexColors = false;
+      mat.color.setHex(_singleColor);
+      mat.needsUpdate = true;
+    } else {
+      // Step 11b) Re-enable vertex colors (geometry still has color attribute)
+      mat.vertexColors = true;
+      mat.color.setHex(0xffffff);
+      mat.needsUpdate = true;
+    }
+  }
+}
+
+function getSurfaceColorMode() {
+  return _colorMode;
+}
+
+function getSingleColor() {
+  return _singleColor;
+}
+
 export {
   addSurface,
   setSurfaceVisible,
@@ -267,5 +305,8 @@ export {
   getAllSurfaceBounds,
   clearSurfaces,
   getLoadedSurfaceNames,
-  getSurfaceEntry
+  getSurfaceEntry,
+  setSurfaceColorMode,
+  getSurfaceColorMode,
+  getSingleColor
 };

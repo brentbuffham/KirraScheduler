@@ -9,11 +9,13 @@ import { drills, mpus } from "../state/equipmentState.js";
 import {
   initScene, resizeRenderer, setLocalOrigin, startRenderLoop, stopRenderLoop,
   fitCameraToBounds, setCameraTopDown, setCameraIsometric, setCameraPerspective,
+  setDataBounds, setCameraMode, getCameraMode,
   setGridVisible, disposeScene
 } from "../three/PlaybackScene.js";
 import {
   addSurface, clearSurfaces, getAllSurfaceBounds, setSurfaceVisible,
-  setSurfaceOpacity, setAllWireframes, getLoadedSurfaceNames
+  setSurfaceOpacity, setAllWireframes, getLoadedSurfaceNames,
+  setSurfaceColorMode
 } from "../three/PitShellRenderer.js";
 import {
   addBlastPolygon, addBlastSolid, createBlastLabel, setBlastPhase,
@@ -61,11 +63,42 @@ function initPlayback() {
     updateFlashAnimation(deltaMs);
   });
 
-  // Step 1e) Wire up camera preset buttons
-  var avgZ = 0;
-  document.getElementById("pbCamTop").addEventListener("click", function() { setCameraTopDown(avgZ); });
-  document.getElementById("pbCamIso").addEventListener("click", function() { setCameraIsometric(avgZ); });
-  document.getElementById("pbCamPersp").addEventListener("click", function() { setCameraPerspective(avgZ); });
+  // Step 1e) Wire up camera preset buttons (use stored data bounds, not a closure)
+  document.getElementById("pbCamTop").addEventListener("click", function() { setCameraTopDown(); });
+  document.getElementById("pbCamIso").addEventListener("click", function() { setCameraIsometric(); });
+  document.getElementById("pbCamPersp").addEventListener("click", function() { setCameraPerspective(); });
+
+  // Step 1e-ii) Wire up ortho camera toggle
+  var orthoBtn = document.getElementById("pbCamOrtho");
+  if (orthoBtn) {
+    orthoBtn.addEventListener("click", function() {
+      var isOrtho = getCameraMode() === "ortho";
+      setCameraMode(isOrtho ? "perspective" : "ortho");
+      orthoBtn.classList.toggle("active", !isOrtho);
+      orthoBtn.textContent = isOrtho ? "Ortho" : "Persp";
+    });
+  }
+
+  // Step 1e-iii) Wire up single-color surface toggle
+  var colorToggle = document.getElementById("pbSingleColor");
+  if (colorToggle) {
+    colorToggle.addEventListener("change", function(e) {
+      var picker = document.getElementById("pbSurfaceColor");
+      var hex = picker ? parseInt(picker.value.replace("#", ""), 16) : 0x7799bb;
+      setSurfaceColorMode(e.target.checked ? "single" : "spectrum", hex);
+    });
+  }
+
+  // Step 1e-iv) Wire up surface color picker
+  var colorPicker = document.getElementById("pbSurfaceColor");
+  if (colorPicker) {
+    colorPicker.addEventListener("input", function(e) {
+      var toggle = document.getElementById("pbSingleColor");
+      if (toggle && toggle.checked) {
+        setSurfaceColorMode("single", parseInt(e.target.value.replace("#", ""), 16));
+      }
+    });
+  }
 
   // Step 1f) Wire up sidebar toggles
   document.getElementById("pbShowAllBlasts").addEventListener("change", function(e) {
@@ -219,10 +252,14 @@ function refreshPlayback() {
   var cz = allZ.reduce(function(a, b) { return a + b; }, 0) / allZ.length;
   setLocalOrigin(cx, cy, cz);
 
-  // Step 2e) Add surfaces to scene
+  // Step 2e) Add surfaces to scene — supports both indexed and vertex-per-tri formats
   surfaces.forEach(function(s) {
-    if (s.points && s.points.length > 0 && s.triangles && s.triangles.length > 0) {
-      addSurface(s.name, s.points, s.triangles, {
+    var hasPoints = s.points && s.points.length > 0;
+    var hasTris = s.triangles && s.triangles.length > 0;
+    var hasVertexPerTri = hasTris && s.triangles[0] && s.triangles[0].vertices !== undefined;
+
+    if (hasTris && (hasPoints || hasVertexPerTri)) {
+      addSurface(s.name, s.points || [], s.triangles, {
         opacity: s.opacity !== undefined ? s.opacity : 0.85,
         visible: s.visible !== undefined ? s.visible : true
       });
@@ -257,9 +294,10 @@ function refreshPlayback() {
   // Step 2g) Update surface list in sidebar
   updateSurfaceList();
 
-  // Step 2h) Fit camera to scene bounds
+  // Step 2h) Fit camera to scene bounds and store for camera presets
   var bounds = getAllSurfaceBounds();
   if (bounds) {
+    setDataBounds(bounds);
     fitCameraToBounds(bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ);
   }
 

@@ -404,6 +404,11 @@
           <div class="playback-blast-layers">
             <label class="playback-toggle"><input type="checkbox" id="pbWireframe"> Wireframe overlay</label>
             <label class="playback-toggle"><input type="checkbox" id="pbGrid" checked> Ground grid</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbSingleColor"> Single colour surface</label>
+            <div style="display:flex;align-items:center;gap:6px;padding:2px 0 2px 22px;">
+              <input type="color" id="pbSurfaceColor" value="#7799bb" title="Surface colour when single-colour mode is on" style="width:28px;height:22px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+              <span style="font-size:10px;color:var(--text-muted);">Surface colour</span>
+            </div>
           </div>
         </div>
       </div>
@@ -415,6 +420,7 @@
           <button class="pb-cam-btn" id="pbCamTop" title="Top-down view">Top</button>
           <button class="pb-cam-btn" id="pbCamIso" title="Isometric view">Iso</button>
           <button class="pb-cam-btn" id="pbCamPersp" title="Perspective view">3D</button>
+          <button class="pb-cam-btn" id="pbCamOrtho" title="Toggle orthographic / perspective projection">Ortho</button>
         </div>
         <!-- Step 4) No-data overlay -->
         <div class="playback-no-data" id="playbackNoData">

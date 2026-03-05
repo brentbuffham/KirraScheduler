@@ -2,13 +2,18 @@
 //  PLAYBACK SCENE
 //  Three.js scene setup — camera, lights, renderer, orbit controls
 //  Handles local-origin transform for large UTM coordinates.
+//  Supports perspective and orthographic camera modes.
 // ============================================================
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 var _scene = null;
+var _perspCamera = null;
+var _orthoCamera = null;
 var _camera = null;
+var _cameraMode = "perspective";
+var _dataBounds = null;
 var _renderer = null;
 var _controls = null;
 var _gridHelper = null;
@@ -25,10 +30,19 @@ function initScene(canvas) {
   _scene = new THREE.Scene();
   syncSceneBackground();
 
-  // Step 2b) Camera — perspective, wide FOV for mine-scale viewing
-  _camera = new THREE.PerspectiveCamera(60, 1, 0.1, 50000);
-  _camera.position.set(0, 0, 500);
-  _camera.up.set(0, 0, 1);
+  // Step 2b) Perspective camera — wide FOV for mine-scale viewing
+  _perspCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 50000);
+  _perspCamera.position.set(0, 0, 500);
+  _perspCamera.up.set(0, 0, 1);
+
+  // Step 2b-ii) Orthographic camera — frustum updated on resize and data load
+  _orthoCamera = new THREE.OrthographicCamera(-500, 500, 500, -500, 0.1, 50000);
+  _orthoCamera.position.set(0, 0, 500);
+  _orthoCamera.up.set(0, 0, 1);
+
+  // Step 2b-iii) Active camera defaults to perspective
+  _camera = _perspCamera;
+  _cameraMode = "perspective";
 
   // Step 2c) Renderer — use the provided canvas
   _renderer = new THREE.WebGLRenderer({
@@ -90,10 +104,24 @@ _themeObserver.observe(document.documentElement, { attributes: true, attributeFi
 
 // Step 3) Resize renderer to fit container
 function resizeRenderer(width, height) {
-  if (!_renderer || !_camera) return;
+  if (!_renderer) return;
   _renderer.setSize(width, height);
-  _camera.aspect = width / height;
-  _camera.updateProjectionMatrix();
+  var aspect = width / height;
+
+  // Step 3a) Update perspective camera aspect
+  if (_perspCamera) {
+    _perspCamera.aspect = aspect;
+    _perspCamera.updateProjectionMatrix();
+  }
+
+  // Step 3b) Update orthographic camera frustum preserving vertical extent
+  if (_orthoCamera) {
+    var halfH = (_orthoCamera.top - _orthoCamera.bottom) / 2;
+    if (halfH < 1) halfH = 500;
+    _orthoCamera.left = -halfH * aspect;
+    _orthoCamera.right = halfH * aspect;
+    _orthoCamera.updateProjectionMatrix();
+  }
 }
 
 // Step 4) Set local origin from data bounds
@@ -143,28 +171,82 @@ function stopRenderLoop() {
   }
 }
 
-// Step 8) Camera preset views
-function setCameraTopDown(targetZ) {
+// Step 8) Store data bounds so camera presets scale to the loaded data
+function setDataBounds(bounds) {
+  _dataBounds = bounds;
+}
+
+function getDataBounds() {
+  return _dataBounds;
+}
+
+// Step 8a) Helper — sync orthographic frustum to a given half-extent
+function _syncOrthoFrustum(halfExtent) {
+  if (!_orthoCamera || !_renderer) return;
+  var size = new THREE.Vector2();
+  _renderer.getSize(size);
+  var aspect = size.x / size.y;
+  _orthoCamera.left = -halfExtent * aspect;
+  _orthoCamera.right = halfExtent * aspect;
+  _orthoCamera.top = halfExtent;
+  _orthoCamera.bottom = -halfExtent;
+  _orthoCamera.updateProjectionMatrix();
+}
+
+// Step 8b) Camera preset views — data-bounds-aware
+function setCameraTopDown() {
   if (!_camera || !_controls) return;
-  var z = targetZ || 0;
-  _camera.position.set(0, 0, z + 1000);
-  _controls.target.set(0, 0, z);
+  var b = _dataBounds;
+  var cx = 0, cy = 0, cz = 0, maxDim = 1000;
+  if (b) {
+    cx = (b.minX + b.maxX) / 2;
+    cy = (b.minY + b.maxY) / 2;
+    cz = (b.minZ + b.maxZ) / 2;
+    maxDim = Math.max(b.maxX - b.minX, b.maxY - b.minY, 100);
+  }
+  _camera.position.set(cx, cy, cz + maxDim * 1.2);
+  _controls.target.set(cx, cy, cz);
+  if (_cameraMode === "ortho") {
+    _syncOrthoFrustum(maxDim * 0.6);
+  }
   _controls.update();
 }
 
-function setCameraIsometric(targetZ) {
+function setCameraIsometric() {
   if (!_camera || !_controls) return;
-  var z = targetZ || 0;
-  _camera.position.set(500, -500, z + 500);
-  _controls.target.set(0, 0, z);
+  var b = _dataBounds;
+  var cx = 0, cy = 0, cz = 0, maxDim = 1000;
+  if (b) {
+    cx = (b.minX + b.maxX) / 2;
+    cy = (b.minY + b.maxY) / 2;
+    cz = (b.minZ + b.maxZ) / 2;
+    maxDim = Math.max(b.maxX - b.minX, b.maxY - b.minY, b.maxZ - b.minZ, 100);
+  }
+  var dist = maxDim * 0.8;
+  _camera.position.set(cx + dist, cy - dist, cz + dist);
+  _controls.target.set(cx, cy, cz);
+  if (_cameraMode === "ortho") {
+    _syncOrthoFrustum(maxDim * 0.6);
+  }
   _controls.update();
 }
 
-function setCameraPerspective(targetZ) {
+function setCameraPerspective() {
   if (!_camera || !_controls) return;
-  var z = targetZ || 0;
-  _camera.position.set(300, -600, z + 300);
-  _controls.target.set(0, 0, z);
+  var b = _dataBounds;
+  var cx = 0, cy = 0, cz = 0, maxDim = 1000;
+  if (b) {
+    cx = (b.minX + b.maxX) / 2;
+    cy = (b.minY + b.maxY) / 2;
+    cz = (b.minZ + b.maxZ) / 2;
+    maxDim = Math.max(b.maxX - b.minX, b.maxY - b.minY, b.maxZ - b.minZ, 100);
+  }
+  var dist = maxDim * 1.0;
+  _camera.position.set(cx + dist * 0.4, cy - dist * 0.8, cz + dist * 0.4);
+  _controls.target.set(cx, cy, cz);
+  if (_cameraMode === "ortho") {
+    _syncOrthoFrustum(maxDim * 0.5);
+  }
   _controls.update();
 }
 
@@ -182,7 +264,51 @@ function fitCameraToBounds(minX, maxX, minY, maxY, minZ, maxZ) {
 
   _controls.target.set(cx, cy, cz);
   _camera.position.set(cx + dist * 0.5, cy - dist * 0.7, cz + dist * 0.5);
+
+  // Step 9a) Also sync ortho frustum if in ortho mode
+  if (_cameraMode === "ortho") {
+    _syncOrthoFrustum(maxDim * 0.6);
+  }
   _controls.update();
+}
+
+// Step 9b) Switch between perspective and orthographic camera
+function setCameraMode(mode) {
+  if (!_controls || !_renderer) return;
+  if (mode === _cameraMode) return;
+
+  var oldCam = _camera;
+  _cameraMode = mode;
+
+  if (mode === "ortho") {
+    // Step 9b-i) Compute ortho frustum to match current perspective view
+    var dist = oldCam.position.distanceTo(_controls.target);
+    var halfH = dist * Math.tan(THREE.MathUtils.degToRad(_perspCamera.fov / 2));
+    var aspect = _perspCamera.aspect;
+    _orthoCamera.left = -halfH * aspect;
+    _orthoCamera.right = halfH * aspect;
+    _orthoCamera.top = halfH;
+    _orthoCamera.bottom = -halfH;
+    _orthoCamera.position.copy(oldCam.position);
+    _orthoCamera.quaternion.copy(oldCam.quaternion);
+    _orthoCamera.zoom = 1;
+    _orthoCamera.updateProjectionMatrix();
+    _camera = _orthoCamera;
+  } else {
+    // Step 9b-ii) Switch back to perspective — copy position from ortho
+    _perspCamera.position.copy(oldCam.position);
+    _perspCamera.quaternion.copy(oldCam.quaternion);
+    _perspCamera.updateProjectionMatrix();
+    _camera = _perspCamera;
+  }
+
+  // Step 9b-iii) Re-bind orbit controls to the new camera
+  _controls.object = _camera;
+  _controls.update();
+}
+
+function getCameraMode() {
+  return _cameraMode;
 }
 
 // Step 10) Toggle grid visibility
@@ -202,7 +328,11 @@ function disposeScene() {
   if (_controls) { _controls.dispose(); _controls = null; }
   if (_renderer) { _renderer.dispose(); _renderer = null; }
   _scene = null;
+  _perspCamera = null;
+  _orthoCamera = null;
   _camera = null;
+  _cameraMode = "perspective";
+  _dataBounds = null;
   _gridHelper = null;
 }
 
@@ -215,9 +345,13 @@ export {
   startRenderLoop,
   stopRenderLoop,
   syncSceneBackground,
+  setDataBounds,
+  getDataBounds,
   setCameraTopDown,
   setCameraIsometric,
   setCameraPerspective,
+  setCameraMode,
+  getCameraMode,
   fitCameraToBounds,
   setGridVisible,
   getScene,
