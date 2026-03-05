@@ -13,6 +13,17 @@ import { renderGantt } from "../views/ganttView.js";
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
 import { CREW_ROLES, ensureCrewAllocated } from "../state/crewRoles.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { isoDate } from "../utils/dateUtils.js";
+
+// Step 0) Update phase toggle labels in context menu
+function updatePhaseToggleLabels(blast) {
+  var nd = document.getElementById("ctxToggleNoDrill");
+  var nl = document.getElementById("ctxToggleNoLoad");
+  var nb = document.getElementById("ctxToggleNoBlast");
+  if (nd && blast) nd.textContent = blast.noDrill ? "\u2705 Enable Drilling" : "\uD83D\uDEAB No Drill";
+  if (nl && blast) nl.textContent = blast.noLoad  ? "\u2705 Enable Loading"  : "\uD83D\uDEAB No Load";
+  if (nb && blast) nb.textContent = blast.noBlast ? "\u2705 Enable Blasting" : "\uD83D\uDEAB No Blast";
+}
 
 // Step 1) Show context menu at cursor position (from sticky-col right-click)
 function showCtxMenu(e, idx, section, blockIdx) {
@@ -54,6 +65,9 @@ function showCtxMenu(e, idx, section, blockIdx) {
 
   // Step 1e) Show general items
   menu.querySelectorAll(".ctx-general").forEach(function(el) { el.style.display = ""; });
+
+  // Step 1e-ii) Update phase toggle labels
+  updatePhaseToggleLabels(blast);
 
   // Step 1f-pre) Build dynamic equipment items for this blast/section
   buildDynamicEquipItems(menu, blast, section, APP.ctxBlockIdx);
@@ -102,7 +116,10 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
     menu.querySelectorAll(".ctx-delay-only").forEach(function(el) { el.style.display = "none"; });
     menu.querySelectorAll(".ctx-general").forEach(function(el) { el.style.display = ""; });
 
-    // Step 1f-iii) Build dynamic equipment items for bar context too
+    // Step 1f-iii) Update phase toggle labels
+    updatePhaseToggleLabels(blast);
+
+    // Step 1f-iv) Build dynamic equipment items for bar context too
     buildDynamicEquipItems(menu, blast, section, APP.ctxBlockIdx);
   }
 
@@ -401,6 +418,45 @@ function shrinkDelayFromCtx() {
   renderGantt();
 }
 
+// Step 8e) Toggle No-Drill mode (decoupled load/blast without drilling)
+function toggleNoDrillFromCtx() {
+  var blast = APP.blasts[APP.ctxBlastIdx];
+  if (!blast) return;
+
+  blast.noDrill = !blast.noDrill;
+
+  if (blast.noDrill) {
+    if (!blast.loadStart) {
+      blast.loadStart = blast.drillStart || isoDate(APP.planStart);
+      blast.loadStartManual = true;
+    }
+  }
+
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+}
+
+// Step 8f) Toggle No-Load mode (drill/blast without loading)
+function toggleNoLoadFromCtx() {
+  var blast = APP.blasts[APP.ctxBlastIdx];
+  if (!blast) return;
+  blast.noLoad = !blast.noLoad;
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+}
+
+// Step 8g) Toggle No-Blast mode (drill/load only — grade control)
+function toggleNoBlastFromCtx() {
+  var blast = APP.blasts[APP.ctxBlastIdx];
+  if (!blast) return;
+  blast.noBlast = !blast.noBlast;
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+}
+
 // Step 9) Initialise context menu event listeners
 function initContextMenu() {
   // Step 9a) Close context menu on any click
@@ -413,6 +469,9 @@ function initContextMenu() {
   document.getElementById("ctxDrilling").addEventListener("click", function() { setBlastStatus("drilling"); });
   document.getElementById("ctxLoading").addEventListener("click", function() { setBlastStatus("loading"); });
   document.getElementById("ctxFired").addEventListener("click", function() { setBlastStatus("fired"); });
+  document.getElementById("ctxToggleNoDrill").addEventListener("click", toggleNoDrillFromCtx);
+  document.getElementById("ctxToggleNoLoad").addEventListener("click", toggleNoLoadFromCtx);
+  document.getElementById("ctxToggleNoBlast").addEventListener("click", toggleNoBlastFromCtx);
   document.getElementById("ctxDuplicate").addEventListener("click", duplicateBlast);
   document.getElementById("ctxRemove").addEventListener("click", removeBlast);
   document.getElementById("ctxSplitDrill").addEventListener("click", splitDrillFromCtx);

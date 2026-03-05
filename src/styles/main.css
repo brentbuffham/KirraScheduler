@@ -1109,6 +1109,63 @@ body {
   cursor: grabbing;
   box-shadow: 0 2px 12px rgba(59,130,246,0.4);
 }
+
+/* Step) Gantt rubber-band selection rectangle */
+.gantt-select-band {
+  border: 2px dashed var(--accent-cyan);
+  background: rgba(0,200,255,0.08);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Step) Selected Gantt rows — highlighted bar outlines */
+.gantt-row-selected td {
+  background: rgba(0,200,255,0.06) !important;
+}
+.gantt-row-selected .gantt-bar {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -1px;
+}
+
+/* Step) Gantt reorder grip handle */
+.gantt-reorder-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  cursor: ns-resize;
+  vertical-align: middle;
+  margin-right: 2px;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+.gantt-row:hover .gantt-reorder-grip {
+  opacity: 0.7;
+}
+.gantt-reorder-grip:hover {
+  opacity: 1 !important;
+}
+.gantt-row-reordering td {
+  background: rgba(59,130,246,0.1) !important;
+}
+.gantt-reorder-target td {
+  border-top: 2px solid var(--accent-cyan) !important;
+}
+
+/* Step) No-Drill badge for decoupled load/blast blasts */
+.no-drill-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent-load);
+  color: #000;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  letter-spacing: 0.5px;
+}
 .gantt-bar.prep.planned,
 .gantt-bar.drill.planned,
 .gantt-bar.load.planned {

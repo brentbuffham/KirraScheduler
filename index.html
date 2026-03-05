@@ -807,6 +807,10 @@
   <div class="ctx-item ctx-drill-only ctx-block-only ctx-general" id="ctxEditBlock">&#x2699; Edit Block</div>
   <div class="ctx-item ctx-drill-only ctx-block-only ctx-general" id="ctxMergeBlocks">&#x1F517; Merge Blocks</div>
   <div class="ctx-divider ctx-general"></div>
+  <div class="ctx-item ctx-general" id="ctxToggleNoDrill">&#x1F6AB; No Drill</div>
+  <div class="ctx-item ctx-general" id="ctxToggleNoLoad">&#x1F6AB; No Load</div>
+  <div class="ctx-item ctx-general" id="ctxToggleNoBlast">&#x1F6AB; No Blast</div>
+  <div class="ctx-divider ctx-general"></div>
   <div class="ctx-item ctx-general" id="ctxDuplicate">&#x1F4CB; Duplicate</div>
   <div class="ctx-item ctx-general" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove</div>
 
@@ -852,13 +856,40 @@
             <label>Surface Area (m2)</label>
             <input type="number" id="fSurfaceArea" placeholder="0">
           </div>
-          <div class="form-field">
+          <div class="form-field" id="fDrillStartWrap">
             <label>Drill Start Date</label>
             <input type="date" id="fDrillStart">
           </div>
-          <div class="form-field" style="min-width:110px;">
+          <div class="form-field" id="fDrillStartTimeWrap" style="min-width:110px;">
             <label>Start Time</label>
             <input type="time" id="fDrillStartTime" value="06:00" step="1800">
+          </div>
+        </div>
+        <div class="form-row" style="gap:16px;">
+          <div class="form-field" style="min-width:80px;display:flex;align-items:flex-end;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:11px;">
+              <input type="checkbox" id="fNoDrill"> No Drill
+            </label>
+          </div>
+          <div class="form-field" style="min-width:80px;display:flex;align-items:flex-end;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:11px;">
+              <input type="checkbox" id="fNoLoad"> No Load
+            </label>
+          </div>
+          <div class="form-field" style="min-width:80px;display:flex;align-items:flex-end;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:11px;">
+              <input type="checkbox" id="fNoBlast"> No Blast
+            </label>
+          </div>
+        </div>
+        <div class="form-row" id="fLoadStartRow" style="display:none;">
+          <div class="form-field">
+            <label>Load Start Date (manual)</label>
+            <input type="date" id="fLoadStart">
+          </div>
+          <div class="form-field" id="fBlastDateWrap" style="display:none;">
+            <label>Blast Date (manual)</label>
+            <input type="date" id="fBlastDateManual">
           </div>
         </div>
 

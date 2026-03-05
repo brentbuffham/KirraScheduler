@@ -21,9 +21,9 @@ var _originZ = 0;
 
 // Step 2) Initialise the Three.js scene, camera, renderer, and controls
 function initScene(canvas) {
-  // Step 2a) Scene
+  // Step 2a) Scene — background responds to theme
   _scene = new THREE.Scene();
-  _scene.background = new THREE.Color(0x1a1a2e);
+  syncSceneBackground();
 
   // Step 2b) Camera — perspective, wide FOV for mine-scale viewing
   _camera = new THREE.PerspectiveCamera(60, 1, 0.1, 50000);
@@ -71,6 +71,23 @@ function initScene(canvas) {
   return { scene: _scene, camera: _camera, renderer: _renderer, controls: _controls };
 }
 
+// Step 2g) Sync scene background with light/dark theme
+function syncSceneBackground() {
+  if (!_scene) return;
+  var isLight = document.documentElement.getAttribute("data-theme") === "light";
+  _scene.background = new THREE.Color(isLight ? 0xf0f0f0 : 0x000000);
+
+  if (_gridHelper) {
+    _gridHelper.material.opacity = isLight ? 0.12 : 0.5;
+  }
+}
+
+// Step 2h) Observe theme changes via MutationObserver on <html>
+var _themeObserver = new MutationObserver(function() {
+  syncSceneBackground();
+});
+_themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
 // Step 3) Resize renderer to fit container
 function resizeRenderer(width, height) {
   if (!_renderer || !_camera) return;
@@ -95,17 +112,27 @@ function toLocal(wx, wy, wz) {
   return new THREE.Vector3(wx - _originX, wy - _originY, wz - _originZ);
 }
 
-// Step 6) Start the render loop
+// Step 6) Start the render loop with delta time tracking for animations
+var _lastFrameTime = 0;
+var _onFrameCallback = null;
+
 function startRenderLoop(onFrame) {
-  function animate() {
+  _onFrameCallback = onFrame;
+  _lastFrameTime = performance.now();
+
+  function animate(now) {
     _animationId = requestAnimationFrame(animate);
+    var deltaMs = now - _lastFrameTime;
+    _lastFrameTime = now;
+    if (deltaMs > 100) deltaMs = 16;
+
     if (_controls) _controls.update();
-    if (onFrame) onFrame();
+    if (_onFrameCallback) _onFrameCallback(deltaMs);
     if (_renderer && _scene && _camera) {
       _renderer.render(_scene, _camera);
     }
   }
-  animate();
+  animate(performance.now());
 }
 
 // Step 7) Stop the render loop
@@ -187,6 +214,7 @@ export {
   toLocal,
   startRenderLoop,
   stopRenderLoop,
+  syncSceneBackground,
   setCameraTopDown,
   setCameraIsometric,
   setCameraPerspective,

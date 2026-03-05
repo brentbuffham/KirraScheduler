@@ -29,6 +29,8 @@ import { parseDXFFile } from "./io/dxfImport.js";
 import { parseKirraConfig, parseKirraProject } from "./io/kirraImport.js";
 import { initKAPImport } from "./io/kapImport.js";
 import { initCalendarExport } from "./io/calendarExport.js";
+import { initGanttSelect } from "./ui/ganttSelect.js";
+import { initGanttReorder } from "./ui/ganttReorder.js";
 import { renderGantt } from "./views/ganttView.js";
 import { renderBlasts } from "./views/blastOverview.js";
 import { renderPatterns, initPatternLibrary } from "./views/patternLibrary.js";
@@ -226,9 +228,11 @@ function firstRender() {
   renderConformance();
   renderEquipment();
 
-  // Step 8) Initialise Gantt drag-to-move and resize after initial render
+  // Step 8) Initialise Gantt drag-to-move, resize, and multi-select after initial render
   initGanttDrag();
   initGanttResize();
+  initGanttSelect();
+  initGanttReorder();
 
   // Step 9) Initialise delay palette drag-and-drop
   initDelayPalette();

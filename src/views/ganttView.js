@@ -14,6 +14,8 @@ import { showBarTooltip, hideTooltip } from "../ui/tooltip.js";
 import { showCtxMenu, showBarCtxMenu } from "../ui/contextMenu.js";
 import { initGanttDrag } from "../ui/ganttDrag.js";
 import { initGanttResize } from "../ui/ganttResize.js";
+import { applySelectionHighlight } from "../ui/ganttSelect.js";
+import { initGanttReorder } from "../ui/ganttReorder.js";
 import { renderConnectors } from "../ui/ganttConnectors.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { getDelayType } from "../state/delayTypes.js";
@@ -101,6 +103,14 @@ function buildMPUChips(mpuIds, blastIdx) {
 var EDIT_ICON = "<span class=\"gantt-edit-btn\" title=\"Edit\">" +
   "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">" +
   "<path d=\"M11.5 1.5l3 3L5 14H2v-3z\"/><path d=\"M10 3l3 3\"/>" +
+  "</svg></span>";
+
+// Step 0b-iii) Grip handle for drag-to-reorder (6-dot grid)
+var REORDER_GRIP = "<span class=\"gantt-reorder-grip\" title=\"Drag to reorder\">" +
+  "<svg viewBox=\"0 0 8 14\" width=\"8\" height=\"14\" fill=\"currentColor\" opacity=\"0.35\">" +
+  "<circle cx=\"2\" cy=\"2\" r=\"1.2\"/><circle cx=\"6\" cy=\"2\" r=\"1.2\"/>" +
+  "<circle cx=\"2\" cy=\"7\" r=\"1.2\"/><circle cx=\"6\" cy=\"7\" r=\"1.2\"/>" +
+  "<circle cx=\"2\" cy=\"12\" r=\"1.2\"/><circle cx=\"6\" cy=\"12\" r=\"1.2\"/>" +
   "</svg></span>";
 
 // Step 0b-ii) Auto/Manual toggle switch builder
@@ -417,7 +427,8 @@ function renderGantt() {
       var deps = getBlastDeps(blast);
       var comp = blast._computed || {};
 
-      // Step 1f-i) DRILLING section with block support
+      // Step 1f-i) DRILLING section with block support (skip noDrill blasts)
+      if (sectionName === "DRILLING" && blast.noDrill) return;
       if (sectionName === "DRILLING" && hasBlocks(blast)) {
         blast.drillBlocks.forEach(function(block, blockIdx) {
           if (!block.drillStart) return;
@@ -501,9 +512,13 @@ function renderGantt() {
         info = formatNum(blast.volume) + " bcm";
       }
 
+      var phaseBadges = "";
+      if (blast.noDrill) phaseBadges += "<span class=\"no-drill-badge\" title=\"No Drilling\">ND</span>";
+      if (blast.noLoad) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-blast);\" title=\"No Loading\">NL</span>";
+      if (blast.noBlast) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-prep);\" title=\"No Blasting\">NB</span>";
       html += "<tr class=\"gantt-row\" data-blast=\"" + idx + "\" data-section=\"" + secKey + "\">";
       html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"" + secKey + "\">";
-      html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name;
+      html += REORDER_GRIP + EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name + phaseBadges;
       html += "</td>";
       html += "<td class=\"sticky-col-2\">" + info + "</td>";
       html += renderBarCells(range, blast, idx, sectionName, deps, comp, null, null);
@@ -520,6 +535,7 @@ function renderGantt() {
   });
 
   renderSection("DRILLING", "var(--accent-drill)", function(b) {
+    if (b.noDrill) return null;
     if (!b.drillStart) return null;
     var start = b.drillStart;
     var end = isoDate(addDays(new Date(b.drillStart), (b.drillDays || 1) - 1));
@@ -527,6 +543,7 @@ function renderGantt() {
   });
 
   renderSection("LOADING", "var(--accent-load)", function(b) {
+    if (b.noLoad) return null;
     if (!b.loadStart) return null;
     var start = b.loadStart;
     var days = b.loadDays || Math.ceil((b.expMass || 0) / (b.loadRate || 100000));
@@ -535,6 +552,7 @@ function renderGantt() {
   });
 
   renderSection("BLASTING", "var(--accent-blast)", function(b) {
+    if (b.noBlast) return null;
     if (!b.blastDate) return null;
     return { start: b.blastDate, end: b.blastDate };
   });
@@ -630,9 +648,10 @@ function renderGantt() {
     });
   });
 
-  // Step 1j) Re-initialise drag and resize handlers after re-render
+  // Step 1j) Re-initialise drag, resize, and reorder handlers after re-render
   initGanttDrag();
   initGanttResize();
+  initGanttReorder();
 
   // Step 1j-b) Attach drag events to inline drill/mpu chips in the info column
   document.querySelectorAll(".gantt-drill-chip, .gantt-mpu-chip").forEach(function(chip) {
@@ -702,6 +721,9 @@ function renderGantt() {
 
   // Step 1n) Re-render equipment palette to reflect any status changes
   renderDelayPalette();
+
+  // Step 1o) Re-apply selection highlight after DOM rebuild
+  applySelectionHighlight();
 }
 
 export { renderGantt, getPlanWeekIdx, getPlanBandStyle, hexToRgba };

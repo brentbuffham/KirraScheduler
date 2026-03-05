@@ -14,9 +14,10 @@ var _equipmentMap = {};
 function buildDrillMesh(type) {
   var group = new THREE.Group();
 
-  // Step 2a) Tracked base — box
-  var baseW = type === "D65" ? 3 : 4;
-  var baseD = type === "D65" ? 6 : 8;
+  // Step 2a) Tracked base — small for D65-class, larger for everything else
+  var isSmall = (type === "D65");
+  var baseW = isSmall ? 3 : 4;
+  var baseD = isSmall ? 6 : 8;
   var baseH = 2;
   var baseGeom = new THREE.BoxGeometry(baseW, baseD, baseH);
   var baseMat = new THREE.MeshPhongMaterial({ color: 0xf59e0b, flatShading: true });
@@ -26,15 +27,15 @@ function buildDrillMesh(type) {
 
   // Step 2b) Cab — smaller box on front
   var cabGeom = new THREE.BoxGeometry(baseW * 0.7, baseD * 0.3, 2.5);
-  var cabMat = new THREE.MeshPhongMaterial({ color: 0x1e40af, flatShading: true });
+  var cabMat = new THREE.MeshPhongMaterial({ color: 0xd97706, flatShading: true });
   var cabMesh = new THREE.Mesh(cabGeom, cabMat);
   cabMesh.position.set(0, -baseD * 0.3, baseH + 1.25);
   group.add(cabMesh);
 
-  // Step 2c) Mast — tall cylinder
-  var mastH = type === "D65" ? 14 : 20;
+  // Step 2c) Mast — tall cylinder (2x base height for visibility)
+  var mastH = isSmall ? 28 : 40;
   var mastGeom = new THREE.CylinderGeometry(0.3, 0.4, mastH, 8);
-  var mastMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, flatShading: true });
+  var mastMat = new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true });
   var mastMesh = new THREE.Mesh(mastGeom, mastMat);
   mastMesh.rotation.x = Math.PI / 2;
   mastMesh.rotation.z = Math.PI / 2;
@@ -59,21 +60,21 @@ function buildMPUMesh() {
 
   // Step 3a) Chassis — long box
   var chassisGeom = new THREE.BoxGeometry(3, 10, 1.5);
-  var chassisMat = new THREE.MeshPhongMaterial({ color: 0x374151, flatShading: true });
+  var chassisMat = new THREE.MeshPhongMaterial({ color: 0x2563eb, flatShading: true });
   var chassisMesh = new THREE.Mesh(chassisGeom, chassisMat);
   chassisMesh.position.set(0, 0, 1.5);
   group.add(chassisMesh);
 
   // Step 3b) Cab — front box
   var cabGeom = new THREE.BoxGeometry(2.6, 2.5, 2.5);
-  var cabMat = new THREE.MeshPhongMaterial({ color: 0xdc2626, flatShading: true });
+  var cabMat = new THREE.MeshPhongMaterial({ color: 0x1d4ed8, flatShading: true });
   var cabMesh = new THREE.Mesh(cabGeom, cabMat);
   cabMesh.position.set(0, -4.5, 3);
   group.add(cabMesh);
 
   // Step 3c) Tank — cylinder
   var tankGeom = new THREE.CylinderGeometry(1.2, 1.2, 6, 12);
-  var tankMat = new THREE.MeshPhongMaterial({ color: 0x9ca3af, flatShading: true });
+  var tankMat = new THREE.MeshPhongMaterial({ color: 0x3b82f6, flatShading: true });
   var tankMesh = new THREE.Mesh(tankGeom, tankMat);
   tankMesh.position.set(0, 1, 3.5);
   group.add(tankMesh);
@@ -96,31 +97,64 @@ function buildMPUMesh() {
   return group;
 }
 
-// Step 4) Place equipment at a position
+// Step 4) Build a floating text label sprite
+function buildLabelSprite(text) {
+  var canvas = document.createElement("canvas");
+  var ctx = canvas.getContext("2d");
+  canvas.width = 256;
+  canvas.height = 48;
+  ctx.fillStyle = "rgba(0,0,0,0)";
+  ctx.fillRect(0, 0, 256, 48);
+  ctx.font = "bold 22px JetBrains Mono, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 3;
+  ctx.strokeText(text, 128, 24);
+  ctx.fillText(text, 128, 24);
+
+  var texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  var mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  var sprite = new THREE.Sprite(mat);
+  sprite.scale.set(30, 6, 1);
+  return sprite;
+}
+
+// Step 5) Place equipment at a position with label
 function placeEquipment(equipId, type, position) {
   var scene = getScene();
   if (!scene) return null;
 
-  // Step 4a) Remove existing if repositioning
+  // Step 5a) Remove existing if repositioning
   if (_equipmentMap[equipId]) {
     scene.remove(_equipmentMap[equipId].group);
   }
 
-  // Step 4b) Build appropriate mesh
+  // Step 5b) Build appropriate mesh — "MPU" builds truck, everything else builds drill rig
   var group;
-  if (type === "D65" || type === "PV271") {
+  var isDrill = (type !== "MPU");
+  if (isDrill) {
     group = buildDrillMesh(type);
   } else {
     group = buildMPUMesh();
   }
 
-  // Step 4c) Position
+  // Step 5c) Add label above equipment
+  var label = buildLabelSprite(equipId);
+  var labelHeight = isDrill ? 48 : 12;
+  label.position.set(0, 0, labelHeight);
+  group.add(label);
+
+  // Step 5d) Position
   group.position.copy(position);
   group.name = "equip_" + equipId;
   scene.add(group);
 
   _equipmentMap[equipId] = {
     group: group,
+    label: label,
     type: type
   };
 
@@ -151,7 +185,16 @@ function setAllEquipmentVisible(visible) {
   }
 }
 
-// Step 8) Clear all equipment
+// Step 8) Toggle equipment labels
+function setAllEquipLabelsVisible(visible) {
+  var ids = Object.keys(_equipmentMap);
+  for (var i = 0; i < ids.length; i++) {
+    var entry = _equipmentMap[ids[i]];
+    if (entry.label) entry.label.visible = visible;
+  }
+}
+
+// Step 9) Clear all equipment
 function clearEquipment() {
   var scene = getScene();
   var ids = Object.keys(_equipmentMap);
@@ -171,6 +214,7 @@ export {
   removeEquipment,
   setEquipmentVisible,
   setAllEquipmentVisible,
+  setAllEquipLabelsVisible,
   clearEquipment,
   getPlacedEquipmentIds
 };

@@ -16,10 +16,12 @@ import {
   setSurfaceOpacity, setAllWireframes, getLoadedSurfaceNames
 } from "../three/PitShellRenderer.js";
 import {
-  addBlastPolygon, setBlastPhase, clearBlasts, getBlastCentroid, setAllBlastsVisible
+  addBlastPolygon, addBlastSolid, createBlastLabel, setBlastPhase,
+  setAllLabelsVisible, updateFlashAnimation,
+  clearBlasts, getBlastCentroid, setAllBlastsVisible
 } from "../three/BlastGeometry.js";
 import {
-  placeEquipment, clearEquipment, setAllEquipmentVisible
+  placeEquipment, clearEquipment, setAllEquipmentVisible, setAllEquipLabelsVisible
 } from "../three/EquipmentModels.js";
 import {
   buildTimeline, getCurrentDay, getDayCount, getCurrentIndex,
@@ -54,8 +56,10 @@ function initPlayback() {
   });
   _resizeObserver.observe(viewport);
 
-  // Step 1d) Start render loop
-  startRenderLoop(null);
+  // Step 1d) Start render loop with flash animation callback
+  startRenderLoop(function(deltaMs) {
+    updateFlashAnimation(deltaMs);
+  });
 
   // Step 1e) Wire up camera preset buttons
   var avgZ = 0;
@@ -76,6 +80,20 @@ function initPlayback() {
   document.getElementById("pbGrid").addEventListener("change", function(e) {
     setGridVisible(e.target.checked);
   });
+
+  // Step 1f-ii) Wire up label toggles
+  var pbLabels = document.getElementById("pbShowLabels");
+  if (pbLabels) {
+    pbLabels.addEventListener("change", function(e) {
+      setAllLabelsVisible(e.target.checked);
+    });
+  }
+  var pbEquipLabels = document.getElementById("pbShowEquipLabels");
+  if (pbEquipLabels) {
+    pbEquipLabels.addEventListener("change", function(e) {
+      setAllEquipLabelsVisible(e.target.checked);
+    });
+  }
 
   // Step 1g) Wire up timeline controls
   document.getElementById("pbTlStart").addEventListener("click", goToStart);
@@ -167,6 +185,28 @@ function refreshPlayback() {
     }
   });
 
+  // Step 2b-iii) Collect from blast solids
+  var solids = APP.kirraProjectSolids || [];
+  solids.forEach(function(s) {
+    if (s.bounds && isFinite(s.bounds.minX)) {
+      allX.push(s.bounds.minX, s.bounds.maxX);
+      allY.push(s.bounds.minY, s.bounds.maxY);
+      allZ.push(s.bounds.minZ, s.bounds.maxZ);
+      hasSpatial = true;
+    } else if (s.triangles && s.triangles.length > 0 && s.triangles[0].vertices) {
+      var sample = [s.triangles[0], s.triangles[Math.floor(s.triangles.length / 2)], s.triangles[s.triangles.length - 1]];
+      sample.forEach(function(tri) {
+        if (!tri.vertices) return;
+        tri.vertices.forEach(function(v) {
+          allX.push(v.x);
+          allY.push(v.y);
+          allZ.push(v.z || 0);
+        });
+      });
+      hasSpatial = true;
+    }
+  });
+
   // Step 2c) Show/hide no-data overlay
   var noDataEl = document.getElementById("playbackNoData");
   if (noDataEl) noDataEl.style.display = hasSpatial ? "none" : "flex";
@@ -197,6 +237,21 @@ function refreshPlayback() {
       avgZ /= b.polygons.length;
       addBlastPolygon(b.name, b.polygons, avgZ, b.status || "planned");
     }
+  });
+
+  // Step 2f-ii) Add blast solids (3D volumes matched by name)
+  APP.blasts.forEach(function(b) {
+    for (var si = 0; si < solids.length; si++) {
+      if (solids[si].name === b.name) {
+        addBlastSolid(b.name, solids[si]);
+        break;
+      }
+    }
+  });
+
+  // Step 2f-iv) Create blast labels
+  APP.blasts.forEach(function(b) {
+    createBlastLabel(b.name);
   });
 
   // Step 2g) Update surface list in sidebar
@@ -298,6 +353,10 @@ function updateSceneForDay(day) {
       }
     }
   });
+
+  // Step 4c) Sync equipment label visibility with checkbox
+  var eqLabelCb = document.getElementById("pbShowEquipLabels");
+  if (eqLabelCb) setAllEquipLabelsVisible(eqLabelCb.checked);
 }
 
 // Step 5) Update surface list in sidebar

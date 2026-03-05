@@ -26,26 +26,33 @@ function buildTimeline() {
   var latest = null;
 
   APP.blasts.forEach(function(b) {
-    var dates = [b.drillStart, b.loadStart, b.blastDate];
+    var dates = [b.prepStart, b.drillStart, b.loadStart, b.blastDate];
     dates.forEach(function(d) {
       if (!d) return;
       if (!earliest || d < earliest) earliest = d;
       if (!latest || d > latest) latest = d;
     });
 
-    // Step 2a-i) Account for drill duration
+    // Step 2a-i) Account for prep duration
+    if (b.prepStart && b.prepDays) {
+      var endP = new Date(b.prepStart);
+      endP.setDate(endP.getDate() + (b.prepDays || 0));
+      var endPStr = isoDate(endP);
+      if (!latest || endPStr > latest) latest = endPStr;
+    }
+    // Step 2a-ii) Account for drill duration
     if (b.drillStart && b.drillDays) {
       var endD = new Date(b.drillStart);
       endD.setDate(endD.getDate() + (b.drillDays || 0));
       var endStr = isoDate(endD);
       if (!latest || endStr > latest) latest = endStr;
     }
-    // Step 2a-ii) Account for load duration
+    // Step 2a-iii) Account for load duration
     if (b.loadStart && b.loadDays) {
       var endL = new Date(b.loadStart);
       endL.setDate(endL.getDate() + (b.loadDays || 0));
-      var endStr = isoDate(endL);
-      if (!latest || endStr > latest) latest = endStr;
+      var endLStr = isoDate(endL);
+      if (!latest || endLStr > latest) latest = endLStr;
     }
   });
 
@@ -85,52 +92,72 @@ function buildTimeline() {
 
 // Step 3) Determine what phase a blast is in on a given date
 function getBlastPhase(blast, dateStr) {
-  // Step 3a) Blast day
-  if (blast.blastDate && dateStr === blast.blastDate) {
-    // Step 3a-i) Migrated mpu to mpus array (backward compat with legacy assignedMPU)
-    return { phase: "blastDay", drills: blast.assignedDrills || [], mpus: blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []) };
+  var mpusList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
+  var drillsList = blast.assignedDrills || [];
+
+  // Step 3a) Blast day — highest priority
+  if (!blast.noBlast && blast.blastDate && dateStr === blast.blastDate) {
+    return { phase: "blastDay", drills: drillsList, mpus: mpusList };
   }
 
-  // Step 3b) Loading phase
-  if (blast.loadStart && blast.loadDays) {
+  // Step 3b) Completed — past blast date
+  if (!blast.noBlast && blast.blastDate && dateStr > blast.blastDate) {
+    return { phase: "completed", drills: [], mpus: [] };
+  }
+
+  // Step 3c) Loading phase
+  if (!blast.noLoad && blast.loadStart && blast.loadDays) {
     var loadEnd = new Date(blast.loadStart);
     loadEnd.setDate(loadEnd.getDate() + blast.loadDays - 1);
     var loadEndStr = isoDate(loadEnd);
     if (dateStr >= blast.loadStart && dateStr <= loadEndStr) {
-      // Step 3b-i) Migrated mpu to mpus array
-      return { phase: "loading", drills: [], mpus: blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []) };
+      return { phase: "loading", drills: [], mpus: mpusList };
     }
   }
 
-  // Step 3c) Drilling phase (check blocks first)
-  if (blast.drillBlocks && blast.drillBlocks.length > 0) {
-    for (var i = 0; i < blast.drillBlocks.length; i++) {
-      var block = blast.drillBlocks[i];
-      if (block.drillStart && block.drillDays) {
-        var blockEnd = new Date(block.drillStart);
-        blockEnd.setDate(blockEnd.getDate() + block.drillDays - 1);
-        var blockEndStr = isoDate(blockEnd);
-        if (dateStr >= block.drillStart && dateStr <= blockEndStr) {
-          return { phase: "drilling", drills: block.assignedDrills || [], mpus: [] };
+  // Step 3d) Drilling phase (check blocks first)
+  if (!blast.noDrill) {
+    if (blast.drillBlocks && blast.drillBlocks.length > 0) {
+      for (var i = 0; i < blast.drillBlocks.length; i++) {
+        var block = blast.drillBlocks[i];
+        if (block.drillStart && block.drillDays) {
+          var blockEnd = new Date(block.drillStart);
+          blockEnd.setDate(blockEnd.getDate() + block.drillDays - 1);
+          var blockEndStr = isoDate(blockEnd);
+          if (dateStr >= block.drillStart && dateStr <= blockEndStr) {
+            return { phase: "drilling", drills: block.assignedDrills || [], mpus: [] };
+          }
         }
       }
-    }
-  } else if (blast.drillStart && blast.drillDays) {
-    var drillEnd = new Date(blast.drillStart);
-    drillEnd.setDate(drillEnd.getDate() + blast.drillDays - 1);
-    var drillEndStr = isoDate(drillEnd);
-    if (dateStr >= blast.drillStart && dateStr <= drillEndStr) {
-      return { phase: "drilling", drills: blast.assignedDrills || [], mpus: [] };
+    } else if (blast.drillStart && blast.drillDays) {
+      var drillEnd = new Date(blast.drillStart);
+      drillEnd.setDate(drillEnd.getDate() + blast.drillDays - 1);
+      var drillEndStr = isoDate(drillEnd);
+      if (dateStr >= blast.drillStart && dateStr <= drillEndStr) {
+        return { phase: "drilling", drills: drillsList, mpus: [] };
+      }
     }
   }
 
-  // Step 3d) Past blast date = completed
-  if (blast.blastDate && dateStr > blast.blastDate) {
-    return { phase: "completed", drills: [], mpus: [] };
+  // Step 3e) Prep phase
+  if (blast.prepStart && blast.prepDays) {
+    var prepEnd = new Date(blast.prepStart);
+    prepEnd.setDate(prepEnd.getDate() + blast.prepDays - 1);
+    var prepEndStr = isoDate(prepEnd);
+    if (dateStr >= blast.prepStart && dateStr <= prepEndStr) {
+      return { phase: "prep", drills: [], mpus: [] };
+    }
   }
 
-  // Step 3e) Has a drill start but date is before = planned
-  if (blast.drillStart && dateStr >= blast.drillStart) {
+  // Step 3f) Date falls within the overall blast window but no active phase = inactive
+  var anyStart = blast.prepStart || blast.drillStart || blast.loadStart;
+  var anyEnd = blast.blastDate || blast.loadStart || blast.drillStart;
+  if (anyStart && dateStr >= anyStart && anyEnd && dateStr <= anyEnd) {
+    return { phase: "inactive", drills: [], mpus: [] };
+  }
+
+  // Step 3g) Date is before any phase starts = planned
+  if (anyStart && dateStr < anyStart) {
     return { phase: "planned", drills: [], mpus: [] };
   }
 

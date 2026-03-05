@@ -399,6 +399,26 @@ function populateAncillaryDropdown(selectedIds) {
 //  SHOW / EDIT / SAVE
 // ============================================================
 
+// Step 5b) Toggle decouple field visibility based on noDrill/noLoad/noBlast
+function toggleDecoupleUI() {
+  var noDrill = document.getElementById("fNoDrill").checked;
+  var noLoad = document.getElementById("fNoLoad").checked;
+  var noBlast = document.getElementById("fNoBlast").checked;
+
+  var drillStartWrap = document.getElementById("fDrillStartWrap");
+  var drillTimeWrap = document.getElementById("fDrillStartTimeWrap");
+  var loadStartRow = document.getElementById("fLoadStartRow");
+  var blastDateWrap = document.getElementById("fBlastDateWrap");
+
+  if (drillStartWrap) drillStartWrap.style.display = noDrill ? "none" : "";
+  if (drillTimeWrap) drillTimeWrap.style.display = noDrill ? "none" : "";
+
+  // Step 5b-ii) Show manual loadStart when noDrill, show manual blastDate when noLoad
+  var showManualRow = noDrill || noBlast;
+  if (loadStartRow) loadStartRow.style.display = showManualRow ? "" : "none";
+  if (blastDateWrap) blastDateWrap.style.display = (noDrill && !noBlast) ? "" : "none";
+}
+
 // Step 6) Show the Add Blast modal with empty fields
 function showAddBlastModal() {
   APP.editingBlastIdx = null;
@@ -409,6 +429,13 @@ function showAddBlastModal() {
   document.getElementById("fSurfaceArea").value = "";
   document.getElementById("fDrillStart").value = isoDate(APP.planStart);
   document.getElementById("fDrillStartTime").value = "06:00";
+  document.getElementById("fNoDrill").checked = false;
+  document.getElementById("fNoLoad").checked = false;
+  document.getElementById("fNoBlast").checked = false;
+  document.getElementById("fLoadStart").value = "";
+  var fBlastDateMan = document.getElementById("fBlastDateManual");
+  if (fBlastDateMan) fBlastDateMan.value = "";
+  toggleDecoupleUI();
   document.getElementById("fLoadRate").value = 100000;
   document.getElementById("fVolume").value = "";
   document.getElementById("fExpMass").value = "";
@@ -448,6 +475,13 @@ function editBlast(idx) {
   document.getElementById("fSurfaceArea").value = b.surfaceArea || "";
   document.getElementById("fDrillStart").value = b.drillStart || "";
   document.getElementById("fDrillStartTime").value = b.drillStartTime || "06:00";
+  document.getElementById("fNoDrill").checked = !!b.noDrill;
+  document.getElementById("fNoLoad").checked = !!b.noLoad;
+  document.getElementById("fNoBlast").checked = !!b.noBlast;
+  document.getElementById("fLoadStart").value = b.loadStart || "";
+  var fBlastDateMan2 = document.getElementById("fBlastDateManual");
+  if (fBlastDateMan2) fBlastDateMan2.value = b.blastDate || "";
+  toggleDecoupleUI();
   document.getElementById("fLoadRate").value = b.loadRate;
   document.getElementById("fVolume").value = b.volume || "";
   document.getElementById("fExpMass").value = b.expMass || "";
@@ -514,8 +548,13 @@ function saveBlast() {
   }
 
   var loadRate = parseFloat(document.getElementById("fLoadRate").value) || 100000;
-  var drillStart = document.getElementById("fDrillStart").value;
+  var noDrill = document.getElementById("fNoDrill").checked;
+  var noLoad = document.getElementById("fNoLoad").checked;
+  var noBlast = document.getElementById("fNoBlast").checked;
+  var drillStart = noDrill ? "" : document.getElementById("fDrillStart").value;
   var drillStartTime = document.getElementById("fDrillStartTime").value || "06:00";
+  var manualLoadStart = noDrill ? (document.getElementById("fLoadStart").value || "") : "";
+  var manualBlastDate = (noDrill && !noBlast) ? (document.getElementById("fBlastDateManual").value || "") : "";
 
   // Step 8e) Calculate drill days from assigned drills' equipment rates
   var assignedDrills = [];
@@ -583,12 +622,17 @@ function saveBlast() {
     loadRate: loadRate,
     volume: volume,
     expMass: expMass,
+    noDrill: noDrill,
+    noLoad: noLoad,
+    noBlast: noBlast,
     drillStart: drillStart,
     drillStartTime: drillStartTime,
-    drillDays: drillDays,
-    loadStart: null,
-    loadDays: loadDays,
-    blastDate: null,
+    drillDays: noDrill ? 0 : drillDays,
+    loadStart: noDrill ? (manualLoadStart || null) : null,
+    loadStartManual: noDrill ? true : false,
+    loadDays: noLoad ? 0 : loadDays,
+    blastDate: manualBlastDate || null,
+    blastDateManual: manualBlastDate ? true : false,
     status: "planned",
     deps: blastDeps,
     assignedDrills: assignedDrills,
@@ -643,7 +687,12 @@ function initBlastModal() {
     addHoleTypeRow("", false, 0, 0, 0, remainPct);
   });
 
-  // Step 9b) Update drill-day estimate when drill assignment changes
+  // Step 9b) Toggle decouple field visibility on any checkbox change
+  document.getElementById("fNoDrill").addEventListener("change", toggleDecoupleUI);
+  document.getElementById("fNoLoad").addEventListener("change", toggleDecoupleUI);
+  document.getElementById("fNoBlast").addEventListener("change", toggleDecoupleUI);
+
+  // Step 9c) Update drill-day estimate when drill assignment changes
   document.getElementById("fAssignedDrills").addEventListener("change", function() {
     updateDrillDayEstimate();
   });
