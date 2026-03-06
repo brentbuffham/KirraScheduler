@@ -256,3 +256,16 @@
   color: #fff;
   border-color: var(--accent-drill);
 }
+.pb-tl-loop {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.pb-tl-loop:hover {
+  color: var(--text-secondary);
+}

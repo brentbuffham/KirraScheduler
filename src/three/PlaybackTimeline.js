@@ -13,6 +13,7 @@ var _days = [];
 var _currentIdx = 0;
 var _playing = false;
 var _speed = 1;
+var _loop = false;
 var _intervalId = null;
 var _onDayChange = null;
 
@@ -207,6 +208,8 @@ function play() {
   _intervalId = setInterval(function() {
     if (_currentIdx < _days.length - 1) {
       nextDay();
+    } else if (_loop && _days.length > 0) {
+      goToDay(0);
     } else {
       pause();
     }
@@ -235,6 +238,10 @@ function setSpeed(s) {
 
 function getSpeed() { return _speed; }
 
+// Step 7b) Loop control
+function setLoop(on) { _loop = !!on; }
+function getLoop() { return _loop; }
+
 // Step 8) Callback registration
 function onDayChange(fn) {
   _onDayChange = fn;
@@ -256,5 +263,7 @@ export {
   isPlaying,
   setSpeed,
   getSpeed,
+  setLoop,
+  getLoop,
   onDayChange
 };

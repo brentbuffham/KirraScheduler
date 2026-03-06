@@ -20,7 +20,7 @@ import {
 import {
   addBlastPolygon, addBlastSolid, createBlastLabel, setBlastPhase,
   setAllLabelsVisible, updateFlashAnimation,
-  clearBlasts, getBlastCentroid, setAllBlastsVisible
+  clearBlasts, getBlastCentroid, getBlastTopZ, setAllBlastsVisible
 } from "../three/BlastGeometry.js";
 import {
   placeEquipment, clearEquipment, setAllEquipmentVisible, setAllEquipLabelsVisible
@@ -28,7 +28,7 @@ import {
 import {
   buildTimeline, getCurrentDay, getDayCount, getCurrentIndex,
   goToDay, nextDay, prevDay, goToStart, goToEnd,
-  togglePlayPause, isPlaying, setSpeed, getSpeed, onDayChange
+  togglePlayPause, isPlaying, setSpeed, getSpeed, setLoop, onDayChange
 } from "../three/PlaybackTimeline.js";
 
 var _initialised = false;
@@ -154,6 +154,14 @@ function initPlayback() {
     });
   });
 
+  // Step 1i-ii) Loop checkbox
+  var loopCb = document.getElementById("pbTlLoop");
+  if (loopCb) {
+    loopCb.addEventListener("change", function(e) {
+      setLoop(e.target.checked);
+    });
+  }
+
   // Step 1j) Day change callback — update UI and scene
   onDayChange(function(day) {
     updateTimelineUI(day);
@@ -261,8 +269,17 @@ function refreshPlayback() {
     if (hasTris && (hasPoints || hasVertexPerTri)) {
       addSurface(s.name, s.points || [], s.triangles, {
         opacity: s.opacity !== undefined ? s.opacity : 0.85,
-        visible: s.visible !== undefined ? s.visible : true
+        visible: true
       });
+    }
+  });
+
+  // Step 2e-ii) Explicitly sync surface visibility so pit shell always shows (avoids checkbox-toggle workaround)
+  surfaces.forEach(function(s) {
+    var hasTris = s.triangles && s.triangles.length > 0;
+    var hasVertexPerTri = hasTris && s.triangles[0] && s.triangles[0].vertices !== undefined;
+    if (hasTris && (s.points || hasVertexPerTri)) {
+      setSurfaceVisible(s.name, true);
     }
   });
 
@@ -294,6 +311,14 @@ function refreshPlayback() {
   // Step 2g) Update surface list in sidebar
   updateSurfaceList();
 
+  // Step 2g-ii) Re-apply single colour mode to newly added surfaces (avoids toggle-off-on refresh)
+  var singleColorCb = document.getElementById("pbSingleColor");
+  var surfaceColorPicker = document.getElementById("pbSurfaceColor");
+  if (singleColorCb && singleColorCb.checked) {
+    var hex = surfaceColorPicker ? parseInt(surfaceColorPicker.value.replace("#", ""), 16) : 0x7799bb;
+    setSurfaceColorMode("single", hex);
+  }
+
   // Step 2h) Fit camera to scene bounds and store for camera presets
   var bounds = getAllSurfaceBounds();
   if (bounds) {
@@ -319,6 +344,12 @@ function refreshPlayback() {
   } else {
     document.getElementById("pbTlDay").textContent = "No schedule data";
     document.getElementById("pbTlDate").textContent = "";
+  }
+
+  // Step 2k) Re-apply Loop checkbox state so loop works without toggle-off-on
+  var loopCbRefresh = document.getElementById("pbTlLoop");
+  if (loopCbRefresh) {
+    setLoop(loopCbRefresh.checked);
   }
 }
 
@@ -360,11 +391,12 @@ function updateSceneForDay(day) {
     var state = day.blastStates[b.name];
     if (!state) return;
 
-    // Step 4b-i) Place drills at drilling blasts
+    // Step 4b-i) Place drills at drilling blasts — base (cuboid) at top of blast
     if (state.phase === "drilling" && state.drills) {
       state.drills.forEach(function(drillId) {
         if (placed[drillId]) return;
         var centroid = getBlastCentroid(b.name);
+        var topZ = getBlastTopZ(b.name);
         if (!centroid) return;
         var drill = drills.find(function(d) { return d.id === drillId; });
         var type = drill ? drill.type : "PV271";
@@ -372,6 +404,7 @@ function updateSceneForDay(day) {
         var offset = Object.keys(placed).length * 8;
         var pos = centroid.clone();
         pos.x += offset;
+        if (topZ !== null) pos.z = topZ;
         placeEquipment(drillId, type, pos);
         placed[drillId] = true;
       });

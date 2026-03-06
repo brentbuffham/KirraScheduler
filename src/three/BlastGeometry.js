@@ -224,6 +224,10 @@ function setBlastPhase(blastName, phase) {
     entry.solidMesh.material.transparent = isCompleted;
     entry.solidMesh.material.opacity = opacity;
     entry.solidMesh.material.depthWrite = !isCompleted;
+    // Step 5b-i) Reset emissive when leaving blastDay (flash animation sets it; otherwise grey appears tinted)
+    if (phase !== "blastDay") {
+      entry.solidMesh.material.emissive.setHex(0x000000);
+    }
     entry.solidMesh.material.needsUpdate = true;
   }
 
@@ -323,6 +327,17 @@ function getBlastCentroid(blastName) {
   return entry ? entry.centroid : null;
 }
 
+// Step 8b) Get blast top Z for drill placement (base sits on top of blast)
+function getBlastTopZ(blastName) {
+  var entry = _blastMeshes[blastName];
+  if (!entry) return null;
+  if (entry.solidMesh && entry.solidMesh.geometry) {
+    var box = new THREE.Box3().setFromBufferAttribute(entry.solidMesh.geometry.attributes.position);
+    return box.max.z;
+  }
+  return entry.centroid ? entry.centroid.z : null;
+}
+
 // Step 9) Set blast visibility
 function setBlastVisible(blastName, visible) {
   var entry = _blastMeshes[blastName];
@@ -381,6 +396,7 @@ export {
   setAllLabelsVisible,
   updateFlashAnimation,
   getBlastCentroid,
+  getBlastTopZ,
   setBlastVisible,
   setAllBlastsVisible,
   clearBlasts,

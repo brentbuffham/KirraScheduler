@@ -26,11 +26,26 @@ function findMatchingSolid(blastName) {
 //  HOLE TYPE TABLE HELPERS
 // ============================================================
 
-// Step 1) Calculate hole depth from pattern angle
+// Step 1) Calculate hole depth from pattern angle (uses pattern benchHt)
 function calcHoleDepth(pattern) {
   var angle = pattern.holeAngle || 90;
   var radians = angle * Math.PI / 180;
   var depth = pattern.benchHt / Math.sin(radians) + (pattern.subdrill || 0);
+  return Math.round(depth * 100) / 100;
+}
+
+// Step 1-BLOCK) Calculate hole depth from block volume instead of pattern benchHt.
+// Each hole covers a footprint of burden * spacing, so:
+//   blockBenchHt = (volume * pct/100) / (holes * burden * spacing)
+//   depth = blockBenchHt / sin(angle) + subdrill
+function calcBlockHoleDepth(pattern, volume, area, pct, holes) {
+  if (!volume || volume <= 0 || !holes || holes <= 0 || !pct || pct <= 0) {
+    return calcHoleDepth(pattern);
+  }
+  var blockBenchHt = (volume * pct / 100) / (holes * pattern.burden * pattern.spacing);
+  var angle = pattern.holeAngle || 90;
+  var radians = angle * Math.PI / 180;
+  var depth = blockBenchHt / Math.sin(radians) + (pattern.subdrill || 0);
   return Math.round(depth * 100) / 100;
 }
 
@@ -90,9 +105,10 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass, pct
     if (p) {
       var t = p.type.toUpperCase();
       lineChk.checked = (t === "PRESPLIT" || t === "BUFFER");
+      // Step 2a-i) Initial depth shown before recalc; recalcHolesFromPct will override if block depth is on
       tr.querySelector(".ht-depth").textContent = calcHoleDepth(p).toFixed(2);
     }
-    // Step 2b) Recalculate holes from current % when pattern changes
+    // Step 2b) Recalculate holes from current % when pattern changes (handles block depth)
     recalcHolesFromPct();
   });
   lineChk.addEventListener("change", function() { recalcHolesFromPct(); });
@@ -106,9 +122,14 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass, pct
 }
 
 // Step 2c) Recalculate holes on all rows from their % Block values
-//  holes = (surfaceArea * pct/100) / (burden * spacing)
+//  [1] holes = (surfaceArea * pct/100) / (burden * spacing)
+//  When "Use Block Depth" is on, also re-derives depth from block volume:
+//  [2] blockBenchHt = (volume * pct/100) / holes
+//  [3] depth = blockBenchHt / sin(angle) + subdrill
 function recalcHolesFromPct() {
   var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
+  var volume = parseFloat(document.getElementById("fVolume").value) || 0;
+  var useBlockDepth = document.getElementById("fUseBlockDepth").checked;
   var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
 
   for (var i = 0; i < rows.length; i++) {
@@ -116,14 +137,24 @@ function recalcHolesFromPct() {
     var patSel = tr.querySelector(".ht-pattern");
     var pctInp = tr.querySelector(".ht-pct");
     var holesInp = tr.querySelector(".ht-holes");
+    var depthCell = tr.querySelector(".ht-depth");
 
     var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
     var pct = parseFloat(pctInp.value) || 0;
 
     if (p && area > 0 && pct > 0) {
+      // Step 2c-i) Holes from surface area and pattern spacing
       var patternArea = area * pct / 100;
       var holes = Math.round(patternArea / (p.burden * p.spacing));
       holesInp.value = holes;
+
+      // Step 2c-ii) Update depth cell when using block depth
+      if (useBlockDepth && volume > 0 && holes > 0) {
+        var blockDepth = calcBlockHoleDepth(p, volume, area, pct, holes);
+        depthCell.textContent = blockDepth.toFixed(2);
+      } else if (p) {
+        depthCell.textContent = calcHoleDepth(p).toFixed(2);
+      }
     }
   }
   recalcHoleTypes();
@@ -159,12 +190,19 @@ function autoBalancePct() {
   }
 }
 
-// Step 3) Recalculate all hole type rows and update totals
+// Step 3) Recalculate all hole type rows and update totals.
+// When "Use Block Depth" is enabled, derives benchHt from block volume:
+//   blockBenchHt = (volume * pct/100) / holes
+//   depth = blockBenchHt / sin(angle) + subdrill
+// Otherwise uses pattern.benchHt as before.
 function recalcHoleTypes() {
   var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
   var totalMeters = 0;
   var totalMass = 0;
   var totalPct = 0;
+  var useBlockDepth = document.getElementById("fUseBlockDepth").checked;
+  var volume = parseFloat(document.getElementById("fVolume").value) || 0;
+  var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
 
   for (var i = 0; i < rows.length; i++) {
     var tr = rows[i];
@@ -177,11 +215,20 @@ function recalcHoleTypes() {
 
     var p = APP.patterns.find(function(pp) { return pp.id === patSel.value; });
     var holes = parseInt(holesInp.value) || 0;
-    totalPct += parseFloat(pctInp.value) || 0;
+    var pct = parseFloat(pctInp.value) || 0;
+    totalPct += pct;
 
     if (p) {
-      // Step 3a) Pattern is known — recalculate from pattern specs
-      var depth = calcHoleDepth(p);
+      // Step 3a) Pattern is known — choose depth source based on useBlockDepth
+      var depth;
+      var effectiveBenchHt = p.benchHt;
+      if (useBlockDepth && volume > 0 && holes > 0 && pct > 0) {
+        // Step 3a-BLOCK) Derive bench height from block volume / hole footprint
+        effectiveBenchHt = (volume * pct / 100) / (holes * p.burden * p.spacing);
+        depth = calcBlockHoleDepth(p, volume, area, pct, holes);
+      } else {
+        depth = calcHoleDepth(p);
+      }
       depthCell.textContent = depth.toFixed(2);
       var meters = holes * depth;
       var mass = 0;
@@ -190,7 +237,7 @@ function recalcHoleTypes() {
         if (isLine) {
           mass = meters * p.pf;
         } else {
-          mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+          mass = holes * p.burden * p.spacing * effectiveBenchHt * p.pf;
         }
       }
       metersCell.textContent = Math.round(meters);
@@ -265,10 +312,15 @@ function updateDrillDayEstimate() {
   el.innerHTML = parts.join(" &nbsp;|&nbsp; ");
 }
 
-// Step 4) Collect hole types from table into array
+// Step 4) Collect hole types from table into array.
+// Respects "Use Block Depth" — derives bench height from block volume when enabled.
 function collectHoleTypes() {
   var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+  var useBlockDepth = document.getElementById("fUseBlockDepth").checked;
+  var volume = parseFloat(document.getElementById("fVolume").value) || 0;
+  var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
   var result = [];
+
   for (var i = 0; i < rows.length; i++) {
     var tr = rows[i];
     var patId = tr.querySelector(".ht-pattern").value;
@@ -279,15 +331,21 @@ function collectHoleTypes() {
 
     var depth, meters, mass;
     if (p) {
-      // Step 4a) Pattern exists — calculate from pattern specs
-      depth = calcHoleDepth(p);
+      // Step 4a) Pattern exists — choose depth source based on useBlockDepth
+      var effectiveBenchHt = p.benchHt;
+      if (useBlockDepth && volume > 0 && holes > 0 && pct > 0) {
+        effectiveBenchHt = (volume * pct / 100) / (holes * p.burden * p.spacing);
+        depth = calcBlockHoleDepth(p, volume, area, pct, holes);
+      } else {
+        depth = calcHoleDepth(p);
+      }
       meters = holes * depth;
       mass = 0;
       if (holes > 0) {
         if (isLine) {
           mass = meters * p.pf;
         } else {
-          mass = holes * p.burden * p.spacing * p.benchHt * p.pf;
+          mass = holes * p.burden * p.spacing * effectiveBenchHt * p.pf;
         }
       }
     } else {
@@ -419,6 +477,67 @@ function toggleDecoupleUI() {
   if (blastDateWrap) blastDateWrap.style.display = (noDrill && !noBlast) ? "" : "none";
 }
 
+// Step 5c) Populate the Block Statistics tab from solidStats
+function populateSolidStats(stats) {
+  var tabBtn = document.getElementById("blastTabStatsBtn");
+  var tbody = document.getElementById("solidStatsRows");
+  var content = document.getElementById("solidStatsContent");
+  var empty = document.getElementById("solidStatsEmpty");
+  if (!tbody) return;
+
+  // Step 5c-i) Show/hide the tab button based on whether stats exist
+  if (!stats) {
+    if (tabBtn) tabBtn.style.display = "none";
+    if (content) content.style.display = "none";
+    if (empty) empty.style.display = "";
+    tbody.innerHTML = "";
+    return;
+  }
+
+  if (tabBtn) tabBtn.style.display = "";
+  if (content) content.style.display = "";
+  if (empty) empty.style.display = "none";
+  tbody.innerHTML = "";
+
+  var rowStyle = "border-bottom:1px solid var(--border);";
+  var labelStyle = "padding:6px 10px;color:var(--text-muted);";
+  var valueStyle = "padding:6px 10px;text-align:right;color:var(--text-primary);font-weight:600;";
+
+  // Step 5c-ii) Mesh quality colours — highlight issues in warm colours
+  var openEdgeColor = stats.openEdges > 0 ? "color:#ff9800;" : "";
+  var nonManifoldColor = stats.nonManifoldEdges > 0 ? "color:#f44336;" : "";
+  var closedColor = stats.closed ? "color:#4caf50;" : "color:#ff9800;";
+
+  var rows = [
+    ["Points (pts)", stats.points.toLocaleString()],
+    ["Edges (segs)", stats.edges.toLocaleString()],
+    ["Faces (tris)", stats.faces.toLocaleString()],
+    ["Normal Dir.", stats.normalDir],
+    ["Closed", stats.closed ? "Yes" : "No", closedColor],
+    ["Open Edges", stats.openEdges.toLocaleString(), openEdgeColor],
+    ["Non-manifold Edges", stats.nonManifoldEdges.toLocaleString(), nonManifoldColor],
+    ["XY Area (m\u00B2)", stats.xyArea.toLocaleString()],
+    ["YZ Area (m\u00B2)", stats.yzArea.toLocaleString()],
+    ["XZ Area (m\u00B2)", stats.xzArea.toLocaleString()],
+    ["3D Area (m\u00B2)", stats.area3d.toLocaleString()],
+    ["Volume (m\u00B3)", stats.volume.toLocaleString()]
+  ];
+
+  for (var i = 0; i < rows.length; i++) {
+    var tr = document.createElement("tr");
+    tr.style.cssText = rowStyle;
+    var td1 = document.createElement("td");
+    td1.style.cssText = labelStyle;
+    td1.textContent = rows[i][0];
+    var td2 = document.createElement("td");
+    td2.style.cssText = valueStyle + (rows[i][2] || "");
+    td2.textContent = rows[i][1];
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    tbody.appendChild(tr);
+  }
+}
+
 // Step 6) Show the Add Blast modal with empty fields
 function showAddBlastModal() {
   APP.editingBlastIdx = null;
@@ -432,6 +551,7 @@ function showAddBlastModal() {
   document.getElementById("fNoDrill").checked = false;
   document.getElementById("fNoLoad").checked = false;
   document.getElementById("fNoBlast").checked = false;
+  document.getElementById("fUseBlockDepth").checked = false;
   document.getElementById("fLoadStart").value = "";
   var fBlastDateMan = document.getElementById("fBlastDateManual");
   if (fBlastDateMan) fBlastDateMan.value = "";
@@ -460,6 +580,7 @@ function showAddBlastModal() {
   populateAncillaryDropdown([]);
   document.getElementById("fDrillProgress").value = "";
   document.getElementById("fLoadProgress").value = "";
+  populateSolidStats(null);
   updateDrillDayEstimate();
   openModal("blastModal");
 }
@@ -478,6 +599,7 @@ function editBlast(idx) {
   document.getElementById("fNoDrill").checked = !!b.noDrill;
   document.getElementById("fNoLoad").checked = !!b.noLoad;
   document.getElementById("fNoBlast").checked = !!b.noBlast;
+  document.getElementById("fUseBlockDepth").checked = !!b.useBlockDepth;
   document.getElementById("fLoadStart").value = b.loadStart || "";
   var fBlastDateMan2 = document.getElementById("fBlastDateManual");
   if (fBlastDateMan2) fBlastDateMan2.value = b.blastDate || "";
@@ -507,6 +629,7 @@ function editBlast(idx) {
   populateAncillaryDropdown(b.assignedAncillary || []);
   document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
   document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
+  populateSolidStats(b.solidStats || null);
   updateDrillDayEstimate();
   openModal("blastModal");
 }
@@ -551,6 +674,7 @@ function saveBlast() {
   var noDrill = document.getElementById("fNoDrill").checked;
   var noLoad = document.getElementById("fNoLoad").checked;
   var noBlast = document.getElementById("fNoBlast").checked;
+  var useBlockDepth = document.getElementById("fUseBlockDepth").checked;
   var drillStart = noDrill ? "" : document.getElementById("fDrillStart").value;
   var drillStartTime = document.getElementById("fDrillStartTime").value || "06:00";
   var manualLoadStart = noDrill ? (document.getElementById("fLoadStart").value || "") : "";
@@ -625,6 +749,7 @@ function saveBlast() {
     noDrill: noDrill,
     noLoad: noLoad,
     noBlast: noBlast,
+    useBlockDepth: useBlockDepth,
     drillStart: drillStart,
     drillStartTime: drillStartTime,
     drillDays: noDrill ? 0 : drillDays,
@@ -653,6 +778,7 @@ function saveBlast() {
     blastData.status = prev.status;
     if (!blastData.solidBounds && prev.solidBounds) blastData.solidBounds = prev.solidBounds;
     if (!blastData.solidBenchHt && prev.solidBenchHt) blastData.solidBenchHt = prev.solidBenchHt;
+    if (prev.solidStats) blastData.solidStats = prev.solidStats;
     if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
@@ -700,6 +826,16 @@ function initBlastModal() {
   // Step 9c) Recalculate holes from % when surface area changes
   document.getElementById("fSurfaceArea").addEventListener("input", function() {
     recalcHolesFromPct();
+  });
+
+  // Step 9d) Recalculate when "Use Block Depth" is toggled or volume changes
+  document.getElementById("fUseBlockDepth").addEventListener("change", function() {
+    recalcHoleTypes();
+  });
+  document.getElementById("fVolume").addEventListener("input", function() {
+    if (document.getElementById("fUseBlockDepth").checked) {
+      recalcHoleTypes();
+    }
   });
 }
 

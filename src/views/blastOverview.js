@@ -178,11 +178,11 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   // Step 6b) Determine if line-drill type
   var isLineDrill = (pattern.type === "PRESPLIT" || pattern.type === "BUFFER");
 
-  // Step 6c) Calculate hole depth from pattern data
+  // Step 6c) Calculate hole depth from pattern data (default; may be overridden by block depth)
   var angleRad = ((pattern.holeAngle || 90) * Math.PI) / 180;
   var sinAngle = Math.sin(angleRad);
   if (sinAngle < 0.01) sinAngle = 1;
-  var holeDepth = Math.round(((pattern.benchHt + (pattern.subdrill || 0)) / sinAngle) * 100) / 100;
+  var holeDepth = Math.round(((pattern.benchHt / sinAngle) + (pattern.subdrill || 0)) * 100) / 100;
 
   // Step 6d) Ensure holeTypes array exists
   if (!blast.holeTypes) blast.holeTypes = [];
@@ -209,6 +209,12 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   if (isFirstPattern && blast.surfaceArea > 0) {
     var holesFromPct = Math.round((defaultPct / 100) * blast.surfaceArea / (pattern.burden * pattern.spacing));
     if (holesFromPct > 0) defaultHoles = holesFromPct;
+  }
+
+  // Step 6d-iv) Override hole depth when using block depth
+  if (blast.useBlockDepth && blast.volume > 0 && defaultHoles > 0 && defaultPct > 0) {
+    var blockBenchHt = (blast.volume * defaultPct / 100) / (defaultHoles * pattern.burden * pattern.spacing);
+    holeDepth = Math.round((blockBenchHt / sinAngle + (pattern.subdrill || 0)) * 100) / 100;
   }
 
   // Step 6e) Build dialog HTML
@@ -258,9 +264,10 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   document.body.appendChild(container.firstChild);
 
   // Step 6g) Calculate initial explosive mass and wire up live recalc
-  recalcAllocFields(pattern);
+  recalcAllocFields(pattern, blast);
 
   // Step 6g-ii) When % Block changes, recalculate holes from surface area
+  //   and re-derive depth from block volume when useBlockDepth is on
   document.getElementById("allocPct").addEventListener("input", function() {
     var pct = parseFloat(this.value) || 0;
     if (pct > 100) { pct = 100; this.value = 100; }
@@ -269,12 +276,19 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
     if (area > 0 && pattern.burden > 0 && pattern.spacing > 0) {
       var calcHoles = Math.round((pct / 100) * area / (pattern.burden * pattern.spacing));
       document.getElementById("allocHoles").value = calcHoles > 0 ? calcHoles : 0;
+
+      // Step 6g-iii) When using block depth, recalculate depth from volume
+      if (blast.useBlockDepth && blast.volume > 0 && calcHoles > 0 && pct > 0) {
+        var blockBenchHt = (blast.volume * pct / 100) / (calcHoles * pattern.burden * pattern.spacing);
+        var newDepth = Math.round((blockBenchHt / sinAngle + (pattern.subdrill || 0)) * 100) / 100;
+        document.getElementById("allocDepth").value = newDepth;
+      }
     }
-    recalcAllocFields(pattern);
+    recalcAllocFields(pattern, blast);
   });
 
-  document.getElementById("allocHoles").addEventListener("input", function() { recalcAllocFields(pattern); });
-  document.getElementById("allocDepth").addEventListener("input", function() { recalcAllocFields(pattern); });
+  document.getElementById("allocHoles").addEventListener("input", function() { recalcAllocFields(pattern, blast); });
+  document.getElementById("allocDepth").addEventListener("input", function() { recalcAllocFields(pattern, blast); });
 
   // Step 6h) Cancel button
   document.getElementById("allocCancel").addEventListener("click", function() {
@@ -333,15 +347,21 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
   });
 }
 
-// Step 7) Live-recalculate drill meters and explosive mass in the allocation dialog
-function recalcAllocFields(pattern) {
+// Step 7) Live-recalculate drill meters and explosive mass in the allocation dialog.
+// When useBlockDepth is on, derives effective benchHt from block volume for mass calc.
+function recalcAllocFields(pattern, blast) {
   var holes = parseInt(document.getElementById("allocHoles").value) || 0;
   var depth = parseFloat(document.getElementById("allocDepth").value) || 0;
+  var pct = parseFloat(document.getElementById("allocPct").value) || 0;
   var drillMeters = Math.round(holes * depth * 10) / 10;
   document.getElementById("allocDrillM").value = drillMeters;
 
-  // Step 7a) Explosive mass = pf * burden * spacing * benchHt * holes
-  var expMass = pattern.pf * pattern.burden * pattern.spacing * pattern.benchHt * holes;
+  // Step 7a) Explosive mass — use block-derived benchHt when useBlockDepth is on
+  var effectiveBenchHt = pattern.benchHt;
+  if (blast && blast.useBlockDepth && blast.volume > 0 && holes > 0 && pct > 0) {
+    effectiveBenchHt = (blast.volume * pct / 100) / (holes * pattern.burden * pattern.spacing);
+  }
+  var expMass = pattern.pf * pattern.burden * pattern.spacing * effectiveBenchHt * holes;
   document.getElementById("allocExpMass").value = Math.round(expMass);
 }
 

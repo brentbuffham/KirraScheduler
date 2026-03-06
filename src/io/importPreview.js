@@ -81,6 +81,9 @@ function mergeImported() {
       if (imp.solidBounds) {
         existing.solidBounds = imp.solidBounds;
       }
+      if (imp.solidStats) {
+        existing.solidStats = imp.solidStats;
+      }
       // Merge hole types if present
       if (imp.holeTypes && imp.holeTypes.length > 0) {
         existing.holeTypes = imp.holeTypes.map(function(ht) {
@@ -96,7 +99,9 @@ function mergeImported() {
         });
       }
     } else {
-      // Step 3b) Create new blast entry with all available data
+      // Step 3b) Create new blast entry with all available data.
+      // Auto-enable useBlockDepth for solid-sourced imports that have volume.
+      var isSolid = (imp._sourceType === "solid" && imp.volume > 0);
       APP.blasts.push({
         name: imp.name,
         mode: "Manual",
@@ -111,6 +116,7 @@ function mergeImported() {
         loadDays: imp.loadDays || 0,
         blastDate: null,
         status: "planned",
+        useBlockDepth: isSolid,
         deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
         assignedDrills: imp.assignedDrills || [],
         assignedMPUs: imp.assignedMPUs || (imp.assignedMPU ? [imp.assignedMPU] : []),
@@ -130,6 +136,7 @@ function mergeImported() {
         }),
         solidBounds: imp.solidBounds || null,
         solidBenchHt: imp.solidBenchHt || null,
+        solidStats: imp.solidStats || null,
         drillProgress: 0,
         loadProgress: 0
       });

@@ -11,45 +11,36 @@ import { getScene } from "./PlaybackScene.js";
 var _equipmentMap = {};
 
 // Step 2) Build a procedural drill rig mesh (generic tracked drill)
+// Reference: yellow base, vertical light grey mast, small cap at top
 function buildDrillMesh(type) {
   var group = new THREE.Group();
 
-  // Step 2a) Tracked base — small for D65-class, larger for everything else
+  // Step 2a) Tracked base — yellow rectangular prism (cuboid)
   var isSmall = (type === "D65");
   var baseW = isSmall ? 3 : 4;
   var baseD = isSmall ? 6 : 8;
   var baseH = 2;
   var baseGeom = new THREE.BoxGeometry(baseW, baseD, baseH);
-  var baseMat = new THREE.MeshPhongMaterial({ color: 0xf59e0b, flatShading: true });
+  var baseMat = new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true });
   var baseMesh = new THREE.Mesh(baseGeom, baseMat);
   baseMesh.position.set(0, 0, baseH / 2);
   group.add(baseMesh);
 
-  // Step 2b) Cab — smaller box on front
-  var cabGeom = new THREE.BoxGeometry(baseW * 0.7, baseD * 0.3, 2.5);
-  var cabMat = new THREE.MeshPhongMaterial({ color: 0xd97706, flatShading: true });
-  var cabMesh = new THREE.Mesh(cabGeom, cabMat);
-  cabMesh.position.set(0, -baseD * 0.3, baseH + 1.25);
-  group.add(cabMesh);
-
-  // Step 2c) Mast — tall cylinder (2x base height for visibility)
-  var mastH = isSmall ? 28 : 40;
-  var mastGeom = new THREE.CylinderGeometry(0.3, 0.4, mastH, 8);
-  var mastMat = new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true });
+  // Step 2b) Vertical mast — light grey cylinder, 30% shorter (Z-up scene)
+  var mastH = isSmall ? 20 : 28;
+  var mastGeom = new THREE.CylinderGeometry(0.25, 0.35, mastH, 8);
+  var mastMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, flatShading: true });
   var mastMesh = new THREE.Mesh(mastGeom, mastMat);
   mastMesh.rotation.x = Math.PI / 2;
-  mastMesh.rotation.z = Math.PI / 2;
-  mastMesh.position.set(0, baseD * 0.1, baseH + mastH / 2);
+  mastMesh.position.set(0, 0, baseH + mastH / 2);
   group.add(mastMesh);
 
-  // Step 2d) Drill string — thin cylinder inside mast
-  var dsGeom = new THREE.CylinderGeometry(0.1, 0.1, mastH * 0.9, 6);
-  var dsMat = new THREE.MeshPhongMaterial({ color: 0x888888 });
-  var dsMesh = new THREE.Mesh(dsGeom, dsMat);
-  dsMesh.rotation.x = Math.PI / 2;
-  dsMesh.rotation.z = Math.PI / 2;
-  dsMesh.position.set(0, baseD * 0.1, baseH + mastH * 0.45);
-  group.add(dsMesh);
+  // Step 2c) Mast cap — small sphere at top
+  var capGeom = new THREE.SphereGeometry(0.35, 8, 6);
+  var capMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, flatShading: true });
+  var capMesh = new THREE.Mesh(capGeom, capMat);
+  capMesh.position.set(0, 0, baseH + mastH);
+  group.add(capMesh);
 
   return group;
 }
@@ -127,9 +118,10 @@ function placeEquipment(equipId, type, position) {
   var scene = getScene();
   if (!scene) return null;
 
-  // Step 5a) Remove existing if repositioning
+  // Step 5a) Remove and dispose existing if repositioning
   if (_equipmentMap[equipId]) {
     scene.remove(_equipmentMap[equipId].group);
+    disposeGroup(_equipmentMap[equipId].group);
   }
 
   // Step 5b) Build appropriate mesh — "MPU" builds truck, everything else builds drill rig
@@ -161,12 +153,33 @@ function placeEquipment(equipId, type, position) {
   return _equipmentMap[equipId];
 }
 
-// Step 5) Remove equipment from scene
+// Step 4b) Dispose all geometries and materials in a group (recursive)
+function disposeGroup(group) {
+  if (!group) return;
+  group.traverse(function(obj) {
+    if (obj.geometry) {
+      obj.geometry.dispose();
+      obj.geometry = null;
+    }
+    if (obj.material) {
+      if (obj.material.map) obj.material.map.dispose();
+      if (Array.isArray(obj.material)) {
+        obj.material.forEach(function(m) { m.dispose(); });
+      } else {
+        obj.material.dispose();
+      }
+      obj.material = null;
+    }
+  });
+}
+
+// Step 5) Remove equipment from scene and dispose resources
 function removeEquipment(equipId) {
   var scene = getScene();
   var entry = _equipmentMap[equipId];
   if (entry && scene) {
     scene.remove(entry.group);
+    disposeGroup(entry.group);
     delete _equipmentMap[equipId];
   }
 }
@@ -194,12 +207,16 @@ function setAllEquipLabelsVisible(visible) {
   }
 }
 
-// Step 9) Clear all equipment
+// Step 9) Clear all equipment and dispose geometries/materials
 function clearEquipment() {
   var scene = getScene();
   var ids = Object.keys(_equipmentMap);
   for (var i = 0; i < ids.length; i++) {
-    if (scene) scene.remove(_equipmentMap[ids[i]].group);
+    var entry = _equipmentMap[ids[i]];
+    if (scene && entry) {
+      scene.remove(entry.group);
+      disposeGroup(entry.group);
+    }
   }
   _equipmentMap = {};
 }

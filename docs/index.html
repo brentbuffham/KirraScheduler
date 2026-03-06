@@ -12,16 +12,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="/KirraScheduler/icons/kirra-32.png">
-  <script type="module" crossorigin src="/KirraScheduler/assets/index-DdjsGOqM.js"></script>
-  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-BevEmuuK.css">
+<link rel="icon" type="image/png" href="./icons/kirra-32.png">
+  <script type="module" crossorigin src="./assets/index-CxzftQ-r.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-xW_q8lbO.css">
 </head>
 <body>
 
 <!-- Step 1) Header -->
 <header class="app-header">
   <div class="app-logo">
-    <img src="/KirraScheduler/icons/kirra-64.png" alt="Kirra" style="width:32px;height:32px;border-radius:6px;">
+    <img src="./icons/kirra-64.png" alt="Kirra" style="width:32px;height:32px;border-radius:6px;">
     <div>
       <h1>KIRRA SCHEDULER</h1>
       <div class="subtitle">Drill &amp; Blast Open Cut Planning</div>
@@ -461,6 +461,9 @@
         <button class="pb-speed-btn" data-speed="5">5x</button>
         <button class="pb-speed-btn" data-speed="10">10x</button>
       </div>
+      <label class="pb-tl-loop" title="Loop playback when reaching the end">
+        <input type="checkbox" id="pbTlLoop"> Loop
+      </label>
     </div>
   </div>
 
@@ -842,6 +845,7 @@
         <div class="modal-tab active" data-tab="blastTabPatterns">Blast &amp; Patterns</div>
         <div class="modal-tab" data-tab="blastTabEquipment">Equipment &amp; Progress</div>
         <div class="modal-tab" data-tab="blastTabDeps">Prep &amp; Dependencies</div>
+        <div class="modal-tab" data-tab="blastTabStats" id="blastTabStatsBtn" style="display:none;">Block Stats</div>
       </div>
 
       <!-- TAB 1: Blast & Patterns -->
@@ -887,6 +891,11 @@
           <div class="form-field" style="min-width:80px;display:flex;align-items:flex-end;">
             <label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:11px;">
               <input type="checkbox" id="fNoBlast"> No Blast
+            </label>
+          </div>
+          <div class="form-field" style="min-width:140px;display:flex;align-items:flex-end;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:11px;" title="Derive bench height from block volume instead of pattern spec. Use for imported solids/blocks where the vertical depth varies.">
+              <input type="checkbox" id="fUseBlockDepth"> Use Block Depth
             </label>
           </div>
         </div>
@@ -1059,6 +1068,22 @@
           </div>
         </div>
       </div>
+
+      <!-- TAB 4: Block Statistics — mesh quality and geometry from imported solid -->
+      <div class="modal-tab-pane" id="blastTabStats">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">
+          Block Statistics <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— mesh geometry &amp; quality from imported solid</span>
+        </div>
+        <div id="solidStatsContent">
+          <table style="width:100%;max-width:480px;font-size:12px;font-family:'JetBrains Mono',monospace;border-collapse:collapse;">
+            <tbody id="solidStatsRows"></tbody>
+          </table>
+        </div>
+        <div id="solidStatsEmpty" style="display:none;padding:40px 20px;text-align:center;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:12px;">
+          No block statistics available.<br>
+          <span style="font-size:11px;opacity:0.7;">Import a solid from a KAP file to see mesh geometry and quality data.</span>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" id="btnCancelBlastModal">Cancel</button>
@@ -1118,6 +1143,6 @@
   </div>
 </div>
 
-<!-- Step 9) Application entry point -->
+<!-- Step 9) Application entry point -->
 </body>
 </html>
