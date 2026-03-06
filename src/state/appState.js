@@ -186,7 +186,8 @@ var APP = {
     actualBCM: 426594,
     targetMTD: 700000,
     monthStart: "2026-02-01",
-    actuals: []
+    actuals: [],
+    dateLocale: "australia"
   },
 
   // Step 6) Product library (from charge config ZIP or Kirra export)

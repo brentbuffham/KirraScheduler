@@ -351,6 +351,7 @@ function parseKGPProject(file) {
       if (data.conformance) {
         APP.conformance = data.conformance;
         if (!APP.conformance.actuals) APP.conformance.actuals = [];
+        if (!APP.conformance.dateLocale) APP.conformance.dateLocale = "australia";
         var actCount = APP.conformance.actuals.length;
         log.innerHTML += "<div class=\"log-ok\">Conformance restored" + (actCount > 0 ? " (" + actCount + " actuals)" : "") + "</div>";
       }

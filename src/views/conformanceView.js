@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { formatNum, formatDate } from "../utils/dateUtils.js";
+import { formatNum, formatDate, parseDateFromStr } from "../utils/dateUtils.js";
 import { setupDropZone } from "../io/dropZone.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 
@@ -140,7 +140,9 @@ function buildActualsMap() {
 //  CSV ACTUALS IMPORT
 // ============================================================
 
-// Step 5) Parse actuals CSV — columns: BlastName, ActualBCM, ActualExpKg, ActualBlastDate, Status
+// Step 5) Parse actuals CSV — supports full conformance format:
+//   Blast Name, Planned Drill/Volume/Explosive, Designed Drill/Volume/Explosive,
+//   Planned Blast Date, Status, Actual Drill (m), Actual Volume (m³), Actual Explosive (kg), Actual Blast Date
 function importActualsCSV(file) {
   var log = document.getElementById("confCSVLog");
   log.innerHTML = "<div class=\"log-info\">Reading " + file.name + "...</div>";
@@ -155,13 +157,13 @@ function importActualsCSV(file) {
       }
 
       var headers = parseCSVLine(lines[0]).map(function(h) { return h.trim().toLowerCase(); });
-      var nameIdx = findColIdx(headers, ["blastname", "blast_name", "blast", "name"]);
-      var bcmIdx = findColIdx(headers, ["actualbcm", "actual_bcm", "bcm", "volume"]);
-      var expIdx = findColIdx(headers, ["actualexpkg", "actual_exp_kg", "expkg", "exp_mass", "explosive"]);
-      var dateIdx = findColIdx(headers, ["actualblastdate", "actual_blast_date", "blastdate", "date"]);
+      var nameIdx = findColIdx(headers, ["blast name", "blastname", "blast_name", "blast", "name"]);
+      var bcmIdx = findColIdx(headers, ["actual volume (m³)", "actual volume (m3)", "actual volume", "actual_volume", "actualbcm", "actual_bcm", "bcm", "volume"]);
+      var expIdx = findColIdx(headers, ["actual explosive (kg)", "actual explosive", "actual_exp_kg", "actualexpkg", "expkg", "exp_mass", "explosive"]);
+      var dateIdx = findColIdx(headers, ["actual blast date", "actualblastdate", "actual_blast_date", "blastdate", "date"]);
       var statusIdx = findColIdx(headers, ["status", "blast_status"]);
       // Step 5-i) Optional columns for drill/load progress actuals
-      var drillMetersIdx = findColIdx(headers, ["actualdrillmeters", "actual_drill_meters", "drillmeters", "drill_meters", "metersdrilled"]);
+      var drillMetersIdx = findColIdx(headers, ["actual drill (m)", "actual drill", "actual_drill", "actualdrillmeters", "actual_drill_meters", "drillmeters", "drill_meters", "metersdrilled"]);
       var loadKgIdx = findColIdx(headers, ["actualloadkg", "actual_load_kg", "loadkg", "load_kg", "kgloaded", "actualloaded"]);
 
       if (nameIdx === -1) {
@@ -177,11 +179,13 @@ function importActualsCSV(file) {
         var blastName = (cols[nameIdx] || "").trim();
         if (!blastName) continue;
 
+        var rawDate = dateIdx !== -1 ? (cols[dateIdx] || "").trim() : "";
+        var locale = (APP.conformance.dateLocale || "australia");
         var actual = {
           blastName: blastName,
           actualBCM: bcmIdx !== -1 ? parseFloat(cols[bcmIdx]) || 0 : 0,
           actualExpKg: expIdx !== -1 ? parseFloat(cols[expIdx]) || 0 : 0,
-          actualBlastDate: dateIdx !== -1 ? (cols[dateIdx] || "").trim() : "",
+          actualBlastDate: rawDate ? parseDateFromStr(rawDate, locale) || rawDate : "",
           status: statusIdx !== -1 ? (cols[statusIdx] || "").trim() : "",
           actualDrillMeters: drillMetersIdx !== -1 ? parseFloat(cols[drillMetersIdx]) || 0 : 0,
           actualLoadKg: loadKgIdx !== -1 ? parseFloat(cols[loadKgIdx]) || 0 : 0
@@ -537,14 +541,16 @@ function processActualsRows(rows, log) {
 
   var actuals = [];
   var matched = 0;
+  var locale = (APP.conformance.dateLocale || "australia");
   rows.forEach(function(r) {
     var blastName = r.BlastName || r.blastName || r.blast_name || r.BLASTNAME || r.name || r.NAME || "";
     if (!blastName) return;
+    var rawDate = r.ActualBlastDate || r.actualBlastDate || r.actual_blast_date || r.ACTUALBLASTDATE || r.blastDate || r.date || "";
     var actual = {
       blastName: blastName,
       actualBCM: parseFloat(r.ActualBCM || r.actualBCM || r.actual_bcm || r.ACTUALBCM || r.bcm || r.volume || 0) || 0,
       actualExpKg: parseFloat(r.ActualExpKg || r.actualExpKg || r.actual_exp_kg || r.ACTUALEXPKG || r.expKg || r.explosive || 0) || 0,
-      actualBlastDate: r.ActualBlastDate || r.actualBlastDate || r.actual_blast_date || r.ACTUALBLASTDATE || r.blastDate || r.date || "",
+      actualBlastDate: rawDate ? parseDateFromStr(String(rawDate), locale) || rawDate : "",
       status: r.Status || r.status || r.blast_status || r.STATUS || "",
       actualDrillMeters: parseFloat(r.ActualDrillMeters || r.actualDrillMeters || r.actual_drill_meters || r.ACTUALDRILLMETERS || r.drillMeters || 0) || 0,
       actualLoadKg: parseFloat(r.ActualLoadKg || r.actualLoadKg || r.actual_load_kg || r.ACTUALLOADKG || r.loadKg || 0) || 0
@@ -624,6 +630,16 @@ function testAPIConnection() {
 function initConformance() {
   // Step 11a) CSV import
   setupDropZone("confCSVDropZone", "confCSVInput", importActualsCSV);
+
+  // Step 11a-ii) Date locale dropdown — sync with APP.conformance.dateLocale
+  var dateLocaleSel = document.getElementById("confDateLocale");
+  if (dateLocaleSel) {
+    dateLocaleSel.value = APP.conformance.dateLocale || "australia";
+    dateLocaleSel.addEventListener("change", function() {
+      APP.conformance.dateLocale = dateLocaleSel.value;
+      debouncedSave();
+    });
+  }
 
   var btnTemplate = document.getElementById("btnExportConfTemplate");
   if (btnTemplate) btnTemplate.addEventListener("click", exportActualsTemplate);

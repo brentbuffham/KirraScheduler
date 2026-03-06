@@ -273,6 +273,16 @@
       <!-- CSV Import -->
       <div class="data-table-container" style="padding:16px;">
         <h3 style="font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--accent-green); margin:0 0 10px 0;">Import Actuals (CSV)</h3>
+        <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-field" style="flex:0 0 140px;">
+            <label style="font-size:11px;">Date format</label>
+            <select id="confDateLocale" style="font-size:12px;">
+              <option value="australia">Australian (DD/MM/YYYY)</option>
+              <option value="us">US (MM/DD/YYYY)</option>
+              <option value="iso">ISO (YYYY-MM-DD)</option>
+            </select>
+          </div>
+        </div>
         <div class="drop-zone" id="confCSVDropZone" style="padding:16px; min-height:auto;">
           <div class="drop-text" style="font-size:13px;">Drop CSV with blast actuals</div>
           <div class="drop-sub">Columns: BlastName, ActualBCM, ActualExpKg, ActualBlastDate, Status</div>
