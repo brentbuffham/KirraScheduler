@@ -1,0 +1,10 @@
+---
+description: Reserved Vite dev server ports for KirraScheduler vs Kirra
+alwaysApply: true
+---
+
+# Local dev ports
+
+- **KirraScheduler** (this repo): **http://localhost:5174** — `vite.config.js` uses `port: 5174` and `strictPort: true`. Run via **Terminal → Run Task → KirraScheduler DEV** or `npm run dev`.
+- **Kirra** (sibling repo): **http://localhost:5173**.
+- **Other Vite apps**: prefer **5175** so 5173/5174 stay reserved.
