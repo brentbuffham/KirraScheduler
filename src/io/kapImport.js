@@ -18,6 +18,7 @@ import { renderBlasts } from "../views/blastOverview.js";
 import { renderGantt } from "../views/ganttView.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { computeDepthBins } from "../engine/depthBinning.js";
 
 // Step 1) Main entry point — parse a .kap file
 function parseKAPFile(file) {
@@ -243,6 +244,16 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
       surfObj.surfaceArea = surfaceArea;
       surfObj.meshStats = meshStats;
       surfObj.isBlastSolid = true;
+
+      // Step 3c-ii) Compute depth histogram (area % per metre-depth bin)
+      var depthBinData = computeDepthBins(surfObj);
+      if (depthBinData) {
+        surfObj.depthBinData = depthBinData;
+        var binSummary = depthBinData.depthBins.map(function(db) {
+          return db.minDepth + "-" + db.maxDepth + "m:" + db.areaPct + "%";
+        }).join(", ");
+        log.innerHTML += "<div class=\"log-info\">  Depth profile (" + depthBinData.gridResolution + "m grid, " + depthBinData.totalCells + " cells): " + binSummary + "</div>";
+      }
 
       blastSolids.push(surfObj);
 

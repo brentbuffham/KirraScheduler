@@ -12,16 +12,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kirra Scheduler — Drill &amp; Blast Open Cut Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="/KirraScheduler/icons/kirra-32.png">
-  <script type="module" crossorigin src="/KirraScheduler/assets/index-D4gSwuYj.js"></script>
-  <link rel="stylesheet" crossorigin href="/KirraScheduler/assets/index-xW_q8lbO.css">
+<link rel="icon" type="image/png" href="/icons/kirra-32.png">
+  <script type="module" crossorigin src="/assets/index-FFfF0edV.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-xW_q8lbO.css">
 </head>
 <body>
 
 <!-- Step 1) Header -->
 <header class="app-header">
   <div class="app-logo">
-    <img src="/KirraScheduler/icons/kirra-64.png" alt="Kirra" style="width:32px;height:32px;border-radius:6px;">
+    <img src="/icons/kirra-64.png" alt="Kirra" style="width:32px;height:32px;border-radius:6px;">
     <div>
       <h1>KIRRA SCHEDULER</h1>
       <div class="subtitle">Drill &amp; Blast Open Cut Planning</div>
@@ -961,9 +961,20 @@
               </tfoot>
             </table>
           </div>
-          <button type="button" id="btnAddHoleType" class="btn" style="margin-top:8px;font-size:11px;padding:4px 10px;">
-            + Add Pattern
-          </button>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+            <button type="button" id="btnAddHoleType" class="btn" style="font-size:11px;padding:4px 10px;">
+              + Add Pattern
+            </button>
+            <button type="button" id="btnAutoDepth" class="btn" style="font-size:11px;padding:4px 10px;display:none;" title="Auto-populate hole type rows from the 3D solid depth profile">
+              Auto-populate from Depth
+            </button>
+          </div>
+
+          <!-- Depth Profile Panel — shown when a matching 3D solid with depth bins exists -->
+          <div id="depthProfilePanel" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);">
+            <div style="font-weight:600;font-size:12px;margin-bottom:6px;color:var(--text-primary);">Depth Profile (from 3D solid)</div>
+            <div id="depthProfileContent"></div>
+          </div>
         </div>
 
         <div class="form-row" style="margin-top:12px;">

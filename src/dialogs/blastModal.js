@@ -12,6 +12,7 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { renderDepthProfilePanel } from "../engine/depthBinning.js";
 
 // Step 0) Find a matching solid in APP.kirraProjectSolids by blast name
 function findMatchingSolid(blastName) {
@@ -538,6 +539,127 @@ function populateSolidStats(stats) {
   }
 }
 
+// ============================================================
+//  DEPTH PROFILE & AUTO-POPULATE
+// ============================================================
+
+// Step 5e) Show or hide the depth profile panel and auto-populate button
+function populateDepthProfile(blastName) {
+  var panel = document.getElementById("depthProfilePanel");
+  var content = document.getElementById("depthProfileContent");
+  var btn = document.getElementById("btnAutoDepth");
+  if (!panel || !content || !btn) return;
+
+  // Step 5e-i) Look up matching solid with depthBinData
+  var solid = findMatchingSolid(blastName);
+  var depthBinData = null;
+  if (solid && solid.depthBinData) depthBinData = solid.depthBinData;
+
+  // Step 5e-ii) Also check the blast itself for persisted bins
+  if (!depthBinData) {
+    var blast = APP.blasts.find(function(b) { return b.name === blastName; });
+    if (blast && blast.depthBinData) depthBinData = blast.depthBinData;
+  }
+
+  if (depthBinData && depthBinData.depthBins && depthBinData.depthBins.length > 0) {
+    panel.style.display = "";
+    btn.style.display = "";
+    content.innerHTML = renderDepthProfilePanel(depthBinData);
+    btn._depthBinData = depthBinData;
+  } else {
+    panel.style.display = "none";
+    btn.style.display = "none";
+    btn._depthBinData = null;
+  }
+}
+
+// Step 5f) Auto-populate holeType rows from depth bins.
+//  Creates one row per significant bin (areaPct >= 5%), allocating
+//  holes proportionally based on the first pattern in the library.
+function autoPopulateFromDepth() {
+  var btn = document.getElementById("btnAutoDepth");
+  if (!btn || !btn._depthBinData) return;
+
+  var depthBinData = btn._depthBinData;
+  var bins = depthBinData.depthBins;
+
+  // Step 5f-i) Filter bins to significant ones (>= 5% area)
+  var significantBins = [];
+  var mergeTarget = null;
+  for (var i = 0; i < bins.length; i++) {
+    if (bins[i].areaPct >= 5) {
+      significantBins.push({
+        minDepth: bins[i].minDepth,
+        maxDepth: bins[i].maxDepth,
+        areaPct: bins[i].areaPct,
+        avgDepth: bins[i].avgDepth,
+        cellCount: bins[i].cellCount
+      });
+      mergeTarget = significantBins.length - 1;
+    } else if (mergeTarget !== null) {
+      // Step 5f-ii) Merge small bins into nearest significant bin
+      significantBins[mergeTarget].areaPct += bins[i].areaPct;
+      significantBins[mergeTarget].maxDepth = bins[i].maxDepth;
+      significantBins[mergeTarget].avgDepth = (significantBins[mergeTarget].avgDepth + bins[i].avgDepth) / 2;
+    }
+  }
+
+  if (significantBins.length === 0) {
+    alert("No significant depth bins found (all below 5% area threshold).");
+    return;
+  }
+
+  // Step 5f-iii) Check if user wants to replace existing rows
+  var existingRows = document.getElementById("holeTypeRows").querySelectorAll("tr");
+  if (existingRows.length > 0) {
+    if (!confirm("This will replace the existing " + existingRows.length + " hole type row(s). Continue?")) return;
+  }
+
+  // Step 5f-iv) Need at least one pattern to allocate against
+  if (APP.patterns.length === 0) {
+    alert("No patterns in the library. Add at least one pattern first.");
+    return;
+  }
+
+  // Step 5f-v) Use the first PRODUCTION pattern (or first pattern if none)
+  var basePat = APP.patterns.find(function(p) { return p.type === "PRODUCTION"; }) || APP.patterns[0];
+
+  // Step 5f-vi) Get total surface area from the form
+  var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
+  var volume = parseFloat(document.getElementById("fVolume").value) || 0;
+
+  // Step 5f-vii) Clear and rebuild rows
+  clearHoleTypeTable();
+
+  // Step 5f-viii) Normalise bin percentages to sum to 100
+  var totalPct = 0;
+  for (var i = 0; i < significantBins.length; i++) totalPct += significantBins[i].areaPct;
+  var scale = totalPct > 0 ? (100 / totalPct) : 1;
+
+  for (var i = 0; i < significantBins.length; i++) {
+    var bin = significantBins[i];
+    var pct = Math.round(bin.areaPct * scale);
+
+    // Step 5f-ix) Calculate holes from surface area proportion
+    var holes = 0;
+    if (area > 0 && basePat.burden > 0 && basePat.spacing > 0) {
+      holes = Math.round((pct / 100) * area / (basePat.burden * basePat.spacing));
+    }
+
+    // Step 5f-x) Calculate depth from bin avgDepth adjusted for angle + subdrill
+    var angleRad = ((basePat.holeAngle || 90) * Math.PI) / 180;
+    var sinAngle = Math.sin(angleRad);
+    if (sinAngle < 0.01) sinAngle = 1;
+    var depth = (bin.avgDepth / sinAngle) + (basePat.subdrill || 0);
+    var meters = holes * depth;
+    var mass = holes > 0 ? (holes * basePat.burden * basePat.spacing * bin.avgDepth * basePat.pf) : 0;
+
+    addHoleTypeRow(basePat.id, false, holes, Math.round(meters * 10) / 10, Math.round(mass), pct);
+  }
+
+  recalcHoleTypes();
+}
+
 // Step 6) Show the Add Blast modal with empty fields
 function showAddBlastModal() {
   APP.editingBlastIdx = null;
@@ -581,6 +703,7 @@ function showAddBlastModal() {
   document.getElementById("fDrillProgress").value = "";
   document.getElementById("fLoadProgress").value = "";
   populateSolidStats(null);
+  populateDepthProfile("");
   updateDrillDayEstimate();
   openModal("blastModal");
 }
@@ -630,6 +753,7 @@ function editBlast(idx) {
   document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
   document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
   populateSolidStats(b.solidStats || null);
+  populateDepthProfile(b.name);
   updateDrillDayEstimate();
   openModal("blastModal");
 }
@@ -768,6 +892,7 @@ function saveBlast() {
     holeTypes: holeTypes,
     solidBounds: matchedSolid ? matchedSolid.bounds : null,
     solidBenchHt: matchedSolid ? matchedSolid.benchHt : null,
+    depthBinData: matchedSolid ? matchedSolid.depthBinData : null,
     drillProgress: parseFloat(document.getElementById("fDrillProgress").value) / 100 || 0,
     loadProgress: parseFloat(document.getElementById("fLoadProgress").value) / 100 || 0
   };
@@ -779,6 +904,7 @@ function saveBlast() {
     if (!blastData.solidBounds && prev.solidBounds) blastData.solidBounds = prev.solidBounds;
     if (!blastData.solidBenchHt && prev.solidBenchHt) blastData.solidBenchHt = prev.solidBenchHt;
     if (prev.solidStats) blastData.solidStats = prev.solidStats;
+    if (!blastData.depthBinData && prev.depthBinData) blastData.depthBinData = prev.depthBinData;
     if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
@@ -801,6 +927,12 @@ function initBlastModal() {
   document.getElementById("blastModalSave").addEventListener("click", saveBlast);
   document.getElementById("btnCloseBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
   document.getElementById("btnCancelBlastModal").addEventListener("click", function() { closeModal("blastModal"); });
+
+  // Step 9-DEPTH) Auto-populate from Depth button
+  var autoDepthBtn = document.getElementById("btnAutoDepth");
+  if (autoDepthBtn) {
+    autoDepthBtn.addEventListener("click", autoPopulateFromDepth);
+  }
 
   // Step 9a) Add Pattern button — new row gets the remaining % to reach 100
   document.getElementById("btnAddHoleType").addEventListener("click", function() {

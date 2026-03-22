@@ -12,6 +12,7 @@ import { editBlast } from "../dialogs/blastModal.js";
 import { renderGantt } from "./ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { renderBlastCalendar, initBlastCalendar } from "./blastCalendar.js";
+import { renderDepthProfileBar } from "../engine/depthBinning.js";
 
 var _subTabsInited = false;
 
@@ -77,6 +78,7 @@ function renderBlasts() {
   html += "<th>Blast Name</th><th>Status</th><th>Mode</th><th>Pattern</th>";
   html += "<th>Patterns</th><th class=\"num\">Volume (bcm)</th><th class=\"num\">Exp. (kg)</th>";
   html += "<th class=\"num\">PF (kg/bcm)</th><th class=\"num\">Drill (m)</th>";
+  html += "<th>Depth Profile</th>";
   html += "<th>Drill Start</th><th>Load Start</th><th>Blast Date</th>";
   html += "<th style=\"color:var(--accent-purple)\">Deps</th>";
   html += "</tr></thead><tbody>";
@@ -107,6 +109,15 @@ function renderBlasts() {
     html += "<td class=\"num\">" + formatNum(b.expMass) + "</td>";
     html += "<td class=\"num\">" + pf + "</td>";
     html += "<td class=\"num\">" + formatNum(drillM) + "</td>";
+
+    // Step 3b) Depth profile mini-bar from solid or blast depthBinData
+    var depthBinData = b.depthBinData || null;
+    if (!depthBinData) {
+      var matchSolid = (APP.kirraProjectSolids || []).find(function(s) { return s.name === b.name; });
+      if (matchSolid) depthBinData = matchSolid.depthBinData || null;
+    }
+    html += "<td>" + renderDepthProfileBar(depthBinData) + "</td>";
+
     html += "<td>" + formatDate(b.drillStart) + "</td>";
     html += "<td>" + formatDate(b.loadStart) + "</td>";
     html += "<td>" + formatDate(b.blastDate) + "</td>";

@@ -1,8 +1,7 @@
 {
   "name": "kirra-scheduler",
   "private": true,
-  "version": "1.0.1",
-  "type": "module",
+  "version": "1.0.2",
   "description": "Minesite Drill & Blast Scheduler — Vite app",
   "scripts": {
     "dev": "vite",
