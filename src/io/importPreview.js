@@ -84,6 +84,9 @@ function mergeImported() {
       if (imp.solidStats) {
         existing.solidStats = imp.solidStats;
       }
+      if (imp.depthBinData) {
+        existing.depthBinData = imp.depthBinData;
+      }
       // Merge hole types if present
       if (imp.holeTypes && imp.holeTypes.length > 0) {
         existing.holeTypes = imp.holeTypes.map(function(ht) {
@@ -137,6 +140,7 @@ function mergeImported() {
         solidBounds: imp.solidBounds || null,
         solidBenchHt: imp.solidBenchHt || null,
         solidStats: imp.solidStats || null,
+        depthBinData: imp.depthBinData || null,
         drillProgress: 0,
         loadProgress: 0
       });

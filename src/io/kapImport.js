@@ -266,9 +266,15 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
         " | " + qualityNote +
         " (" + tris.length + " tris)</div>";
 
-      // Step 3d) Create importedBlast entry with mesh statistics
+      // Step 3d) Create importedBlast entry with mesh statistics.
+      //  Strip "EXTRUDED_" prefix from blast name so it matches hole entity names.
+      var blastName = name;
+      if (blastName.indexOf("EXTRUDED_") === 0) {
+        blastName = blastName.substring(9);
+      }
+
       var blastEntry = {
-        name: name,
+        name: blastName,
         mode: "Manual",
         surfaceArea: surfaceArea,
         loadRate: 100000,
@@ -288,6 +294,7 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
         solidBounds: bounds,
         solidBenchHt: benchHt,
         solidStats: meshStats,
+        depthBinData: surfObj.depthBinData || null,
         drillProgress: 0,
         loadProgress: 0,
         _sourceType: "solid"

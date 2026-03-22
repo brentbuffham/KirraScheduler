@@ -110,10 +110,16 @@ function renderBlasts() {
     html += "<td class=\"num\">" + pf + "</td>";
     html += "<td class=\"num\">" + formatNum(drillM) + "</td>";
 
-    // Step 3b) Depth profile mini-bar from solid or blast depthBinData
+    // Step 3b) Depth profile mini-bar from solid or blast depthBinData.
+    //  Fallback: look up solid by name, stripping "EXTRUDED_" prefix for matching.
     var depthBinData = b.depthBinData || null;
     if (!depthBinData) {
-      var matchSolid = (APP.kirraProjectSolids || []).find(function(s) { return s.name === b.name; });
+      var matchSolid = (APP.kirraProjectSolids || []).find(function(s) {
+        if (s.name === b.name) return true;
+        var stripped = s.name || "";
+        if (stripped.indexOf("EXTRUDED_") === 0) stripped = stripped.substring(9);
+        return stripped === b.name;
+      });
       if (matchSolid) depthBinData = matchSolid.depthBinData || null;
     }
     html += "<td>" + renderDepthProfileBar(depthBinData) + "</td>";

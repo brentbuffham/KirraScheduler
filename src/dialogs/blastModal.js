@@ -14,11 +14,14 @@ import { renderBlasts } from "../views/blastOverview.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDepthProfilePanel } from "../engine/depthBinning.js";
 
-// Step 0) Find a matching solid in APP.kirraProjectSolids by blast name
+// Step 0) Find a matching solid in APP.kirraProjectSolids by blast name.
+//  Handles "EXTRUDED_" prefix that KAP solids may carry.
 function findMatchingSolid(blastName) {
   var solids = APP.kirraProjectSolids || [];
   for (var i = 0; i < solids.length; i++) {
     if (solids[i].name === blastName) return solids[i];
+    var stripped = solids[i].name || "";
+    if (stripped.indexOf("EXTRUDED_") === 0 && stripped.substring(9) === blastName) return solids[i];
   }
   return null;
 }
