@@ -25,6 +25,7 @@ var APP = {
     loadPctForBlast: 1.0,   // FIXED: always 100% (non-configurable)
     minLeadDays: 0,
     enforceSequence: true,
+    drillOverlapPct: 1.0,
   },
 
   // Step 2) Pattern library
@@ -54,7 +55,7 @@ var APP = {
   // Step 3) Blast schedule data (initial seed data)
   blasts: [
     {
-      name: "S4_214_410P_V2", mode: "Auto", surfaceArea: 0, loadRate: 80000,
+      name: "XYZ-214-410", mode: "Auto", surfaceArea: 0, loadRate: 80000,
       volume: 6219, expMass: 3064.5,
       drillStart: "2026-02-21", drillStartTime: "06:00", drillDays: 1, loadStart: "2026-02-21", loadDays: 1,
       blastDate: "2026-02-22", status: "active",
@@ -66,7 +67,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_412_V1", mode: "Auto", surfaceArea: 0, loadRate: 100000,
+      name: "XYZ-226-412", mode: "Auto", surfaceArea: 0, loadRate: 100000,
       volume: 124236, expMass: 236949,
       drillStart: "2026-02-21", drillStartTime: "06:00", drillDays: 3, loadStart: "2026-02-23", loadDays: 3,
       blastDate: "2026-02-26", status: "active",
@@ -81,7 +82,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_410_V1", mode: "Auto", surfaceArea: 0, loadRate: 100000,
+      name: "XYZ-226-410", mode: "Auto", surfaceArea: 0, loadRate: 100000,
       volume: 165245, expMass: 326375,
       drillStart: "2026-02-23", drillStartTime: "10:00", drillDays: 7, loadStart: "2026-02-27", loadDays: 4,
       blastDate: "2026-03-02", status: "active",
@@ -115,7 +116,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_214_411P", mode: "Auto", surfaceArea: 100, loadRate: 100000,
+      name: "XYZ-214-411", mode: "Auto", surfaceArea: 100, loadRate: 100000,
       volume: 2400, expMass: 1440,
       drillStart: "2026-03-01", drillStartTime: "06:00", drillDays: 2, loadStart: "2026-03-05", loadDays: 1,
       blastDate: "2026-03-06", status: "planned",
@@ -127,7 +128,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_411", mode: "Auto", surfaceArea: 10240, loadRate: 100000,
+      name: "XYZ-226-411", mode: "Auto", surfaceArea: 10240, loadRate: 100000,
       volume: 122880, expMass: 245760,
       drillStart: "2026-03-02", drillDays: 6, loadStart: "2026-03-07", loadDays: 3,
       blastDate: "2026-03-10", status: "planned",
@@ -139,7 +140,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_214_412P", mode: "Auto", surfaceArea: 220, loadRate: 100000,
+      name: "XYZ-214-412", mode: "Auto", surfaceArea: 220, loadRate: 100000,
       volume: 5280, expMass: 3168,
       drillStart: "2026-03-04", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
@@ -151,7 +152,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_413", mode: "Auto", surfaceArea: 5000, loadRate: 100000,
+      name: "XYZ-226-413", mode: "Auto", surfaceArea: 5000, loadRate: 100000,
       volume: 60000, expMass: 120000,
       drillStart: "2026-03-07", drillDays: 3, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",
@@ -163,7 +164,7 @@ var APP = {
       drillProgress: 0, loadProgress: 0
     },
     {
-      name: "S4_226_407", mode: "Auto", surfaceArea: 11886, loadRate: 100000,
+      name: "XYZ-226-407", mode: "Auto", surfaceArea: 11886, loadRate: 100000,
       volume: 142632, expMass: 285264,
       drillStart: "2026-03-09", drillDays: 6, loadStart: null, loadDays: 0,
       blastDate: null, status: "planned",

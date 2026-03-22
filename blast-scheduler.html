@@ -857,11 +857,11 @@ body {
       <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:8px;">Dependencies</div>
       <div class="setting-group">
         <label>Drill % to Load</label>
-        <input type="number" id="depDrillForLoad" value="0.5" min="0" max="1" step="0.05" style="width:60px" title="Loading can start once drilling reaches this % complete">
+        <input type="number" id="depDrillForLoad" value="50" min="0" max="100" step="5" style="width:60px" title="Loading can start once drilling reaches this % complete">
       </div>
       <div class="setting-group">
         <label>Drill % to Blast</label>
-        <input type="number" id="depDrillForBlast" value="1.0" min="0" max="1" step="0.05" style="width:60px" title="Blast requires drilling at this % complete">
+        <input type="number" id="depDrillForBlast" value="100" min="0" max="100" step="5" style="width:60px" title="Blast requires drilling at this % complete">
       </div>
       <div class="setting-group" style="opacity:0.6;" title="Loading must be 100% complete before blasting — this is a hard constraint">
         <label>Load % to Blast</label>
@@ -877,9 +877,17 @@ body {
           Enforce Sequence
         </label>
       </div>
+      <div class="setting-group">
+        <label>Drill Overlap %</label>
+        <input type="number" id="depDrillOverlap" value="100" min="0" max="200" step="5" style="width:60px" title="Previous blast drill % complete before next blast can start drilling. 100 = no overlap (finish first), 50 = 50% overlap">
+      </div>
       <button class="btn" onclick="recalcDependencies(); renderGantt();" style="margin-left:auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
         Recalc Dates
+      </button>
+      <button class="btn" onclick="autoSchedule(); renderGantt();" style="background:var(--accent-purple);color:#fff;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
+        Auto Schedule
       </button>
     </div>
 
@@ -1033,7 +1041,7 @@ body {
       <div class="form-row">
         <div class="form-field">
           <label>Blast Name</label>
-          <input type="text" id="fBlastName" placeholder="e.g. S4_226_413">
+          <input type="text" id="fBlastName" placeholder="e.g. XYZ-226-413">
         </div>
         <div class="form-field">
           <label>Mode</label>
@@ -1108,11 +1116,11 @@ body {
         <div class="form-row">
           <div class="form-field">
             <label>Drill % to Start Loading</label>
-            <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="1" step="0.05">
+            <input type="number" id="fDepDrillForLoad" placeholder="Global: 50%" min="0" max="100" step="5">
           </div>
           <div class="form-field">
             <label>Drill % to Blast</label>
-            <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="1" step="0.05">
+            <input type="number" id="fDepDrillForBlast" placeholder="Global: 100%" min="0" max="100" step="5">
           </div>
         </div>
         <div class="form-row">
@@ -1203,7 +1211,7 @@ const APP = {
   blasts: [
     // Auto blasts (from Kirra/API data)
     {
-      name:'S4_214_410P_V2', mode:'Auto', surfaceArea:0, pattern:'', pctD65:1, pctPV:0,
+      name:'XYZ-214-410', mode:'Auto', surfaceArea:0, pattern:'', pctD65:1, pctPV:0,
       rateD65:19, ratePV:20, numD65:1, numPV:0, loadRate:80000,
       d65Meters:3496.4, pvMeters:0, volume:6219, expMass:3064.5,
       drillStart:'2026-02-21', drillDays:1, loadStart:'2026-02-21', loadDays:1,
@@ -1214,7 +1222,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_226_412_V1', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
+      name:'XYZ-226-412', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
       rateD65:17, ratePV:20, numD65:0, numPV:3, loadRate:100000,
       d65Meters:1149, pvMeters:5766.4, volume:124236, expMass:236949,
       drillStart:'2026-02-21', drillDays:3, loadStart:'2026-02-23', loadDays:3,
@@ -1227,7 +1235,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_226_410_V1', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
+      name:'XYZ-226-410', mode:'Auto', surfaceArea:0, pattern:'', pctD65:0, pctPV:1,
       rateD65:19, ratePV:20, numD65:0, numPV:3, loadRate:100000,
       d65Meters:2333, pvMeters:7461.8, volume:165245, expMass:326375,
       drillStart:'2026-02-23', drillDays:7, loadStart:'2026-02-27', loadDays:4,
@@ -1241,7 +1249,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_214_411P', mode:'Manual', surfaceArea:100, pattern:'1.1.44P24', pctD65:1, pctPV:0,
+      name:'XYZ-214-411', mode:'Manual', surfaceArea:100, pattern:'1.1.44P24', pctD65:1, pctPV:0,
       rateD65:19, ratePV:20, numD65:2, numPV:0, loadRate:100000,
       d65Meters:1350, pvMeters:0, volume:2400, expMass:1440,
       drillStart:'2026-03-01', drillDays:2, loadStart:'2026-03-05', loadDays:1,
@@ -1252,7 +1260,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_226_411', mode:'Manual', surfaceArea:10240, pattern:'1.1.15', pctD65:0, pctPV:1,
+      name:'XYZ-226-411', mode:'Manual', surfaceArea:10240, pattern:'1.1.15', pctD65:0, pctPV:1,
       rateD65:20, ratePV:19, numD65:0, numPV:4, loadRate:100000,
       d65Meters:0, pvMeters:6459.4, volume:122880, expMass:245760,
       drillStart:'2026-03-02', drillDays:6, loadStart:'2026-03-07', loadDays:3,
@@ -1263,7 +1271,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_214_412P', mode:'Manual', surfaceArea:220, pattern:'1.1.44P24', pctD65:1, pctPV:0,
+      name:'XYZ-214-412', mode:'Manual', surfaceArea:220, pattern:'1.1.44P24', pctD65:1, pctPV:0,
       rateD65:15, ratePV:21, numD65:2, numPV:4, loadRate:100000,
       d65Meters:2970, pvMeters:0, volume:5280, expMass:3168,
       drillStart:'2026-03-04', drillDays:3, loadStart:null, loadDays:0,
@@ -1274,7 +1282,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_226_413', mode:'Manual', surfaceArea:5000, pattern:'1.1.15', pctD65:0, pctPV:1,
+      name:'XYZ-226-413', mode:'Manual', surfaceArea:5000, pattern:'1.1.15', pctD65:0, pctPV:1,
       rateD65:17, ratePV:20, numD65:0, numPV:4, loadRate:100000,
       d65Meters:0, pvMeters:3154, volume:60000, expMass:120000,
       drillStart:'2026-03-07', drillDays:3, loadStart:null, loadDays:0,
@@ -1285,7 +1293,7 @@ const APP = {
       ]
     },
     {
-      name:'S4_226_407', mode:'Manual', surfaceArea:11886, pattern:'1.1.15', pctD65:0, pctPV:1,
+      name:'XYZ-226-407', mode:'Manual', surfaceArea:11886, pattern:'1.1.15', pctD65:0, pctPV:1,
       rateD65:45, ratePV:20, numD65:0, numPV:4, loadRate:100000,
       d65Meters:0, pvMeters:7497.7, volume:142632, expMass:285264,
       drillStart:'2026-03-09', drillDays:6, loadStart:null, loadDays:0,
@@ -1385,8 +1393,8 @@ function getBlastDeps(blast) {
 // Recalculate all load/blast dates based on dependency thresholds
 function recalcDependencies() {
   // Read global settings from UI
-  APP.deps.drillPctForLoad  = parseFloat(document.getElementById('depDrillForLoad').value)  || 0;
-  APP.deps.drillPctForBlast = parseFloat(document.getElementById('depDrillForBlast').value) || 1;
+  APP.deps.drillPctForLoad  = (parseFloat(document.getElementById('depDrillForLoad').value)  || 0) / 100;
+  APP.deps.drillPctForBlast = (parseFloat(document.getElementById('depDrillForBlast').value) || 100) / 100;
   APP.deps.loadPctForBlast  = 1.0; // Hard constraint: always 100%
   APP.deps.minLeadDays      = parseInt(document.getElementById('depMinLead').value)          || 0;
   APP.deps.enforceSequence  = document.getElementById('depEnforceSeq').checked;
@@ -2036,8 +2044,8 @@ function editBlast(idx) {
   document.getElementById('fNumPV').value = b.numPV;
   // Dependency fields
   const bd = b.deps || {};
-  document.getElementById('fDepDrillForLoad').value = bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined ? bd.drillPctForLoad : '';
-  document.getElementById('fDepDrillForBlast').value = bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined ? bd.drillPctForBlast : '';
+  document.getElementById('fDepDrillForLoad').value = bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined ? Math.round(bd.drillPctForLoad * 100) : '';
+  document.getElementById('fDepDrillForBlast').value = bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined ? Math.round(bd.drillPctForBlast * 100) : '';
   document.getElementById('fDepMinLead').value = bd.minLeadDays !== null && bd.minLeadDays !== undefined ? bd.minLeadDays : '';
   populatePredecessorDropdown(b.name);
   document.getElementById('fDepPredecessor').value = bd.predecessor || '';
@@ -2105,8 +2113,8 @@ function saveBlast() {
   const fDepPredType = document.getElementById('fDepPredType').value;
 
   const blastDeps = {
-    drillPctForLoad:  fDepDL !== '' ? parseFloat(fDepDL) : null,
-    drillPctForBlast: fDepDB !== '' ? parseFloat(fDepDB) : null,
+    drillPctForLoad:  fDepDL !== '' ? parseFloat(fDepDL) / 100 : null,
+    drillPctForBlast: fDepDB !== '' ? parseFloat(fDepDB) / 100 : null,
     loadPctForBlast:  null, // Hard constraint: always 100%, not overridable
     minLeadDays:      fDepML !== '' ? parseInt(fDepML) : null,
     predecessor:      fDepPred || null,

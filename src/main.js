@@ -10,7 +10,7 @@ import "./styles/playback.css";
 
 // Step 2) Import modules
 import { APP } from "./state/appState.js";
-import { recalcDependencies } from "./engine/dependencyEngine.js";
+import { recalcDependencies, autoSchedule } from "./engine/dependencyEngine.js";
 import { initTabs } from "./ui/tabs.js";
 import { initContextMenu } from "./ui/contextMenu.js";
 import { initGanttDrag } from "./ui/ganttDrag.js";
@@ -67,6 +67,12 @@ document.getElementById("btnRefreshGantt").addEventListener("click", function() 
 
 document.getElementById("btnRecalcDates").addEventListener("click", function() {
   recalcDependencies();
+  debouncedSave();
+  renderGantt();
+});
+
+document.getElementById("btnAutoSchedule").addEventListener("click", function() {
+  autoSchedule();
   debouncedSave();
   renderGantt();
 });

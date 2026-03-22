@@ -16,8 +16,9 @@ function shouldShowStartup() {
 
 // Step 2) Clear all seed data for a fresh start
 function clearSeedData() {
-  // Step 2a) Remove all example blasts
+  // Step 2a) Remove all example blasts and imported blasts
   APP.blasts.length = 0;
+  APP.importedBlasts.length = 0;
 
   // Step 2b) Remove all example equipment
   drills.length = 0;
@@ -25,10 +26,29 @@ function clearSeedData() {
   ancillary.length = 0;
   people.length = 0;
 
-  // Step 2c) Reset conformance to zeroes
-  APP.conformance.actualBCM = 0;
-  APP.conformance.targetBCM = 0;
-  APP.conformance.targetMTD = 0;
+  // Step 2c) Clear pattern library
+  APP.patterns.length = 0;
+
+  // Step 2d) Clear charge configurations and product library
+  APP.chargeConfigs.length = 0;
+  APP.products.length = 0;
+
+  // Step 2e) Clear 3D spatial data (surfaces and solids)
+  APP.kirraProjectSurfaces.length = 0;
+  APP.kirraProjectSolids.length = 0;
+
+  // Step 2f) Clear per-week custom colours
+  APP.planWeekColors.length = 0;
+
+  // Step 2g) Reset conformance to zeroes
+  APP.conformance = {
+    targetBCM: 0,
+    actualBCM: 0,
+    targetMTD: 0,
+    monthStart: new Date().toISOString().split("T")[0].slice(0, 8) + "01",
+    actuals: [],
+    dateLocale: "australia"
+  };
 }
 
 // Step 3) Mark startup as complete so the dialog does not reappear

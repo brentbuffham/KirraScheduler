@@ -134,7 +134,9 @@ function renderDrillTable() {
   var html = "<thead><tr>";
   html += sortTh("drill", "id", "ID");
   html += sortTh("drill", "name", "Name");
-  html += sortTh("drill", "type", "Type");
+  html += sortTh("drill", "brand", "Brand");
+  html += sortTh("drill", "model", "Model");
+  html += sortTh("drill", "type", "Drill Type");
   html += "<th class=\"num\">Min Diam (mm)</th><th class=\"num\">Max Diam (mm)</th>";
   html += sortTh("drill", "rateM_per_day", "Rate (m/day)", "num");
   html += "<th>Crew Req</th>";
@@ -160,7 +162,9 @@ function renderDrillTable() {
     html += "<tr data-drill-id=\"" + drill.id + "\">";
     html += "<td style=\"color:var(--accent-cyan);font-weight:600;\">" + drill.id + "</td>";
     html += "<td>" + drill.name + "</td>";
-    html += "<td><span class=\"badge badge-drill\">" + drill.type + "</span></td>";
+    html += "<td>" + (drill.brand || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td><span class=\"badge badge-drill\">" + (drill.model || drill.type || "") + "</span></td>";
+    html += "<td style=\"font-size:11px;\">" + (drill.type || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td class=\"num\">" + drill.minDiam + "</td>";
     html += "<td class=\"num\">" + drill.maxDiam + "</td>";
     html += "<td class=\"num\">" + formatNum(drill.rateM_per_day) + "</td>";
@@ -185,7 +189,9 @@ function renderMPUTable() {
   var html = "<thead><tr>";
   html += sortTh("mpu", "id", "ID");
   html += sortTh("mpu", "name", "Name");
-  html += sortTh("mpu", "type", "Type");
+  html += sortTh("mpu", "brand", "Prime Mover");
+  html += sortTh("mpu", "model", "Model");
+  html += sortTh("mpu", "type", "Product Type");
   html += "<th class=\"num\">Capacity (kg)</th>";
   html += sortTh("mpu", "rateKg_per_day", "Rate (kg/day)", "num");
   html += "<th>Crew Req</th>";
@@ -206,12 +212,20 @@ function renderMPUTable() {
       ? "<span class=\"badge badge-blast\">" + maintCount + " window(s)</span>"
       : "<span class=\"badge badge-complete\">Clear</span>";
 
+    // Step 4b) Build blend info badge if applicable
+    var typeBadge = mpu.type;
+    if (mpu.type === "Blend" && mpu.blendConfig) {
+      typeBadge = "Blend (" + (mpu.blendConfig.anPct || 0) + "/" + (mpu.blendConfig.foPct || 0) + "/" + (mpu.blendConfig.matrixPct || 0) + ")";
+    }
+
     var actions = buildEquipActions(mpu.status, mpu.id, "mpu");
 
     html += "<tr data-mpu-id=\"" + mpu.id + "\">";
     html += "<td style=\"color:var(--accent-load);font-weight:600;\">" + mpu.id + "</td>";
     html += "<td>" + mpu.name + "</td>";
-    html += "<td><span class=\"badge badge-load\">" + mpu.type + "</span></td>";
+    html += "<td>" + (mpu.brand || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td>" + (mpu.model || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td><span class=\"badge badge-load\">" + typeBadge + "</span></td>";
     html += "<td class=\"num\">" + formatNum(mpu.capacity_kg) + "</td>";
     html += "<td class=\"num\">" + formatNum(mpu.rateKg_per_day) + "</td>";
     html += "<td style=\"font-size:11px;\">" + formatCrewRequired(mpu.crewRequired) + "</td>";
@@ -234,6 +248,8 @@ function renderAncillaryTable() {
   var html = "<thead><tr>";
   html += sortTh("ancillary", "id", "ID");
   html += sortTh("ancillary", "name", "Name");
+  html += sortTh("ancillary", "brand", "Brand");
+  html += sortTh("ancillary", "model", "Model");
   html += sortTh("ancillary", "type", "Type");
   html += sortTh("ancillary", "rateM2_per_day", "Rate (m\u00B2/day)", "num");
   html += sortTh("ancillary", "status", "Status");
@@ -252,6 +268,8 @@ function renderAncillaryTable() {
     html += "<tr data-ancillary-id=\"" + unit.id + "\">";
     html += "<td style=\"color:var(--accent-prep);font-weight:600;\">" + unit.id + "</td>";
     html += "<td>" + unit.name + "</td>";
+    html += "<td>" + (unit.brand || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
+    html += "<td>" + (unit.model || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td><span class=\"badge\" style=\"background:rgba(20,184,166,0.15);color:var(--accent-prep);\">" + unit.type + "</span></td>";
     html += "<td class=\"num\">" + formatNum(unit.rateM2_per_day) + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + unit.status + "</span></td>";

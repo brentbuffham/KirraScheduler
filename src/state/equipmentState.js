@@ -4,10 +4,10 @@
 //  and Maintenance Windows
 // ============================================================
 
-// Step 1) Drill rig fleet — each drill has a diameter capability range
+// Step 1) Drill rig fleet — each drill has brand, model, type, and diameter capability range
 var drills = [
   {
-    id: "D65-01", name: "D65 #1", type: "D65",
+    id: "D65-01", name: "D65 #1", brand: "Sandvik", model: "D65", type: "Rotary",
     minDiam: 127, maxDiam: 229,
     rateM_per_day: 19,
     status: "available",
@@ -17,7 +17,7 @@ var drills = [
     ]
   },
   {
-    id: "D65-02", name: "D65 #2", type: "D65",
+    id: "D65-02", name: "D65 #2", brand: "Sandvik", model: "D65", type: "Rotary",
     minDiam: 127, maxDiam: 229,
     rateM_per_day: 19,
     status: "available",
@@ -25,7 +25,7 @@ var drills = [
     maintenance: []
   },
   {
-    id: "PV271-01", name: "PV271 #1", type: "PV271",
+    id: "PV271-01", name: "PV271 #1", brand: "Epiroc", model: "PV271", type: "Rotary",
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
@@ -35,7 +35,7 @@ var drills = [
     ]
   },
   {
-    id: "PV271-02", name: "PV271 #2", type: "PV271",
+    id: "PV271-02", name: "PV271 #2", brand: "Epiroc", model: "PV271", type: "Rotary",
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
@@ -43,7 +43,7 @@ var drills = [
     maintenance: []
   },
   {
-    id: "PV271-03", name: "PV271 #3", type: "PV271",
+    id: "PV271-03", name: "PV271 #3", brand: "Epiroc", model: "PV271", type: "Rotary",
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
@@ -53,7 +53,7 @@ var drills = [
     ]
   },
   {
-    id: "PV271-04", name: "PV271 #4", type: "PV271",
+    id: "PV271-04", name: "PV271 #4", brand: "Epiroc", model: "PV271", type: "Rotary",
     minDiam: 200, maxDiam: 311,
     rateM_per_day: 20,
     status: "available",
@@ -65,14 +65,14 @@ var drills = [
 // Step 2) Mobile Processing Units (MPUs) — emulsion loading trucks
 var mpus = [
   {
-    id: "MPU-01", name: "MPU #1", type: "Emulsion",
+    id: "MPU-01", name: "MPU #1", brand: "Volvo", model: "FMX", type: "Emulsion",
     capacity_kg: 20000, rateKg_per_day: 100000,
     status: "available",
     crewRequired: { OP: 1, SF: 1 },
     maintenance: []
   },
   {
-    id: "MPU-02", name: "MPU #2", type: "Emulsion",
+    id: "MPU-02", name: "MPU #2", brand: "Isuzu", model: "FXZ", type: "Emulsion",
     capacity_kg: 20000, rateKg_per_day: 80000,
     status: "available",
     crewRequired: { OP: 1, SF: 1 },
@@ -84,12 +84,12 @@ var mpus = [
 
 // Step 2b) Ancillary fleet — dozers, graders, loaders, excavators, rollers
 var ancillary = [
-  { id: "DZ-01", name: "D9 Dozer #1", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
-  { id: "DZ-02", name: "D9 Dozer #2", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
-  { id: "GR-01", name: "Grader #1", type: "Grader", rateM2_per_day: 12000, status: "available", maintenance: [] },
-  { id: "EX-01", name: "Excavator #1", type: "Excavator", rateM2_per_day: 5000, status: "available", maintenance: [] },
-  { id: "LD-01", name: "Loader #1", type: "Loader", rateM2_per_day: 6000, status: "available", maintenance: [] },
-  { id: "RL-01", name: "Roller #1", type: "Roller", rateM2_per_day: 15000, status: "available", maintenance: [] }
+  { id: "DZ-01", name: "D9 Dozer #1", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
+  { id: "DZ-02", name: "D9 Dozer #2", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
+  { id: "GR-01", name: "Grader #1", brand: "Cat", model: "16M", type: "Grader", rateM2_per_day: 12000, status: "available", maintenance: [] },
+  { id: "EX-01", name: "Excavator #1", brand: "Hitachi", model: "EX5600", type: "Excavator", rateM2_per_day: 5000, status: "available", maintenance: [] },
+  { id: "LD-01", name: "Loader #1", brand: "Cat", model: "992K", type: "Loader", rateM2_per_day: 6000, status: "available", maintenance: [] },
+  { id: "RL-01", name: "Roller #1", brand: "Cat", model: "CS78B", type: "Roller", rateM2_per_day: 15000, status: "available", maintenance: [] }
 ];
 
 // Step 3) Personnel list

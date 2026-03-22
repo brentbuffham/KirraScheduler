@@ -6,7 +6,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { drills, mpus, people } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
@@ -120,9 +120,40 @@ function showResetDialog() {
   html += "</label>";
 
   html += "<label class=\"reset-option\">";
+  html += "<input type=\"checkbox\" id=\"resetAncillary\" value=\"ancillary\">";
+  html += "<span class=\"reset-option-text\">Remove Ancillary Fleet</span>";
+  html += "<span class=\"reset-option-desc\">Clears dozers, graders, excavators, loaders, rollers</span>";
+  html += "</label>";
+
+  html += "<label class=\"reset-option\">";
   html += "<input type=\"checkbox\" id=\"resetPersonnel\" value=\"personnel\">";
   html += "<span class=\"reset-option-text\">Remove Personnel Roster</span>";
   html += "<span class=\"reset-option-desc\">Clears the named personnel list</span>";
+  html += "</label>";
+
+  html += "<div class=\"reset-divider\"></div>";
+
+  // =========================================================
+  //  Section: Spatial / 3D
+  // =========================================================
+  html += "<div class=\"reset-section-label\">Spatial / 3D</div>";
+
+  html += "<label class=\"reset-option\">";
+  html += "<input type=\"checkbox\" id=\"resetSurfaces\" value=\"surfaces\">";
+  html += "<span class=\"reset-option-text\">Remove 3D Surfaces</span>";
+  html += "<span class=\"reset-option-desc\">Clears imported pit shell surfaces</span>";
+  html += "</label>";
+
+  html += "<label class=\"reset-option\">";
+  html += "<input type=\"checkbox\" id=\"resetSolids\" value=\"solids\">";
+  html += "<span class=\"reset-option-text\">Remove 3D Solids</span>";
+  html += "<span class=\"reset-option-desc\">Clears imported blast solids and block models</span>";
+  html += "</label>";
+
+  html += "<label class=\"reset-option\">";
+  html += "<input type=\"checkbox\" id=\"resetProducts\" value=\"products\">";
+  html += "<span class=\"reset-option-text\">Remove Product Library</span>";
+  html += "<span class=\"reset-option-desc\">Clears explosive product definitions from charge config imports</span>";
   html += "</label>";
 
   html += "<div class=\"reset-divider\"></div>";
@@ -306,9 +337,32 @@ function performReset() {
     mpus.forEach(function(m) { m.maintenance = []; });
   }
 
-  // Step 7h) Equipment — Remove personnel roster
+  // Step 7h) Equipment — Remove ancillary fleet
+  if (isAll || document.getElementById("resetAncillary").checked) {
+    ancillary.length = 0;
+    APP.blasts.forEach(function(b) {
+      b.assignedAncillary = [];
+    });
+  }
+
+  // Step 7h-ii) Equipment — Remove personnel roster
   if (isAll || document.getElementById("resetPersonnel").checked) {
     people.length = 0;
+  }
+
+  // Step 7h-iii) Spatial — Remove 3D surfaces
+  if (isAll || document.getElementById("resetSurfaces").checked) {
+    APP.kirraProjectSurfaces = [];
+  }
+
+  // Step 7h-iv) Spatial — Remove 3D solids
+  if (isAll || document.getElementById("resetSolids").checked) {
+    APP.kirraProjectSolids = [];
+  }
+
+  // Step 7h-v) Library — Remove product library
+  if (isAll || document.getElementById("resetProducts").checked) {
+    APP.products = [];
   }
 
   // Step 7i) Scheduling — Remove all delays from blasts
@@ -363,12 +417,14 @@ function performReset() {
     APP.availability = 0.85;
     APP.utilisation = 0.75;
     APP.ganttWeeks = 8;
+    APP.planWeekColors = [];
     APP.deps = {
       drillPctForLoad: 0.5,
       drillPctForBlast: 1.0,
       loadPctForBlast: 1.0,
       minLeadDays: 0,
-      enforceSequence: true
+      enforceSequence: true,
+      drillOverlapPct: 1.0
     };
     // Step) Update the toolbar inputs to reflect defaults
     var elPlanStart = document.getElementById("planStart");

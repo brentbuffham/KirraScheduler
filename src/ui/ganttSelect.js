@@ -1,10 +1,10 @@
 // ============================================================
 //  GANTT SELECT
 //  Rubber-band selection rectangle on the Gantt chart.
-//  Shift+drag on empty space draws a rectangle; rows whose bars
-//  intersect are selected. Selected bars can then be dragged
-//  together via ganttDrag multi-drag support.
-//  Click on empty space clears the selection.
+//  Click+drag on empty space draws a rectangle; rows whose bars
+//  intersect are selected. Hold Shift or Ctrl while dragging
+//  to add to the existing selection. Click on empty space
+//  (without dragging) clears the selection.
 // ============================================================
 
 import { APP } from "../state/appState.js";
@@ -18,7 +18,10 @@ var _band = {
   active: false,
   startX: 0,
   startY: 0,
-  el: null
+  scrollX0: 0,
+  scrollY0: 0,
+  el: null,
+  justFinished: false
 };
 
 // Step 3) Public API: get current selection
@@ -52,26 +55,29 @@ function initGanttSelect() {
   document.addEventListener("mousemove", onSelectMove);
   document.addEventListener("mouseup", onSelectEnd);
 
-  // Step 6a) Click on empty Gantt space (no bar) without Shift clears selection
+  // Step 6a) Click on empty Gantt space (no bar) clears selection
+  //          (only fires when the rubber-band was NOT used — tiny drags are ignored)
   container.addEventListener("click", function(e) {
     if (e.target.closest(".gantt-bar")) return;
     if (e.target.closest(".gantt-resize-handle")) return;
     if (e.target.closest(".sticky-col")) return;
     if (e.target.closest(".sticky-col-2")) return;
-    if (!e.shiftKey && !_band.active) {
+    if (!_band.justFinished) {
       clearSelection();
     }
+    _band.justFinished = false;
   });
 }
 
-// Step 7) Start rubber-band on Shift+mousedown on empty Gantt area
+// Step 7) Start rubber-band on mousedown on empty Gantt area
 function onSelectStart(e) {
-  // Step 7a) Only start on Shift+click, and not on bars or handles
-  if (!e.shiftKey) return;
+  // Step 7a) Only start on empty space — not on bars, handles, or sticky columns
   if (e.target.closest(".gantt-bar")) return;
   if (e.target.closest(".gantt-resize-handle")) return;
   if (e.target.closest(".sticky-col")) return;
   if (e.target.closest(".sticky-col-2")) return;
+  if (e.target.closest(".gantt-reorder-grip")) return;
+  if (e.button !== 0) return;
 
   e.preventDefault();
 
@@ -81,6 +87,9 @@ function onSelectStart(e) {
   _band.active = true;
   _band.startX = e.clientX;
   _band.startY = e.clientY;
+  // Step 7a-ii) Record initial scroll offsets so rubber-band stays anchored during autoscroll
+  _band.scrollX0 = container.scrollLeft;
+  _band.scrollY0 = container.scrollTop;
 
   // Step 7b) Create the rubber-band element
   var el = document.createElement("div");
@@ -94,15 +103,48 @@ function onSelectStart(e) {
   _band.el = el;
 }
 
-// Step 8) Update rubber-band dimensions
+// Step 8) Update rubber-band dimensions + autoscroll near edges
 function onSelectMove(e) {
   if (!_band.active || !_band.el) return;
   e.preventDefault();
 
-  var x = Math.min(e.clientX, _band.startX);
-  var y = Math.min(e.clientY, _band.startY);
-  var w = Math.abs(e.clientX - _band.startX);
-  var h = Math.abs(e.clientY - _band.startY);
+  var container = document.getElementById("ganttScroll");
+  if (!container) return;
+
+  // Step 8a) Autoscroll using viewport boundaries (container may extend beyond viewport)
+  var cRect = container.getBoundingClientRect();
+  var vpW = window.innerWidth;
+  var vpH = window.innerHeight;
+  var EDGE_ZONE = 40;
+  var SCROLL_SPEED = 8;
+
+  var topBound = Math.max(cRect.top, 0);
+  var bottomBound = Math.min(cRect.bottom, vpH);
+  var leftBound = Math.max(cRect.left, 0);
+  var rightBound = Math.min(cRect.right, vpW);
+
+  if (e.clientY < topBound + EDGE_ZONE && e.clientY > topBound) {
+    container.scrollTop -= SCROLL_SPEED;
+  } else if (e.clientY > bottomBound - EDGE_ZONE && e.clientY < bottomBound) {
+    container.scrollTop += SCROLL_SPEED;
+  }
+  if (e.clientX < leftBound + EDGE_ZONE && e.clientX > leftBound) {
+    container.scrollLeft -= SCROLL_SPEED;
+  } else if (e.clientX > rightBound - EDGE_ZONE && e.clientX < rightBound) {
+    container.scrollLeft += SCROLL_SPEED;
+  }
+
+  // Step 8b) Compensate rubber-band origin for any scroll that happened since mousedown
+  var dScrollX = container.scrollLeft - _band.scrollX0;
+  var dScrollY = container.scrollTop - _band.scrollY0;
+  var originX = _band.startX - dScrollX;
+  var originY = _band.startY - dScrollY;
+
+  // Step 8c) Size and position the rubber-band using the scroll-adjusted origin
+  var x = Math.min(e.clientX, originX);
+  var y = Math.min(e.clientY, originY);
+  var w = Math.abs(e.clientX - originX);
+  var h = Math.abs(e.clientY - originY);
 
   _band.el.style.left = x + "px";
   _band.el.style.top = y + "px";
@@ -114,11 +156,18 @@ function onSelectMove(e) {
 function onSelectEnd(e) {
   if (!_band.active) return;
 
+  // Step 9-pre) Compute scroll-adjusted origin so hit-testing matches the visual band
+  var container = document.getElementById("ganttScroll");
+  var dScrollX = container ? (container.scrollLeft - _band.scrollX0) : 0;
+  var dScrollY = container ? (container.scrollTop - _band.scrollY0) : 0;
+  var originX = _band.startX - dScrollX;
+  var originY = _band.startY - dScrollY;
+
   var bandRect = {
-    left: Math.min(e.clientX, _band.startX),
-    top: Math.min(e.clientY, _band.startY),
-    right: Math.max(e.clientX, _band.startX),
-    bottom: Math.max(e.clientY, _band.startY)
+    left: Math.min(e.clientX, originX),
+    top: Math.min(e.clientY, originY),
+    right: Math.max(e.clientX, originX),
+    bottom: Math.max(e.clientY, originY)
   };
 
   // Step 9a) Remove the rubber-band element
@@ -128,13 +177,17 @@ function onSelectEnd(e) {
   }
   _band.active = false;
 
-  // Step 9b) Minimum size threshold — ignore tiny accidental drags
+  // Step 9b) Minimum size threshold — ignore tiny accidental drags (let click handler clear)
   if ((bandRect.right - bandRect.left) < 10 && (bandRect.bottom - bandRect.top) < 10) {
+    _band.justFinished = false;
     return;
   }
 
-  // Step 9c) Clear previous selection unless Ctrl is held (additive)
-  if (!e.ctrlKey) {
+  // Step 9b-ii) Mark that a real rubber-band just finished so the click handler won't clear
+  _band.justFinished = true;
+
+  // Step 9c) Clear previous selection unless Shift or Ctrl is held (additive)
+  if (!e.ctrlKey && !e.shiftKey) {
     _selected = [];
   }
 

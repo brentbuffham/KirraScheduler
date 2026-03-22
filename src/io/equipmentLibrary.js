@@ -14,6 +14,8 @@ var EQUIP_HEADERS = [
   "Category",
   "ID",
   "Name",
+  "Brand",
+  "Model",
   "Type",
   "MinDiam_mm",
   "MaxDiam_mm",
@@ -25,28 +27,29 @@ var EQUIP_HEADERS = [
   "CertifiedTypes",
   "CrewRequired",
   "Status",
-  "Maintenance"
+  "Maintenance",
+  "BlendConfig"
 ];
 
 // Step 2) Example rows for each category (used in template export)
 var EXAMPLE_DRILLS = [
-  ["Drill", "D65-01", "D65 #1", "D65", "127", "229", "19", "", "", "", "", "", "OP:1", "available", "2026-03-10 to 2026-03-12 (5000hr Service)"],
-  ["Drill", "PV271-01", "PV271 #1", "PV271", "200", "311", "20", "", "", "", "", "", "OP:1", "available", ""]
+  ["Drill", "D65-01", "D65 #1", "Sandvik", "D65", "Rotary", "127", "229", "19", "", "", "", "", "", "OP:1", "available", "2026-03-10 to 2026-03-12 (5000hr Service)", ""],
+  ["Drill", "PV271-01", "PV271 #1", "Epiroc", "PV271", "Rotary", "200", "311", "20", "", "", "", "", "", "OP:1", "available", "", ""]
 ];
 
 var EXAMPLE_MPUS = [
-  ["MPU", "MPU-01", "MPU #1", "Emulsion", "", "", "", "20000", "100000", "", "", "", "OP:1 SF:1", "available", ""],
-  ["MPU", "MPU-02", "MPU #2", "Emulsion", "", "", "", "20000", "80000", "", "", "", "OP:1 SF:1", "available", "2026-03-08 to 2026-03-09 (Pump service)"]
+  ["MPU", "MPU-01", "MPU #1", "Volvo", "FMX", "Emulsion", "", "", "", "20000", "100000", "", "", "", "OP:1 SF:1", "available", "", ""],
+  ["MPU", "MPU-02", "MPU #2", "Isuzu", "FXZ", "Blend", "", "", "", "20000", "80000", "", "", "", "OP:1 SF:1", "available", "2026-03-08 to 2026-03-09 (Pump service)", "94/6/0"]
 ];
 
 var EXAMPLE_ANCILLARY = [
-  ["Ancillary", "DZ-01", "D9 Dozer #1", "Dozer", "", "", "", "", "", "8000", "", "", "", "available", ""],
-  ["Ancillary", "GR-01", "Grader #1", "Grader", "", "", "", "", "", "12000", "", "", "", "available", ""]
+  ["Ancillary", "DZ-01", "D9 Dozer #1", "Cat", "D9T", "Dozer", "", "", "", "", "", "8000", "", "", "", "available", "", ""],
+  ["Ancillary", "GR-01", "Grader #1", "Cat", "16M", "Grader", "", "", "", "", "", "12000", "", "", "", "available", "", ""]
 ];
 
 var EXAMPLE_PEOPLE = [
-  ["Person", "P001", "John Smith", "Drill Operator", "", "", "", "", "", "", "Drill Operator", "D65 | PV271", "", "", ""],
-  ["Person", "P002", "Sarah Johnson", "Shot Firer", "", "", "", "", "", "", "Shot Firer", "", "", "", ""]
+  ["Person", "P001", "Operator A", "", "", "Drill Operator", "", "", "", "", "", "", "Drill Operator", "D65 | PV271", "", "", "", ""],
+  ["Person", "P002", "Shotfirer B", "", "", "Shot Firer", "", "", "", "", "", "", "Shot Firer", "", "", "", "", ""]
 ];
 
 // Step 3) CSV escape helper
@@ -79,48 +82,58 @@ function formatMaintenance(maint) {
   }).join(" | ");
 }
 
-// Step 6) Serialise a single equipment item to CSV row array
+// Step 6) Format blend config as "AN/FO/Matrix" string
+function formatBlendConfig(bc) {
+  if (!bc) return "";
+  return (bc.anPct || 0) + "/" + (bc.foPct || 0) + "/" + (bc.matrixPct || 0);
+}
+
+// Step 6b) Serialise a single equipment item to CSV row array
 function equipToRow(category, eq) {
   if (category === "Drill") {
     return [
-      "Drill", eq.id, eq.name, eq.type,
+      "Drill", eq.id, eq.name, eq.brand || "", eq.model || "", eq.type,
       eq.minDiam, eq.maxDiam, eq.rateM_per_day,
       "", "", "",
       "", "",
       formatCrew(eq.crewRequired),
       eq.status || "available",
-      formatMaintenance(eq.maintenance)
+      formatMaintenance(eq.maintenance),
+      ""
     ];
   }
   if (category === "MPU") {
     return [
-      "MPU", eq.id, eq.name, eq.type,
+      "MPU", eq.id, eq.name, eq.brand || "", eq.model || "", eq.type,
       "", "", "",
       eq.capacity_kg, eq.rateKg_per_day, "",
       "", "",
       formatCrew(eq.crewRequired),
       eq.status || "available",
-      formatMaintenance(eq.maintenance)
+      formatMaintenance(eq.maintenance),
+      formatBlendConfig(eq.blendConfig)
     ];
   }
   if (category === "Ancillary") {
     return [
-      "Ancillary", eq.id, eq.name, eq.type,
+      "Ancillary", eq.id, eq.name, eq.brand || "", eq.model || "", eq.type,
       "", "", "",
       "", "", eq.rateM2_per_day,
       "", "",
       formatCrew(eq.crewRequired),
       eq.status || "available",
-      formatMaintenance(eq.maintenance)
+      formatMaintenance(eq.maintenance),
+      ""
     ];
   }
   if (category === "Person") {
     return [
-      "Person", eq.id, eq.name, eq.type || eq.role || "",
+      "Person", eq.id, eq.name, "", "", eq.type || eq.role || "",
       "", "", "",
       "", "", "",
       eq.role || "",
       (eq.certifiedTypes || []).join(" | "),
+      "",
       "",
       "",
       ""
@@ -137,6 +150,12 @@ function exportEquipmentTemplate() {
   rows.push("# Kirra Scheduler - Equipment Library Template");
   rows.push("# Fill in your site equipment below.");
   rows.push("# Category must be: Drill, MPU, Ancillary, or Person");
+  rows.push("# Brand: manufacturer (e.g. Sandvik, Epiroc, Cat, Volvo, Isuzu)");
+  rows.push("# Model: equipment model filtered by brand (e.g. D65, PV271, FMX)");
+  rows.push("# Drill Type: Rotary, Top Hammer, Down-the-Hole Hammer, Reverse Circulation, Core Drilling");
+  rows.push("# MPU Type: ANFO, Watergel, Emulsion, Blend");
+  rows.push("# Ancillary Type: Dozer, Grader, Loader, Roller, Impactor, Excavator");
+  rows.push("# BlendConfig format: AN%/FO%/Matrix% (e.g. 94/6/0) — only for Blend type MPUs");
   rows.push("# Maintenance format: YYYY-MM-DD to YYYY-MM-DD (Reason) — pipe | separate multiple windows");
   rows.push("# CrewRequired format: OP:1 SF:1 — space separate role:count pairs");
   rows.push("# CertifiedTypes: pipe | separate type codes e.g. D65 | PV271");
@@ -274,7 +293,9 @@ function buildColumnMap(headerFields) {
     category:       ["category", "cat", "type", "equiptype", "equip_type"],
     id:             ["id", "equipid", "equip_id", "equipment_id"],
     name:           ["name", "equipname", "equip_name", "equipment_name"],
-    type:           ["type", "subtype", "sub_type", "equipsubtype"],
+    brand:          ["brand", "manufacturer", "make"],
+    model:          ["model", "modelname", "model_name"],
+    type:           ["type", "subtype", "sub_type", "equipsubtype", "drilltype", "producttype"],
     minDiam:        ["mindiam_mm", "mindiam", "min_diam", "mindiameter"],
     maxDiam:        ["maxdiam_mm", "maxdiam", "max_diam", "maxdiameter"],
     rateM:          ["rate_m_per_day", "ratem", "drillrate", "drill_rate", "rate_m"],
@@ -285,7 +306,8 @@ function buildColumnMap(headerFields) {
     certifiedTypes: ["certifiedtypes", "certified_types", "certs", "certifications"],
     crewRequired:   ["crewrequired", "crew_required", "crew"],
     status:         ["status", "equipstatus", "equip_status"],
-    maintenance:    ["maintenance", "maint", "maint_windows"]
+    maintenance:    ["maintenance", "maint", "maint_windows"],
+    blendConfig:    ["blendconfig", "blend_config", "blend"]
   };
 
   for (var i = 0; i < headerFields.length; i++) {
@@ -362,10 +384,13 @@ function importEquipmentCSV(file) {
       if (!id) { skipped++; continue; }
 
       var name = get("name") || id;
+      var brand = get("brand") || "";
+      var model = get("model") || "";
       var subType = get("type") || "";
       var status = get("status") || "available";
       var crewStr = get("crewRequired");
       var maintStr = get("maintenance");
+      var blendStr = get("blendConfig");
 
       // Step 16c) Route by category
       if (category === "drill" || category === "drills") {
@@ -377,7 +402,9 @@ function importEquipmentCSV(file) {
         var drillObj = {
           id: id,
           name: name,
-          type: subType || "Unknown",
+          brand: brand,
+          model: model,
+          type: subType || "Rotary",
           minDiam: parseInt(get("minDiam"), 10) || 0,
           maxDiam: parseInt(get("maxDiam"), 10) || 0,
           rateM_per_day: parseFloat(get("rateM")) || 0,
@@ -397,14 +424,29 @@ function importEquipmentCSV(file) {
         for (var m = 0; m < mpus.length; m++) {
           if (mpus[m].id === id) { existMpuIdx = m; break; }
         }
+        // Step 16c-ii) Parse blend config from "AN/FO/Matrix" format
+        var blendConfig = null;
+        if (blendStr) {
+          var blendParts = blendStr.split("/");
+          if (blendParts.length >= 3) {
+            blendConfig = {
+              anPct: parseFloat(blendParts[0]) || 0,
+              foPct: parseFloat(blendParts[1]) || 0,
+              matrixPct: parseFloat(blendParts[2]) || 0
+            };
+          }
+        }
         var mpuObj = {
           id: id,
           name: name,
+          brand: brand,
+          model: model,
           type: subType || "Emulsion",
           capacity_kg: parseFloat(get("capacityKg")) || 0,
           rateKg_per_day: parseFloat(get("rateKg")) || 0,
           status: status,
           crewRequired: parseCrew(crewStr),
+          blendConfig: blendConfig,
           maintenance: parseMaintenance(maintStr)
         };
         if (existMpuIdx !== -1) {
@@ -422,6 +464,8 @@ function importEquipmentCSV(file) {
         var ancObj = {
           id: id,
           name: name,
+          brand: brand,
+          model: model,
           type: subType || "Unknown",
           rateM2_per_day: parseFloat(get("rateM2")) || 0,
           status: status,

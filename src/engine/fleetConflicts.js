@@ -11,7 +11,7 @@ import { hasBlocks } from "./blockHelpers.js";
 import { addDays, isoDate } from "../utils/dateUtils.js";
 
 // Step 1) Build a map of drillId -> [dates] for every blast
-//  Returns { "PV271-01": { "2026-03-01": ["S4_226_412_V1"], ... }, ... }
+//  Returns { "PV271-01": { "2026-03-01": ["XYZ-226-412"], ... }, ... }
 function buildDailyDrillUsage() {
   var usage = {};
 
@@ -68,7 +68,7 @@ function detectFleetConflicts() {
         var drill = drillFleet.find(function(d) { return d.id === drillId; });
         conflicts.push({
           drillId: drillId,
-          drillType: drill ? drill.type : "Unknown",
+          drillType: drill ? (drill.model || drill.type) : "Unknown",
           date: ds,
           blasts: dates[ds]
         });
@@ -79,31 +79,32 @@ function detectFleetConflicts() {
   return conflicts;
 }
 
-// Step 3) Build a per-type daily count vs fleet size
-//  Returns { "PV271": { "2026-03-01": { used: 5, available: 4, over: true }, ... } }
+  // Step 3) Build a per-model daily count vs fleet size
+  //  Returns { "PV271": { "2026-03-01": { used: 5, available: 4, over: true }, ... } }
 function detectTypeOverAllocation() {
   var usage = buildDailyDrillUsage();
   var typeOverMap = {};
 
-  // Step 3a) Count how many of each type are in the fleet
+  // Step 3a) Count how many of each model are in the fleet
   var typeCounts = {};
   drillFleet.forEach(function(drill) {
     if (drill.status === "demobilised") return;
-    if (!typeCounts[drill.type]) typeCounts[drill.type] = 0;
-    typeCounts[drill.type]++;
+    var modelKey = drill.model || drill.type;
+    if (!typeCounts[modelKey]) typeCounts[modelKey] = 0;
+    typeCounts[modelKey]++;
   });
 
-  // Step 3b) Count daily usage per type
+  // Step 3b) Count daily usage per model
   var typeDailyUsage = {};
   Object.keys(usage).forEach(function(drillId) {
     var drill = drillFleet.find(function(d) { return d.id === drillId; });
     if (!drill) return;
-    var type = drill.type;
-    if (!typeDailyUsage[type]) typeDailyUsage[type] = {};
+    var modelKey = drill.model || drill.type;
+    if (!typeDailyUsage[modelKey]) typeDailyUsage[modelKey] = {};
 
     Object.keys(usage[drillId]).forEach(function(ds) {
-      if (!typeDailyUsage[type][ds]) typeDailyUsage[type][ds] = 0;
-      typeDailyUsage[type][ds]++;
+      if (!typeDailyUsage[modelKey][ds]) typeDailyUsage[modelKey][ds] = 0;
+      typeDailyUsage[modelKey][ds]++;
     });
   });
 

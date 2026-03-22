@@ -611,8 +611,8 @@ function editBlast(idx) {
   populateHoleTypeTable(b.holeTypes || []);
   // Step 7b) Dependency fields
   var bd = b.deps || {};
-  document.getElementById("fDepDrillForLoad").value = (bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined) ? bd.drillPctForLoad : "";
-  document.getElementById("fDepDrillForBlast").value = (bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined) ? bd.drillPctForBlast : "";
+  document.getElementById("fDepDrillForLoad").value = (bd.drillPctForLoad !== null && bd.drillPctForLoad !== undefined) ? Math.round(bd.drillPctForLoad * 100) : "";
+  document.getElementById("fDepDrillForBlast").value = (bd.drillPctForBlast !== null && bd.drillPctForBlast !== undefined) ? Math.round(bd.drillPctForBlast * 100) : "";
   document.getElementById("fDepMinLead").value = (bd.minLeadDays !== null && bd.minLeadDays !== undefined) ? bd.minLeadDays : "";
   populatePredecessorDropdown(b.name);
   document.getElementById("fDepPredecessor").value = bd.predecessor || "";
@@ -716,8 +716,8 @@ function saveBlast() {
   var fDepPred = document.getElementById("fDepPredecessor").value;
   var fDepPredType = document.getElementById("fDepPredType").value;
   var blastDeps = {
-    drillPctForLoad:  fDepDL !== "" ? parseFloat(fDepDL) : null,
-    drillPctForBlast: fDepDB !== "" ? parseFloat(fDepDB) : null,
+    drillPctForLoad:  fDepDL !== "" ? parseFloat(fDepDL) / 100 : null,
+    drillPctForBlast: fDepDB !== "" ? parseFloat(fDepDB) / 100 : null,
     loadPctForBlast:  null,
     minLeadDays:      fDepML !== "" ? parseInt(fDepML) : null,
     predecessor:      fDepPred || null,

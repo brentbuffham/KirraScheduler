@@ -296,13 +296,15 @@ function syncUIFromState() {
   el = document.getElementById("rigUtil");
   if (el) el.value = APP.utilisation;
   el = document.getElementById("depDrillForLoad");
-  if (el && APP.deps) el.value = APP.deps.drillPctForLoad;
+  if (el && APP.deps) el.value = Math.round(APP.deps.drillPctForLoad * 100);
   el = document.getElementById("depDrillForBlast");
-  if (el && APP.deps) el.value = APP.deps.drillPctForBlast;
+  if (el && APP.deps) el.value = Math.round(APP.deps.drillPctForBlast * 100);
   el = document.getElementById("depMinLead");
   if (el && APP.deps) el.value = APP.deps.minLeadDays;
   el = document.getElementById("depEnforceSeq");
   if (el && APP.deps) el.checked = APP.deps.enforceSequence !== false;
+  el = document.getElementById("depDrillOverlap");
+  if (el && APP.deps) el.value = Math.round((APP.deps.drillOverlapPct !== undefined ? APP.deps.drillOverlapPct : 1.0) * 100);
   el = document.getElementById("planWeekStartDay");
   if (el) el.value = APP.planWeekStartDay;
   el = document.getElementById("planCycleWeeks");

@@ -399,7 +399,7 @@ function updateSceneForDay(day) {
         var topZ = getBlastTopZ(b.name);
         if (!centroid) return;
         var drill = drills.find(function(d) { return d.id === drillId; });
-        var type = drill ? drill.type : "PV271";
+        var type = drill ? (drill.model || drill.type) : "PV271";
         // Step) Offset multiple drills so they don't stack
         var offset = Object.keys(placed).length * 8;
         var pos = centroid.clone();

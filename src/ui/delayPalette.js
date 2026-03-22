@@ -17,6 +17,7 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { showPatternAllocDialog } from "../views/blastOverview.js";
+import { getSelection, clearSelection } from "./ganttSelect.js";
 
 var CELL_WIDTH = 32;
 
@@ -79,8 +80,8 @@ function renderDelayPalette() {
       html += "<div class=\"palette-chip drill-chip\" draggable=\"" + draggable + "\" " +
         "data-drag-type=\"drill\" data-drag-id=\"" + drill.id + "\" " +
         "style=\"border-color:" + statusColor + ";" + opacity + "\" " +
-        "title=\"" + drill.name + " (" + drill.type + ") — " + drill.rateM_per_day + " m/hr\">";
-      html += "<span class=\"palette-chip-icon\" style=\"background:" + statusColor + ";\">" + drill.type.charAt(0) + "</span>";
+        "title=\"" + drill.name + " (" + (drill.model || drill.type) + ") — " + drill.rateM_per_day + " m/hr\">";
+      html += "<span class=\"palette-chip-icon\" style=\"background:" + statusColor + ";\">" + (drill.model || drill.type || "?").charAt(0) + "</span>";
       html += "<span class=\"palette-chip-text\">" + drill.id + "</span>";
       html += "</div>";
     });
@@ -265,7 +266,16 @@ function initGanttDropTarget() {
     var blast = APP.blasts[blastIdx];
     if (!blast) return;
 
-    // Step 4c) Route by drag type
+    // Step 4b-ii) Check for active multi-selection — batch apply
+    var selection = getSelection();
+    var isBatchType = (dragType === "drill" || dragType === "mpu" || dragType === "ancillary" ||
+                       dragType === "crew" || dragType === "pattern");
+    if (selection.length > 1 && isBatchType) {
+      batchApplyDrop(dragType, dragId, selection);
+      return;
+    }
+
+    // Step 4c) Route by drag type (single-blast mode)
     if (dragType === "pattern") {
       handlePatternDrop(blast, blastIdx, dragId);
     } else if (dragType === "delay") {
@@ -286,6 +296,163 @@ function initGanttDropTarget() {
       handleMPUReassign(blast, dragId, parseInt(parts[2]), section);
     }
   });
+}
+
+// ============================================================
+//  BATCH APPLY — assign equipment/patterns to all selected blasts
+// ============================================================
+
+// Step 4d) Central batch dispatcher for multi-selected blasts
+function batchApplyDrop(dragType, dragId, selection) {
+  var applied = 0;
+  var skipped = 0;
+  var patternSkipped = 0;
+  var uniqueBlasts = {};
+
+  for (var i = 0; i < selection.length; i++) {
+    var sel = selection[i];
+    var blast = APP.blasts[sel.blastIdx];
+    if (!blast) continue;
+    var section = sel.section;
+
+    // Step 4d-i) DRILL batch — only on drilling rows
+    if (dragType === "drill") {
+      if (section !== "drilling") continue;
+      // Step) Find the DOM row to check for block-level assignment
+      var blockIdx = sel.blockIdx !== undefined ? sel.blockIdx : null;
+      if (blockIdx === null) {
+        // Step) Try to find block index from the DOM row
+        var domRow = document.querySelector(".gantt-row[data-blast=\"" + sel.blastIdx + "\"][data-section=\"drilling\"][data-block]");
+        if (domRow && domRow.dataset.block !== undefined) {
+          blockIdx = parseInt(domRow.dataset.block);
+        }
+      }
+
+      if (blockIdx !== null && blast.drillBlocks && blast.drillBlocks[blockIdx]) {
+        var block = blast.drillBlocks[blockIdx];
+        if ((block.assignedDrills || []).indexOf(dragId) !== -1) { skipped++; continue; }
+        if (!block.assignedDrills) block.assignedDrills = [];
+        block.assignedDrills.push(dragId);
+        var drillObj = drills.find(function(d) { return d.id === dragId; });
+        if (drillObj) {
+          if (!block.drillRates) block.drillRates = {};
+          block.drillRates[dragId] = drillObj.rateM_per_day;
+        }
+        syncBlastFromBlocks(blast);
+      } else {
+        if ((blast.assignedDrills || []).indexOf(dragId) !== -1) { skipped++; continue; }
+        if (!blast.assignedDrills) blast.assignedDrills = [];
+        blast.assignedDrills.push(dragId);
+        delete blast.drillRates;
+      }
+      applied++;
+
+    // Step 4d-ii) MPU batch — only on loading rows
+    } else if (dragType === "mpu") {
+      if (section !== "loading") continue;
+      if (!blast.assignedMPUs) blast.assignedMPUs = [];
+      if (blast.assignedMPUs.indexOf(dragId) !== -1) { skipped++; continue; }
+      blast.assignedMPUs.push(dragId);
+      delete blast.mpuRates;
+      applied++;
+
+    // Step 4d-iii) ANCILLARY batch — only on pattern prep rows
+    } else if (dragType === "ancillary") {
+      if (section !== "pattern prep") continue;
+      if (!blast.assignedAncillary) blast.assignedAncillary = [];
+      if (blast.assignedAncillary.indexOf(dragId) !== -1) { skipped++; continue; }
+      blast.assignedAncillary.push(dragId);
+      delete blast.ancillaryRates;
+      applied++;
+
+    // Step 4d-iv) CREW batch — on drilling or loading rows
+    } else if (dragType === "crew") {
+      if (section !== "drilling" && section !== "loading") continue;
+      var crew = ensureCrewAllocated(blast);
+      var sectionCrew = crew[section];
+      sectionCrew[dragId] = (sectionCrew[dragId] || 0) + 1;
+      applied++;
+
+    // Step 4d-v) PATTERN batch — deduplicate by blastIdx, assign only to empty blocks
+    } else if (dragType === "pattern") {
+      if (uniqueBlasts[sel.blastIdx]) continue;
+      uniqueBlasts[sel.blastIdx] = true;
+
+      var pattern = APP.patterns.find(function(p) { return p.id === dragId; });
+      if (!pattern) continue;
+
+      if (!blast.holeTypes) blast.holeTypes = [];
+
+      // Step) Only assign to blasts with no existing patterns
+      if (blast.holeTypes.length > 0) {
+        patternSkipped++;
+        continue;
+      }
+
+      // Step) Create a default hole type entry from the pattern data
+      var isLine = (pattern.type === "PRESPLIT" || pattern.type === "BUFFER");
+      var holeDepth = (pattern.benchHt || 12) + (pattern.subdrill || 0);
+      var diamM = pattern.diam >= 1 ? pattern.diam / 1000 : pattern.diam;
+      var holeCount = 0;
+      if (blast.surfaceArea > 0 && pattern.burden > 0 && pattern.spacing > 0) {
+        holeCount = Math.ceil(blast.surfaceArea / (pattern.burden * pattern.spacing));
+      }
+      var totalMeters = holeCount * holeDepth;
+      var htExpMass = Math.round((pattern.pf || 0) * (pattern.burden || 0) * (pattern.spacing || 0) * (pattern.benchHt || 12) * holeCount);
+
+      blast.holeTypes.push({
+        patternId: pattern.id,
+        type: pattern.type || "PRODUCTION",
+        diam: diamM,
+        burden: pattern.burden,
+        spacing: pattern.spacing,
+        isLineDrill: isLine,
+        holes: holeCount,
+        holeDepth: holeDepth,
+        drillMeters: Math.round(totalMeters * 10) / 10,
+        expMass: htExpMass,
+        pctBlock: 100
+      });
+      // Step) Update blast-level expMass from hole types
+      blast.expMass = (blast.expMass || 0) + htExpMass;
+      applied++;
+    }
+  }
+
+  // Step 4d-vi) ONE recalc + render + save after all assignments
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+
+  // Step 4d-vii) Build consolidated feedback toast
+  var msg = "";
+  if (dragType === "drill") {
+    msg = dragId + " assigned to " + applied + " blast(s)";
+  } else if (dragType === "mpu") {
+    msg = dragId + " assigned to " + applied + " blast(s)";
+  } else if (dragType === "ancillary") {
+    msg = dragId + " assigned to " + applied + " blast(s)";
+  } else if (dragType === "crew") {
+    msg = "+" + dragId + " on " + applied + " blast(s)";
+  } else if (dragType === "pattern") {
+    msg = dragId + " assigned to " + applied + " blast(s)";
+  }
+
+  if (skipped > 0) {
+    msg += " (" + skipped + " already assigned)";
+  }
+
+  showDropFeedback(msg, applied > 0);
+
+  // Step 4d-viii) Show pattern-specific warning if blocks were skipped
+  if (patternSkipped > 0) {
+    setTimeout(function() {
+      showDropFeedback(
+        patternSkipped + " block(s) already have a pattern assigned. Please manually edit via block details to add additional patterns.",
+        false
+      );
+    }, 300);
+  }
 }
 
 // Step 5) Handle delay drop — create a delay block

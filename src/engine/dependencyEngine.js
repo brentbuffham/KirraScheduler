@@ -25,9 +25,9 @@ function getBlastDeps(blast) {
 
 // Step 2) Recalculate all load/blast dates based on dependency thresholds
 function recalcDependencies() {
-  // Step 2a) Read global settings from UI
-  APP.deps.drillPctForLoad  = parseFloat(document.getElementById("depDrillForLoad").value) || 0;
-  APP.deps.drillPctForBlast = parseFloat(document.getElementById("depDrillForBlast").value) || 1;
+  // Step 2a) Read global settings from UI (inputs are 0-100 integers, internal state is 0-1 decimals)
+  APP.deps.drillPctForLoad  = (parseFloat(document.getElementById("depDrillForLoad").value) || 0) / 100;
+  APP.deps.drillPctForBlast = (parseFloat(document.getElementById("depDrillForBlast").value) || 100) / 100;
   APP.deps.loadPctForBlast  = 1.0;
   APP.deps.minLeadDays      = parseInt(document.getElementById("depMinLead").value) || 0;
   APP.deps.enforceSequence  = document.getElementById("depEnforceSeq").checked;
@@ -37,6 +37,23 @@ function recalcDependencies() {
     // Step 2b-i) Sync block-level derived values if blast has blocks
     if (hasBlocks(blast)) {
       syncBlastFromBlocks(blast);
+    }
+
+    // Step 2b-ia) Refresh blast.expMass from holeTypes, recalculating any missing values
+    //             from the pattern library (pf * burden * spacing * benchHt * holes)
+    if (blast.holeTypes && blast.holeTypes.length > 0) {
+      var htMassTotal = 0;
+      for (var hi = 0; hi < blast.holeTypes.length; hi++) {
+        var ht = blast.holeTypes[hi];
+        if (!ht.expMass && ht.patternId && ht.holes > 0) {
+          var pat = APP.patterns.find(function(p) { return p.id === ht.patternId; });
+          if (pat && pat.pf > 0) {
+            ht.expMass = Math.round(pat.pf * (ht.burden || pat.burden) * (ht.spacing || pat.spacing) * (pat.benchHt || 12) * ht.holes);
+          }
+        }
+        htMassTotal += ht.expMass || 0;
+      }
+      if (htMassTotal > 0) blast.expMass = htMassTotal;
     }
 
     // Step 2b-ii) Recalculate drillDays for non-block blasts from assigned drill rates
@@ -249,4 +266,127 @@ function recalcDependencies() {
   });
 }
 
-export { getBlastDeps, recalcDependencies };
+// ============================================================
+//  AUTO SCHEDULE
+//  Stacks drill start dates top-to-bottom through the blast list.
+//  Each blast's drillStart is derived from the previous blast's
+//  drilling progress, using the global Drill Overlap % threshold.
+//  Per-blast predecessor overrides take priority over the global
+//  stacking rule.  After stacking, recalcDependencies() cascades
+//  load/blast dates as normal.
+// ============================================================
+
+// Step 3) Auto-schedule drill starts by stacking blasts sequentially
+function autoSchedule() {
+  // Step 3a) Read the global drill overlap threshold from the UI (input is 0-200 integer, internal is 0-2 decimal)
+  var overlapEl = document.getElementById("depDrillOverlap");
+  var drillOverlapPct = overlapEl ? (parseFloat(overlapEl.value) || 100) / 100 : 1.0;
+  if (isNaN(drillOverlapPct)) drillOverlapPct = 1.0;
+  APP.deps.drillOverlapPct = drillOverlapPct;
+
+  // Step 3b) First pass — ensure drillDays are up to date for all blasts
+  APP.blasts.forEach(function(blast) {
+    if (hasBlocks(blast)) {
+      syncBlastFromBlocks(blast);
+    }
+    if (!hasBlocks(blast) && blast.assignedDrills && blast.assignedDrills.length > 0) {
+      var totalMeters = getTotalDrillMeters(blast);
+      if (totalMeters > 0) {
+        var effHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
+        var combinedRate = 0;
+        for (var di = 0; di < blast.assignedDrills.length; di++) {
+          var drillId = blast.assignedDrills[di];
+          if (blast.drillRates && blast.drillRates[drillId] !== undefined) {
+            combinedRate += blast.drillRates[drillId] * effHrs;
+          } else {
+            var drillObj = drills.find(function(d) { return d.id === drillId; });
+            if (drillObj) combinedRate += (drillObj.rateM_per_day || 0) * effHrs;
+          }
+        }
+        if (combinedRate > 0) {
+          blast.drillDays = Math.ceil(totalMeters / combinedRate);
+        }
+      }
+    }
+  });
+
+  // Step 3c) Walk blasts top-to-bottom and stack drill starts
+  var prevBlast = null;
+  for (var i = 0; i < APP.blasts.length; i++) {
+    var blast = APP.blasts[i];
+
+    // Step 3c-i) Skip blasts with drilling disabled
+    if (blast.noDrill) { continue; }
+
+    // Step 3c-ii) First drillable blast keeps its existing drillStart as the anchor
+    if (!prevBlast) {
+      if (!blast.drillStart) {
+        blast.drillStart = isoDate(APP.planStart);
+      }
+      prevBlast = blast;
+      continue;
+    }
+
+    // Step 3c-iii) Check for per-blast predecessor override
+    var deps = getBlastDeps(blast);
+    if (deps.predecessor) {
+      var pred = APP.blasts.find(function(b) { return b.name === deps.predecessor; });
+      if (pred) {
+        var newStart = null;
+
+        if (deps.predType === "blast-before-drill" && pred.blastDate) {
+          // Step) Drill starts the day after predecessor fires
+          newStart = addDays(new Date(pred.blastDate), 1);
+
+        } else if (deps.predType === "drill-before-drill" && pred.drillStart && pred.drillDays) {
+          // Step) Drill starts after predecessor finishes drilling
+          newStart = addDays(new Date(pred.drillStart), pred.drillDays || 1);
+
+        } else if (deps.predType === "blast-before-load" && pred.blastDate) {
+          // Step) For blast-before-load, drill still stacks off prev using overlap
+          var prevDays = prevBlast.drillDays || 1;
+          var offsetDays = Math.ceil(prevDays * drillOverlapPct);
+          newStart = addDays(new Date(prevBlast.drillStart), offsetDays);
+        }
+
+        if (newStart) {
+          blast.drillStart = isoDate(newStart);
+          blast.loadStartManual = false;
+          blast.blastDateManual = false;
+          prevBlast = blast;
+          continue;
+        }
+      }
+    }
+
+    // Step 3c-iv) Default stacking: previous blast's drillStart + (drillDays * overlapPct)
+    if (prevBlast.drillStart && prevBlast.drillDays) {
+      var prevDrillStart = new Date(prevBlast.drillStart);
+      var prevDays2 = prevBlast.drillDays || 1;
+      var offsetDays2 = Math.ceil(prevDays2 * drillOverlapPct);
+
+      // Step 3c-v) Use block-level latest end when overlap >= 100% and blast has blocks
+      if (drillOverlapPct >= 1.0 && hasBlocks(prevBlast)) {
+        var latestEnd = getLatestBlockEnd(prevBlast);
+        if (latestEnd) {
+          blast.drillStart = isoDate(addDays(latestEnd, 1));
+        } else {
+          blast.drillStart = isoDate(addDays(prevDrillStart, offsetDays2));
+        }
+      } else {
+        blast.drillStart = isoDate(addDays(prevDrillStart, offsetDays2));
+      }
+
+      // Step 3c-vi) Clear manual overrides so recalcDependencies cascades freely
+      blast.loadStartManual = false;
+      blast.blastDateManual = false;
+    }
+
+    prevBlast = blast;
+  }
+
+  // Step 3d) Now cascade load/blast dates via the existing dependency engine
+  recalcDependencies();
+}
+
+export { getBlastDeps, recalcDependencies, autoSchedule };

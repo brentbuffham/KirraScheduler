@@ -64,7 +64,7 @@ function showBlockEditor(blastIdx, blockIdx) {
     var checked = isAssigned ? " checked" : "";
 
     formHtml += "<div style=\"display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;\">";
-    formHtml += "<label style=\"font-size:11px;white-space:nowrap;\"><input type=\"checkbox\" class=\"be-drill-cb\" value=\"" + drill.id + "\"" + checked + "> " + drill.id + " (" + drill.type + ")</label>";
+    formHtml += "<label style=\"font-size:11px;white-space:nowrap;\"><input type=\"checkbox\" class=\"be-drill-cb\" value=\"" + drill.id + "\"" + checked + "> " + drill.id + " (" + (drill.model || drill.type) + ")</label>";
     formHtml += "<div></div>";
     formHtml += "<input type=\"number\" class=\"be-drill-rate\" data-drill=\"" + drill.id + "\" value=\"" + rate + "\" min=\"1\" step=\"1\" style=\"width:60px;padding:2px 4px;font-size:11px;text-align:right;\"" + (isAssigned ? "" : " disabled") + ">";
     formHtml += "</div>";
