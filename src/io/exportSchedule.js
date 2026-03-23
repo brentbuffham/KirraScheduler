@@ -66,6 +66,7 @@ function exportCSV() {
     "Blast Name", "Status", "Mode",
     "Surface Area (m2)", "Volume (bcm)", "Explosive Mass (kg)",
     "Total Drill Meters", "Hole Count", "Hole Types",
+    "Depth Profile",
     "Drill Start", "Start Time", "Drill Days",
     "Load Start", "Load Days", "Blast Date",
     "Assigned Drills", "Assigned MPUs",
@@ -88,6 +89,29 @@ function exportCSV() {
         htSummary.push(htLabel);
       }
     }
+    // Step 2b-ii) Build depth profile summary text from depthBinData
+    var depthBinData = b.depthBinData || null;
+    if (!depthBinData) {
+      var matchSolid = (APP.kirraProjectSolids || []).find(function(s) {
+        if (s.name === b.name) return true;
+        var stripped = s.name || "";
+        if (stripped.indexOf("EXTRUDED_") === 0) stripped = stripped.substring(9);
+        return stripped === b.name;
+      });
+      if (matchSolid) depthBinData = matchSolid.depthBinData || null;
+    }
+    var depthProfileStr = "";
+    if (depthBinData && depthBinData.depthBins) {
+      var parts = [];
+      for (var di = 0; di < depthBinData.depthBins.length; di++) {
+        var db = depthBinData.depthBins[di];
+        if (db.areaPct >= 1) {
+          parts.push(db.minDepth + "-" + db.maxDepth + "m:" + db.areaPct + "%");
+        }
+      }
+      depthProfileStr = parts.join(" | ");
+    }
+
     var drillPctLoad = b.deps.drillPctForLoad !== null ? b.deps.drillPctForLoad : (APP.deps.drillPctForLoad || "");
     var drillPctBlast = b.deps.drillPctForBlast !== null ? b.deps.drillPctForBlast : (APP.deps.drillPctForBlast || "");
     var leadDays = b.deps.minLeadDays !== null ? b.deps.minLeadDays : (APP.deps.minLeadDays || "");
@@ -103,6 +127,7 @@ function exportCSV() {
       Math.round(totalMeters * 10) / 10,
       totalHoles,
       csvEscape(htSummary.join(" | ")),
+      csvEscape(depthProfileStr),
       b.drillStart || "",
       b.drillStartTime || "",
       b.drillDays || 0,

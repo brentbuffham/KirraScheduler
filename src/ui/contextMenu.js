@@ -10,10 +10,13 @@ import { editBlast } from "../dialogs/blastModal.js";
 import { splitBlast, mergeBlocks, hasBlocks, syncBlastFromBlocks, splitAndRemoveDrill } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
+import { renderBlasts } from "../views/blastOverview.js";
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
 import { CREW_ROLES, ensureCrewAllocated } from "../state/crewRoles.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { isoDate } from "../utils/dateUtils.js";
+import { getSelection, clearSelection } from "./ganttSelect.js";
+import { drills } from "../state/equipmentState.js";
 
 // Step 0) Update phase toggle labels in context menu
 function updatePhaseToggleLabels(blast) {
@@ -23,6 +26,28 @@ function updatePhaseToggleLabels(blast) {
   if (nd && blast) nd.textContent = blast.noDrill ? "\u2705 Enable Drilling" : "\uD83D\uDEAB No Drill";
   if (nl && blast) nl.textContent = blast.noLoad  ? "\u2705 Enable Loading"  : "\uD83D\uDEAB No Load";
   if (nb && blast) nb.textContent = blast.noBlast ? "\u2705 Enable Blasting" : "\uD83D\uDEAB No Blast";
+}
+
+// Step 0b) Show or hide the multi-select menu items.
+// When multi-select is active, hide single-blast items and show multi items.
+// When not active, hide multi items (single-blast items managed by caller).
+function setMultiSelectMode(menu, isMulti, selectionCount) {
+  var multiItems = menu.querySelectorAll(".ctx-multi");
+  multiItems.forEach(function(el) {
+    el.style.display = isMulti ? "" : "none";
+  });
+  if (isMulti) {
+    // Step 0b-i) Hide all single-blast items
+    menu.querySelectorAll(".ctx-general").forEach(function(el) { el.style.display = "none"; });
+    menu.querySelectorAll(".ctx-drill-only").forEach(function(el) { el.style.display = "none"; });
+    menu.querySelectorAll(".ctx-block-only").forEach(function(el) { el.style.display = "none"; });
+    menu.querySelectorAll(".ctx-delay-only").forEach(function(el) { el.style.display = "none"; });
+    menu.querySelectorAll(".ctx-dynamic").forEach(function(el) { el.remove(); });
+
+    // Step 0b-ii) Update the label with count
+    var label = document.getElementById("ctxMultiLabel");
+    if (label) label.textContent = selectionCount + " blasts selected";
+  }
 }
 
 // Step 1) Show context menu at cursor position (from sticky-col right-click)
@@ -35,6 +60,17 @@ function showCtxMenu(e, idx, section, blockIdx) {
 
   var menu = document.getElementById("contextMenu");
   var blast = APP.blasts[idx];
+
+  // Step 1-MULTI) Check if we have a multi-selection
+  var sel = getSelection();
+  if (sel.length > 1) {
+    setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
+    menu.style.display = "block";
+    menu.style.left = e.clientX + "px";
+    menu.style.top = e.clientY + "px";
+    return;
+  }
+  setMultiSelectMode(menu, false, 0);
 
   // Step 1a) Show/hide section-specific items
   var drillItems = menu.querySelectorAll(".ctx-drill-only");
@@ -88,6 +124,17 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
 
   var menu = document.getElementById("contextMenu");
   var blast = APP.blasts[blastIdx];
+
+  // Step 1f-MULTI) Check if we have a multi-selection
+  var sel = getSelection();
+  if (sel.length > 1) {
+    setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
+    menu.style.display = "block";
+    menu.style.left = e.clientX + "px";
+    menu.style.top = e.clientY + "px";
+    return;
+  }
+  setMultiSelectMode(menu, false, 0);
 
   // Step 1f-i) If a delay bar was right-clicked, show delay-specific items
   if (delayIdx !== null) {
@@ -457,6 +504,150 @@ function toggleNoBlastFromCtx() {
   renderGantt();
 }
 
+// ============================================================
+//  MULTI-SELECT ACTIONS
+// ============================================================
+
+// Step MS-1) Get unique blast indices from the selection array
+function getUniqueBlastIndices(sel) {
+  var seen = {};
+  var result = [];
+  for (var i = 0; i < sel.length; i++) {
+    var idx = sel[i].blastIdx;
+    if (!seen[idx]) {
+      seen[idx] = true;
+      result.push(idx);
+    }
+  }
+  return result;
+}
+
+// Step MS-2) Recalculate block meters for all selected blasts.
+// Uses Volume / Surface Area as the average bench height for each blast,
+// then recalculates hole depth, drill meters, and explosive mass per holeType.
+function recalcBlockMetersMulti() {
+  var sel = getSelection();
+  var indices = getUniqueBlastIndices(sel);
+  var updated = 0;
+  var skipped = 0;
+
+  for (var i = 0; i < indices.length; i++) {
+    var blast = APP.blasts[indices[i]];
+    if (!blast) continue;
+
+    // Step MS-2a) Require volume, surface area, and at least one holeType
+    if (!blast.volume || blast.volume <= 0 || !blast.surfaceArea || blast.surfaceArea <= 0) {
+      skipped++;
+      continue;
+    }
+    if (!blast.holeTypes || blast.holeTypes.length === 0) {
+      skipped++;
+      continue;
+    }
+
+    // Step MS-2b) Enable useBlockDepth flag
+    blast.useBlockDepth = true;
+
+    // Step MS-2c) Calculate average bench height from the 3D solid
+    var blockBenchHt = blast.volume / blast.surfaceArea;
+
+    // Step MS-2d) Recalculate each holeType's depth, meters, and mass
+    var totalExpMass = 0;
+    for (var h = 0; h < blast.holeTypes.length; h++) {
+      var ht = blast.holeTypes[h];
+      var pattern = APP.patterns.find(function(p) { return p.id === ht.patternId; });
+      if (!pattern) continue;
+
+      // Step MS-2e) Depth = blockBenchHt / sin(angle) + subdrill
+      var angle = pattern.holeAngle || 90;
+      var radians = angle * Math.PI / 180;
+      var sinAngle = Math.sin(radians);
+      if (sinAngle < 0.01) sinAngle = 1;
+      var depth = Math.round((blockBenchHt / sinAngle + (pattern.subdrill || 0)) * 100) / 100;
+
+      ht.holeDepth = depth;
+      ht.drillMeters = Math.round(ht.holes * depth * 10) / 10;
+
+      // Step MS-2f) Explosive mass
+      if (ht.isLineDrill) {
+        ht.expMass = Math.round(ht.drillMeters * pattern.pf);
+      } else {
+        ht.expMass = Math.round(ht.holes * pattern.burden * pattern.spacing * blockBenchHt * pattern.pf);
+      }
+      totalExpMass += ht.expMass;
+    }
+
+    // Step MS-2g) Update blast-level explosive mass
+    blast.expMass = totalExpMass;
+
+    // Step MS-2h) Recalculate drill days from equipment rates
+    var totalMeters = 0;
+    for (var h2 = 0; h2 < blast.holeTypes.length; h2++) {
+      totalMeters += blast.holeTypes[h2].drillMeters || 0;
+    }
+    if (totalMeters > 0 && blast.assignedDrills && blast.assignedDrills.length > 0) {
+      var effHrs = (APP.rigHours || 24) * (APP.availability || 0.85) * (APP.utilisation || 0.75);
+      var totalDailyM = 0;
+      for (var d = 0; d < blast.assignedDrills.length; d++) {
+        var drillObj = drills.find(function(dd) { return dd.id === blast.assignedDrills[d]; });
+        if (drillObj) totalDailyM += (drillObj.rateM_per_day || 0) * effHrs;
+      }
+      if (totalDailyM > 0) {
+        blast.drillDays = Math.max(1, Math.ceil(totalMeters / totalDailyM));
+      }
+    }
+
+    // Step MS-2i) Recalculate load days
+    var effectiveLoadRate = blast.loadRate || 100000;
+    if (blast.expMass > 0 && effectiveLoadRate > 0) {
+      blast.loadDays = Math.max(1, Math.ceil(blast.expMass / effectiveLoadRate));
+    }
+
+    updated++;
+  }
+
+  // Step MS-2j) Persist, recalculate dependencies, and re-render
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+  renderBlasts();
+
+  // Step MS-2k) Summary notification
+  var msg = "Recalculated block meters for " + updated + " blast" + (updated !== 1 ? "s" : "");
+  if (skipped > 0) msg += " (" + skipped + " skipped — missing volume or area)";
+  console.log("[Multi-Select] " + msg);
+}
+
+// Step MS-3) Enable "Use Block Depth" on all selected blasts, then recalculate
+function enableBlockDepthMulti() {
+  var sel = getSelection();
+  var indices = getUniqueBlastIndices(sel);
+  for (var i = 0; i < indices.length; i++) {
+    var blast = APP.blasts[indices[i]];
+    if (blast) blast.useBlockDepth = true;
+  }
+  recalcBlockMetersMulti();
+}
+
+// Step MS-4) Remove all selected blasts with confirmation
+function removeSelectedBlasts() {
+  var sel = getSelection();
+  var indices = getUniqueBlastIndices(sel);
+  if (indices.length === 0) return;
+  if (!confirm("Remove " + indices.length + " selected blast" + (indices.length !== 1 ? "s" : "") + "?")) return;
+
+  // Step MS-4a) Sort descending so splice indices stay valid
+  indices.sort(function(a, b) { return b - a; });
+  for (var i = 0; i < indices.length; i++) {
+    APP.blasts.splice(indices[i], 1);
+  }
+  clearSelection();
+  debouncedSave();
+  recalcDependencies();
+  renderGantt();
+  renderBlasts();
+}
+
 // Step 9) Initialise context menu event listeners
 function initContextMenu() {
   // Step 9a) Close context menu on any click
@@ -485,6 +676,14 @@ function initContextMenu() {
   if (ctxRemoveDelay) ctxRemoveDelay.addEventListener("click", removeDelayFromCtx);
   if (ctxExtendDelay) ctxExtendDelay.addEventListener("click", extendDelayFromCtx);
   if (ctxShrinkDelay) ctxShrinkDelay.addEventListener("click", shrinkDelayFromCtx);
+
+  // Step 9d) Bind multi-select context menu items
+  var ctxRecalc = document.getElementById("ctxRecalcBlockMeters");
+  var ctxEnableBD = document.getElementById("ctxEnableBlockDepth");
+  var ctxRemoveSel = document.getElementById("ctxRemoveSelected");
+  if (ctxRecalc) ctxRecalc.addEventListener("click", recalcBlockMetersMulti);
+  if (ctxEnableBD) ctxEnableBD.addEventListener("click", enableBlockDepthMulti);
+  if (ctxRemoveSel) ctxRemoveSel.addEventListener("click", removeSelectedBlasts);
 }
 
 export { showCtxMenu, showBarCtxMenu, initContextMenu };

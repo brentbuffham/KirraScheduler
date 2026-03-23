@@ -228,9 +228,9 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
     if (holesFromPct > 0) defaultHoles = holesFromPct;
   }
 
-  // Step 6d-iv) Override hole depth when using block depth
-  if (blast.useBlockDepth && blast.volume > 0 && defaultHoles > 0 && defaultPct > 0) {
-    var blockBenchHt = (blast.volume * defaultPct / 100) / (defaultHoles * pattern.burden * pattern.spacing);
+  // Step 6d-iv) Override hole depth when using block depth (Volume / Area)
+  if (blast.useBlockDepth && blast.volume > 0 && blast.surfaceArea > 0) {
+    var blockBenchHt = blast.volume / blast.surfaceArea;
     holeDepth = Math.round((blockBenchHt / sinAngle + (pattern.subdrill || 0)) * 100) / 100;
   }
 
@@ -294,9 +294,9 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
       var calcHoles = Math.round((pct / 100) * area / (pattern.burden * pattern.spacing));
       document.getElementById("allocHoles").value = calcHoles > 0 ? calcHoles : 0;
 
-      // Step 6g-iii) When using block depth, recalculate depth from volume
-      if (blast.useBlockDepth && blast.volume > 0 && calcHoles > 0 && pct > 0) {
-        var blockBenchHt = (blast.volume * pct / 100) / (calcHoles * pattern.burden * pattern.spacing);
+      // Step 6g-iii) When using block depth, recalculate depth from Volume / Area
+      if (blast.useBlockDepth && blast.volume > 0 && blast.surfaceArea > 0) {
+        var blockBenchHt = blast.volume / blast.surfaceArea;
         var newDepth = Math.round((blockBenchHt / sinAngle + (pattern.subdrill || 0)) * 100) / 100;
         document.getElementById("allocDepth").value = newDepth;
       }
@@ -373,10 +373,10 @@ function recalcAllocFields(pattern, blast) {
   var drillMeters = Math.round(holes * depth * 10) / 10;
   document.getElementById("allocDrillM").value = drillMeters;
 
-  // Step 7a) Explosive mass — use block-derived benchHt when useBlockDepth is on
+  // Step 7a) Explosive mass — use Volume / Area as benchHt when useBlockDepth is on
   var effectiveBenchHt = pattern.benchHt;
-  if (blast && blast.useBlockDepth && blast.volume > 0 && holes > 0 && pct > 0) {
-    effectiveBenchHt = (blast.volume * pct / 100) / (holes * pattern.burden * pattern.spacing);
+  if (blast && blast.useBlockDepth && blast.volume > 0 && blast.surfaceArea > 0) {
+    effectiveBenchHt = blast.volume / blast.surfaceArea;
   }
   var expMass = pattern.pf * pattern.burden * pattern.spacing * effectiveBenchHt * holes;
   document.getElementById("allocExpMass").value = Math.round(expMass);

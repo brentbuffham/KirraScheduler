@@ -38,15 +38,15 @@ function calcHoleDepth(pattern) {
   return Math.round(depth * 100) / 100;
 }
 
-// Step 1-BLOCK) Calculate hole depth from block volume instead of pattern benchHt.
-// Each hole covers a footprint of burden * spacing, so:
-//   blockBenchHt = (volume * pct/100) / (holes * burden * spacing)
-//   depth = blockBenchHt / sin(angle) + subdrill
-function calcBlockHoleDepth(pattern, volume, area, pct, holes) {
-  if (!volume || volume <= 0 || !holes || holes <= 0 || !pct || pct <= 0) {
+// Step 1-BLOCK) Calculate hole depth from block volume depth instead of pattern benchHt.
+// Block Depth = Volume / Surface Area (the average bench height from the 3D solid).
+// Hole depth = Block Depth / sin(angle) + subdrill.
+// This gives accurate meters even when the bench is shallow or irregular.
+function calcBlockHoleDepth(pattern, volume, area) {
+  if (!volume || volume <= 0 || !area || area <= 0) {
     return calcHoleDepth(pattern);
   }
-  var blockBenchHt = (volume * pct / 100) / (holes * pattern.burden * pattern.spacing);
+  var blockBenchHt = volume / area;
   var angle = pattern.holeAngle || 90;
   var radians = angle * Math.PI / 180;
   var depth = blockBenchHt / Math.sin(radians) + (pattern.subdrill || 0);
@@ -128,7 +128,7 @@ function addHoleTypeRow(patternId, isLineDrill, holes, drillMeters, expMass, pct
 // Step 2c) Recalculate holes on all rows from their % Block values
 //  [1] holes = (surfaceArea * pct/100) / (burden * spacing)
 //  When "Use Block Depth" is on, also re-derives depth from block volume:
-//  [2] blockBenchHt = (volume * pct/100) / holes
+//  [2] blockBenchHt = Volume / Surface Area
 //  [3] depth = blockBenchHt / sin(angle) + subdrill
 function recalcHolesFromPct() {
   var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
@@ -152,9 +152,9 @@ function recalcHolesFromPct() {
       var holes = Math.round(patternArea / (p.burden * p.spacing));
       holesInp.value = holes;
 
-      // Step 2c-ii) Update depth cell when using block depth
-      if (useBlockDepth && volume > 0 && holes > 0) {
-        var blockDepth = calcBlockHoleDepth(p, volume, area, pct, holes);
+      // Step 2c-ii) Update depth cell when using block depth (Volume / Area)
+      if (useBlockDepth && volume > 0 && area > 0) {
+        var blockDepth = calcBlockHoleDepth(p, volume, area);
         depthCell.textContent = blockDepth.toFixed(2);
       } else if (p) {
         depthCell.textContent = calcHoleDepth(p).toFixed(2);
@@ -196,7 +196,7 @@ function autoBalancePct() {
 
 // Step 3) Recalculate all hole type rows and update totals.
 // When "Use Block Depth" is enabled, derives benchHt from block volume:
-//   blockBenchHt = (volume * pct/100) / holes
+//   blockBenchHt = Volume / Surface Area
 //   depth = blockBenchHt / sin(angle) + subdrill
 // Otherwise uses pattern.benchHt as before.
 function recalcHoleTypes() {
@@ -226,10 +226,10 @@ function recalcHoleTypes() {
       // Step 3a) Pattern is known — choose depth source based on useBlockDepth
       var depth;
       var effectiveBenchHt = p.benchHt;
-      if (useBlockDepth && volume > 0 && holes > 0 && pct > 0) {
-        // Step 3a-BLOCK) Derive bench height from block volume / hole footprint
-        effectiveBenchHt = (volume * pct / 100) / (holes * p.burden * p.spacing);
-        depth = calcBlockHoleDepth(p, volume, area, pct, holes);
+      if (useBlockDepth && volume > 0 && area > 0) {
+        // Step 3a-BLOCK) Derive bench height from Volume / Area (actual solid depth)
+        effectiveBenchHt = volume / area;
+        depth = calcBlockHoleDepth(p, volume, area);
       } else {
         depth = calcHoleDepth(p);
       }
@@ -317,7 +317,7 @@ function updateDrillDayEstimate() {
 }
 
 // Step 4) Collect hole types from table into array.
-// Respects "Use Block Depth" — derives bench height from block volume when enabled.
+// Respects "Use Block Depth" — derives bench height from Volume / Area when enabled.
 function collectHoleTypes() {
   var rows = document.getElementById("holeTypeRows").querySelectorAll("tr");
   var useBlockDepth = document.getElementById("fUseBlockDepth").checked;
@@ -337,9 +337,10 @@ function collectHoleTypes() {
     if (p) {
       // Step 4a) Pattern exists — choose depth source based on useBlockDepth
       var effectiveBenchHt = p.benchHt;
-      if (useBlockDepth && volume > 0 && holes > 0 && pct > 0) {
-        effectiveBenchHt = (volume * pct / 100) / (holes * p.burden * p.spacing);
-        depth = calcBlockHoleDepth(p, volume, area, pct, holes);
+      if (useBlockDepth && volume > 0 && area > 0) {
+        // Step 4a-BLOCK) Block Depth = Volume / Area (actual solid depth)
+        effectiveBenchHt = volume / area;
+        depth = calcBlockHoleDepth(p, volume, area);
       } else {
         depth = calcHoleDepth(p);
       }
