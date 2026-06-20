@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "shell": "bash",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npm version patch --no-git-tag-version >/dev/null 2>&1 && git add package.json package-lock.json || true",
+            "timeout": 30,
+            "statusMessage": "Bumping patch version"
+          }
+        ]
+      }
+    ]
+  }
+}
