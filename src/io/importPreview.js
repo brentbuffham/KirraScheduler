@@ -60,8 +60,96 @@ function showImportPreview() {
   document.getElementById("importTable").innerHTML = html;
 }
 
+// ============================================================
+//  Step 2B) KAP SURFACE MANIFEST
+//  Lists every surface found in a KAP file with a per-row
+//  Blast/Surface toggle. Closed watertight meshes (and legacy
+//  layer/ID matches) are pre-ticked as blasts. The user
+//  confirms, then merge commits the split.
+// ============================================================
+function showKapSurfaceManifest() {
+  var manifest = APP.kapSurfaceManifest || [];
+  var container = document.getElementById("importPreview");
+  container.style.display = "block";
+
+  var title = container.querySelector(".table-title");
+  if (title) title.textContent = "Surface Manifest — select which surfaces are blasts";
+
+  var mergeBtn = document.getElementById("btnMergeImported");
+  if (mergeBtn) mergeBtn.textContent = "Merge selected as blasts";
+
+  var allChecked = manifest.length > 0 && manifest.every(function(m) { return m.isBlast; });
+
+  var html = "<thead><tr>";
+  html += "<th><input type=\"checkbox\" id=\"kapManifestAll\"" + (allChecked ? " checked" : "") + " title=\"Select all\"></th>";
+  html += "<th>Surface</th><th>Mesh</th>";
+  html += "<th class=\"num\">Volume (m3)</th><th class=\"num\">Area (m2)</th>";
+  html += "<th class=\"num\">Bench (m)</th><th class=\"num\">Tris</th><th>Type</th>";
+  html += "</tr></thead><tbody>";
+
+  manifest.forEach(function(m, idx) {
+    var meshBadge = m.closed
+      ? "<span class=\"badge badge-production\">closed</span>"
+      : "<span class=\"badge badge-presplit\">" + m.openEdges + " open</span>";
+    html += "<tr>";
+    html += "<td><input type=\"checkbox\" class=\"kap-manifest-cb\" data-idx=\"" + idx + "\"" + (m.isBlast ? " checked" : "") + "></td>";
+    html += "<td style=\"font-weight:600;color:var(--text-primary)\">" + m.name + "</td>";
+    html += "<td>" + meshBadge + "</td>";
+    html += "<td class=\"num\">" + fmtNum(m.volume) + "</td>";
+    html += "<td class=\"num\">" + fmtNum(m.surfaceArea) + "</td>";
+    html += "<td class=\"num\">" + (m.benchHt ? m.benchHt.toFixed(1) : "—") + "</td>";
+    html += "<td class=\"num\">" + m.triCount.toLocaleString() + "</td>";
+    html += "<td><span class=\"kap-manifest-type badge " +
+      (m.isBlast ? "badge-buffer" : "badge-muted") + "\" data-idx=\"" + idx +
+      "\" role=\"button\" title=\"Click to toggle Blast / Surface\" style=\"cursor:pointer;\">" +
+      (m.isBlast ? "Blast" : "Surface") + "</span></td>";
+    html += "</tr>";
+  });
+
+  html += "</tbody>";
+  document.getElementById("importTable").innerHTML = html;
+}
+
+// Step 2C) Resolve the manifest into committed surfaces/blasts.
+//  loadBlasts=false (Discard) keeps every surface as a pit surface
+//  so it stays viewable in 3D, but creates no schedule blasts.
+function resolveKapManifest(loadBlasts) {
+  var manifest = APP.kapSurfaceManifest || [];
+  var pitSurfaces = [];
+  var solids = [];
+  var blastEntries = [];
+
+  manifest.forEach(function(m) {
+    if (loadBlasts && m.isBlast) {
+      m.surfObj.isBlastSolid = true;
+      solids.push(m.surfObj);
+      blastEntries.push(m.blastEntry);
+    } else {
+      m.surfObj.isBlastSolid = false;
+      pitSurfaces.push(m.surfObj);
+    }
+  });
+
+  APP.kirraProjectSurfaces = pitSurfaces;
+  APP.kirraProjectSolids = (APP.kirraProjectSolids || []).concat(solids);
+  APP.importedBlasts = blastEntries;
+  APP.kapSurfaceManifest = null;
+
+  // Reset the shared preview chrome back to its default labels
+  var title = document.querySelector("#importPreview .table-title");
+  if (title) title.textContent = "Imported Blast Definitions";
+  var mergeBtn = document.getElementById("btnMergeImported");
+  if (mergeBtn) mergeBtn.textContent = "Merge into Schedule";
+}
+
 // Step 3) Merge imported blasts into the main schedule
 function mergeImported() {
+  // Resolve a pending KAP manifest first — selected surfaces become the
+  // importedBlasts the loop below commits; the rest become pit surfaces.
+  if (APP.kapSurfaceManifest) {
+    resolveKapManifest(true);
+  }
+
   APP.importedBlasts.forEach(function(imp) {
     var existing = APP.blasts.find(function(b) { return b.name === imp.name; });
     if (existing) {
@@ -162,16 +250,76 @@ function mergeImported() {
   renderBlasts();
 }
 
-// Step 4) Discard imported blasts
+// Step 4) Discard imported blasts.
+//  For a KAP manifest, "discard" still loads the surfaces for 3D
+//  viewing but creates no schedule blasts.
 function clearImported() {
+  if (APP.kapSurfaceManifest) {
+    resolveKapManifest(false);
+    debouncedSave();
+  }
   APP.importedBlasts = [];
   document.getElementById("importPreview").style.display = "none";
 }
 
-// Step 5) Initialise import preview buttons
+// Step 5) Initialise import preview buttons + manifest interactions
 function initImportPreview() {
   document.getElementById("btnMergeImported").addEventListener("click", mergeImported);
   document.getElementById("btnClearImported").addEventListener("click", clearImported);
+
+  // Step 5a) Delegated handlers for the manifest: select-all + per-row
+  //  checkbox (change) and the clickable Type badge (click). Both routes
+  //  funnel through setManifestRow so they stay in sync.
+  var table = document.getElementById("importTable");
+  if (table) {
+    table.addEventListener("change", function(e) {
+      var manifest = APP.kapSurfaceManifest;
+      if (!manifest) return;
+
+      if (e.target.id === "kapManifestAll") {
+        var on = e.target.checked;
+        manifest.forEach(function(m) { m.isBlast = on; });
+        showKapSurfaceManifest();
+        return;
+      }
+
+      if (e.target.classList.contains("kap-manifest-cb")) {
+        var idx = parseInt(e.target.getAttribute("data-idx"), 10);
+        setManifestRow(idx, e.target.checked, e.target.closest("tr"));
+      }
+    });
+
+    table.addEventListener("click", function(e) {
+      if (!APP.kapSurfaceManifest) return;
+      var badge = e.target.closest(".kap-manifest-type");
+      if (!badge) return;
+      var idx = parseInt(badge.getAttribute("data-idx"), 10);
+      var m = APP.kapSurfaceManifest[idx];
+      if (!m) return;
+      setManifestRow(idx, !m.isBlast, badge.closest("tr"));
+    });
+  }
 }
 
-export { showImportPreview, mergeImported, clearImported, initImportPreview };
+// Step 5b) Apply a Blast/Surface choice to one manifest row and sync the
+//  row checkbox, the Type badge, and the select-all box — no full re-render.
+function setManifestRow(idx, isBlast, row) {
+  var manifest = APP.kapSurfaceManifest;
+  if (!manifest || !manifest[idx]) return;
+  manifest[idx].isBlast = isBlast;
+
+  if (row) {
+    var cb = row.querySelector(".kap-manifest-cb");
+    if (cb) cb.checked = isBlast;
+    var badge = row.querySelector(".kap-manifest-type");
+    if (badge) {
+      badge.className = "kap-manifest-type badge " + (isBlast ? "badge-buffer" : "badge-muted");
+      badge.textContent = isBlast ? "Blast" : "Surface";
+    }
+  }
+
+  var all = document.getElementById("kapManifestAll");
+  if (all) all.checked = manifest.every(function(m) { return m.isBlast; });
+}
+
+export { showImportPreview, showKapSurfaceManifest, mergeImported, clearImported, initImportPreview };

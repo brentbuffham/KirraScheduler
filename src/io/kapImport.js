@@ -12,7 +12,7 @@
 
 import JSZip from "jszip";
 import { APP } from "../state/appState.js";
-import { showImportPreview } from "./importPreview.js";
+import { showImportPreview, showKapSurfaceManifest } from "./importPreview.js";
 import { renderPatterns } from "../views/patternLibrary.js";
 import { renderBlasts } from "../views/blastOverview.js";
 import { renderGantt } from "../views/ganttView.js";
@@ -128,13 +128,15 @@ async function processKAPZip(arrayBuffer, fileName, log) {
     log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:8px;\">KAP import complete</div>";
     debouncedSave();
 
-    if (APP.importedBlasts.length > 0) {
+    // Step 2i-i) Surfaces go through the manifest selector so the user
+    //  confirms which are blasts; other importers still use showImportPreview.
+    if (APP.kapSurfaceManifest && APP.kapSurfaceManifest.length > 0) {
+      log.innerHTML += "<div class=\"log-ok\">" + APP.kapSurfaceManifest.length +
+        " surface(s) ready — confirm blast selection below.</div>";
+      showKapSurfaceManifest();
+    } else if (APP.importedBlasts.length > 0) {
       log.innerHTML += "<div class=\"log-ok\">" + APP.importedBlasts.length + " blast(s) ready to merge into schedule</div>";
       showImportPreview();
-    }
-
-    if (APP.kirraProjectSurfaces.length > 0) {
-      log.innerHTML += "<div class=\"log-info\">Switch to 3D PLAYBACK tab to view surfaces.</div>";
     }
 
   } catch (err) {
@@ -178,9 +180,13 @@ function flipTriangleWinding(tris, isVertexPerTri) {
 }
 
 // ============================================================
-//  Step 3) Process surfaces — separate pit surfaces from
-//  blast solids. Compute volume for solids and create
-//  importedBlasts entries.
+//  Step 3) Process surfaces — build a SURFACE MANIFEST listing
+//  every surface with mesh stats, pre-flagging likely blast
+//  solids (closed watertight meshes, or layer/ID heuristics).
+//  The user confirms the blast/surface split in the import
+//  preview before anything is committed to the schedule.
+//  Nothing is pushed to importedBlasts / kirraProjectSurfaces
+//  here — that happens at merge time (see importPreview.js).
 // ============================================================
 function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
   if (!Array.isArray(surfacesRaw) || surfacesRaw.length === 0) {
@@ -188,8 +194,8 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
     return;
   }
 
-  var pitSurfaces = [];
-  var blastSolids = [];
+  var manifest = [];
+  var blastDefaultCount = 0;
 
   for (var i = 0; i < surfacesRaw.length; i++) {
     var s = surfacesRaw[i];
@@ -203,21 +209,28 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
       tris = flipTriangleWinding(tris, isVertexPerTri);
     }
 
-    // Step 3a) Compute bounds
+    // Step 3a) Compute bounds and full mesh statistics for EVERY surface.
+    //  We need closed/open + volume up front to classify and to show the
+    //  user a meaningful manifest. (Same cost we already paid per solid.)
     var bounds = computeBounds(pts, tris, isVertexPerTri, s.meshBounds);
+    var meshStats = computeMeshStats(tris, isVertexPerTri, pts, bounds, flipNormals ? "In" : "Out");
+    var volume = meshStats.volume;
+    var benchHt = Math.abs(bounds.maxZ - bounds.minZ);
+    var surfaceArea = meshStats.xyArea;
 
-    // Step 3b) Detect if this is a blast solid
-    var isBlastSolid = false;
+    // Step 3b) Decide the DEFAULT classification (user can override).
+    //  Closed watertight mesh with volume is the most reliable signal;
+    //  the legacy layer-name / EXTRUDED_ heuristics still pre-tick too.
     var solidId = s.id || "";
+    var layerMatch = !!(s.layerId && blastSolidLayerIds[s.layerId]);
+    var idMatch = solidId.indexOf("EXTRUDED_") === 0;
+    var closedSolid = meshStats.closed && volume > 0;
+    var blastDefault = layerMatch || idMatch || closedSolid;
 
-    // Detection method 1: layer membership
-    if (s.layerId && blastSolidLayerIds[s.layerId]) {
-      isBlastSolid = true;
-    }
-    // Detection method 2: ID starts with EXTRUDED_
-    if (solidId.indexOf("EXTRUDED_") === 0) {
-      isBlastSolid = true;
-    }
+    var reason = layerMatch ? "blast layer"
+      : idMatch ? "EXTRUDED_ id"
+      : closedSolid ? "closed mesh"
+      : (meshStats.openEdges + " open edges");
 
     var surfObj = {
       name: name,
@@ -229,93 +242,89 @@ function processSurfaces(surfacesRaw, blastSolidLayerIds, log, flipNormals) {
       opacity: s.transparency !== undefined ? s.transparency : 0.85,
       hillshadeColor: s.hillshadeColor || null,
       layerId: s.layerId || null,
-      normalAlignment: flipNormals ? "IN" : "OUT"
+      normalAlignment: flipNormals ? "IN" : "OUT",
+      volume: volume,
+      benchHt: benchHt,
+      surfaceArea: surfaceArea,
+      meshStats: meshStats
     };
 
-    if (isBlastSolid) {
-      // Step 3c) Compute full mesh statistics (volume, areas, quality) in one pass
-      var meshStats = computeMeshStats(tris, isVertexPerTri, pts, bounds, flipNormals ? "In" : "Out");
-      var volume = meshStats.volume;
-      var benchHt = Math.abs(bounds.maxZ - bounds.minZ);
-      var surfaceArea = meshStats.xyArea;
-
-      surfObj.volume = volume;
-      surfObj.benchHt = benchHt;
-      surfObj.surfaceArea = surfaceArea;
-      surfObj.meshStats = meshStats;
+    // Step 3c) Depth histogram only for likely blasts (grid sampling is
+    //  costly on large pit DTMs and is meaningless for open surfaces).
+    var depthBinData = null;
+    if (blastDefault) {
       surfObj.isBlastSolid = true;
-
-      // Step 3c-ii) Compute depth histogram (area % per metre-depth bin)
-      var depthBinData = computeDepthBins(surfObj);
-      if (depthBinData) {
-        surfObj.depthBinData = depthBinData;
-        var binSummary = depthBinData.depthBins.map(function(db) {
-          return db.minDepth + "-" + db.maxDepth + "m:" + db.areaPct + "%";
-        }).join(", ");
-        log.innerHTML += "<div class=\"log-info\">  Depth profile (" + depthBinData.gridResolution + "m grid, " + depthBinData.totalCells + " cells): " + binSummary + "</div>";
-      }
-
-      blastSolids.push(surfObj);
-
-      var qualityNote = meshStats.closed ? "closed" : meshStats.openEdges + " open edges";
-      if (meshStats.nonManifoldEdges > 0) qualityNote += ", " + meshStats.nonManifoldEdges + " non-manifold";
-      log.innerHTML += "<div class=\"log-ok\">  Blast solid: " + name +
-        " | vol: " + Math.round(volume).toLocaleString() + " m3" +
-        " | XY: " + surfaceArea.toLocaleString() + " m2" +
-        " | bench: " + benchHt.toFixed(1) + " m" +
-        " | " + qualityNote +
-        " (" + tris.length + " tris)</div>";
-
-      // Step 3d) Create importedBlast entry with mesh statistics.
-      //  Strip "EXTRUDED_" prefix from blast name so it matches hole entity names.
-      var blastName = name;
-      if (blastName.indexOf("EXTRUDED_") === 0) {
-        blastName = blastName.substring(9);
-      }
-
-      var blastEntry = {
-        name: blastName,
-        mode: "Manual",
-        surfaceArea: surfaceArea,
-        loadRate: 100000,
-        volume: Math.round(volume),
-        expMass: 0,
-        drillStart: null,
-        drillStartTime: "06:00",
-        drillDays: 0,
-        loadStart: null,
-        loadDays: 0,
-        blastDate: null,
-        status: "planned",
-        deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
-        assignedDrills: [],
-        assignedMPUs: [],
-        holeTypes: [],
-        solidBounds: bounds,
-        solidBenchHt: benchHt,
-        solidStats: meshStats,
-        depthBinData: surfObj.depthBinData || null,
-        drillProgress: 0,
-        loadProgress: 0,
-        _sourceType: "solid"
-      };
-
-      APP.importedBlasts.push(blastEntry);
-    } else {
-      // Step 3e) Regular pit surface
-      pitSurfaces.push(surfObj);
-
-      log.innerHTML += "<div class=\"log-ok\">  Surface: " + name +
-        " (" + pts.length + " pts, " + tris.length + " tris" +
-        (isVertexPerTri ? ", vertex-per-tri" : ", indexed") + ")</div>";
+      depthBinData = computeDepthBins(surfObj);
+      if (depthBinData) surfObj.depthBinData = depthBinData;
     }
+
+    // Step 3d) Pre-build the blast entry so promotion/demotion at merge
+    //  time needs no recompute. Strip "EXTRUDED_" so the name matches
+    //  hole/charging entity names.
+    var blastName = name;
+    if (blastName.indexOf("EXTRUDED_") === 0) blastName = blastName.substring(9);
+    var blastEntry = buildBlastEntry(blastName, surfObj, bounds, meshStats, benchHt, surfaceArea, depthBinData);
+
+    manifest.push({
+      name: name,
+      surfObj: surfObj,
+      blastEntry: blastEntry,
+      isBlast: blastDefault,
+      closed: meshStats.closed,
+      openEdges: meshStats.openEdges,
+      volume: volume,
+      benchHt: benchHt,
+      surfaceArea: surfaceArea,
+      triCount: tris.length,
+      reason: reason
+    });
+    if (blastDefault) blastDefaultCount++;
+
+    log.innerHTML += "<div class=\"log-ok\">  " + (blastDefault ? "Blast" : "Surface") + ": " + name +
+      " | " + (meshStats.closed ? "closed" : meshStats.openEdges + " open edges") +
+      " | vol: " + Math.round(volume).toLocaleString() + " m3" +
+      " | bench: " + benchHt.toFixed(1) + " m" +
+      " (" + tris.length + " tris)</div>";
   }
 
-  APP.kirraProjectSurfaces = pitSurfaces;
-  APP.kirraProjectSolids = (APP.kirraProjectSolids || []).concat(blastSolids);
+  APP.kapSurfaceManifest = manifest;
 
-  log.innerHTML += "<div class=\"log-ok\">" + pitSurfaces.length + " surface(s) + " +
-    blastSolids.length + " blast solid(s) loaded</div>";
+  log.innerHTML += "<div class=\"log-ok\">" + manifest.length + " surface(s) found — " +
+    blastDefaultCount + " auto-detected as blast solid(s). Review the selection below.</div>";
+}
+
+// ============================================================
+//  Step 3-ENTRY) Build an importedBlast entry from a surface's
+//  computed mesh statistics. Shared by the surface manifest so
+//  promoting/demoting a surface needs no recomputation.
+// ============================================================
+function buildBlastEntry(blastName, surfObj, bounds, meshStats, benchHt, surfaceArea, depthBinData) {
+  return {
+    name: blastName,
+    mode: "Manual",
+    surfaceArea: surfaceArea,
+    loadRate: 100000,
+    volume: Math.round(surfObj.volume),
+    expMass: 0,
+    drillStart: null,
+    drillStartTime: "06:00",
+    drillDays: 0,
+    loadStart: null,
+    loadDays: 0,
+    blastDate: null,
+    status: "planned",
+    deps: { drillPctForLoad: null, drillPctForBlast: null, loadPctForBlast: null, minLeadDays: null, predecessor: null },
+    assignedDrills: [],
+    assignedMPUs: [],
+    holeTypes: [],
+    solidBounds: bounds,
+    solidBenchHt: benchHt,
+    solidStats: meshStats,
+    depthBinData: depthBinData || null,
+    drillProgress: 0,
+    loadProgress: 0,
+    _sourceType: "solid"
+  };
 }
 
 // ============================================================
@@ -594,6 +603,15 @@ function processHoles(holesRaw, log) {
       imported.kapHoles = holes;
       imported._sourceHoleCount = holes.length;
       matched++;
+      continue;
+    }
+
+    // Check the pending surface manifest (blast entries not yet committed)
+    var mEntry = (APP.kapSurfaceManifest || []).find(function(m) { return m.blastEntry.name === eName; });
+    if (mEntry) {
+      mEntry.blastEntry.kapHoles = holes;
+      mEntry.blastEntry._sourceHoleCount = holes.length;
+      matched++;
     } else {
       unmatched++;
     }
@@ -743,6 +761,13 @@ function processCharging(chargingRaw, log) {
     if (imported) {
       imported.expMass = mass;
       imported._sourceHoleCount = holeCount;
+    }
+
+    // Match to a pending surface-manifest blast entry
+    var mEntry = (APP.kapSurfaceManifest || []).find(function(m) { return m.blastEntry.name === eName; });
+    if (mEntry && mass > 0) {
+      mEntry.blastEntry.expMass = mass;
+      mEntry.blastEntry._sourceHoleCount = holeCount;
     }
 
     // Match to existing scheduled blast
