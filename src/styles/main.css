@@ -161,6 +161,20 @@ body {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
+.app-version {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  -webkit-text-fill-color: var(--text-muted);
+  letter-spacing: 0;
+}
 .header-actions {
   display: flex;
   align-items: center;

@@ -42,6 +42,10 @@ import { initPlaybackView } from "./views/playbackView.js";
 import { shouldShowStartup, showStartupDialog, clearSeedData, markStartupComplete } from "./dialogs/startupDialog.js";
 import { loadState, debouncedSave, syncUIFromState } from "./state/schedulerDB.js";
 
+// Step 2b) Stamp the app version (injected from package.json by Vite) into the header
+var _versionEl = document.getElementById("appVersion");
+if (_versionEl) _versionEl.textContent = "v" + __APP_VERSION__;
+
 // Step 3) Initialise UI event listeners (safe before data decisions)
 initThemeToggle();
 initTabs();
