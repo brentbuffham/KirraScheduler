@@ -6,6 +6,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
+import { closeOnBackdrop } from "../utils/domUtils.js";
 import { addDays } from "../utils/dateUtils.js";
 
 // Step 0) Timezone-safe local ISO date
@@ -151,7 +152,7 @@ function exportICS(mode) {
         lines.push("DTEND;VALUE=DATE:" + icsDate(range.end));
         lines.push("SUMMARY:" + icsEscape(blast.name + " - " + phaseLabel));
         lines.push("DESCRIPTION:" + desc);
-        lines.push("STATUS:" + (blast.status === "active" ? "CONFIRMED" : "TENTATIVE"));
+        lines.push("STATUS:" + (blast.status && blast.status !== "planned" ? "CONFIRMED" : "TENTATIVE"));
         lines.push("END:VEVENT");
       }
     } else {
@@ -173,7 +174,7 @@ function exportICS(mode) {
       lines.push("DTEND;VALUE=DATE:" + icsDate(latest));
       lines.push("SUMMARY:" + icsEscape(blast.name));
       lines.push("DESCRIPTION:" + desc);
-      lines.push("STATUS:" + (blast.status === "active" ? "CONFIRMED" : "TENTATIVE"));
+      lines.push("STATUS:" + (blast.status && blast.status !== "planned" ? "CONFIRMED" : "TENTATIVE"));
       lines.push("END:VEVENT");
     }
   }
@@ -318,10 +319,9 @@ function showExportDialog() {
     document.getElementById("calExportOverlay").remove();
   });
 
-  // Step 6e) Close on overlay click
-  document.getElementById("calExportOverlay").addEventListener("click", function(e) {
-    if (e.target === this) this.remove();
-  });
+  // Step 6e) Close on overlay click (ignores drags that start inside the dialog)
+  var calExportOverlay = document.getElementById("calExportOverlay");
+  closeOnBackdrop(calExportOverlay, function() { calExportOverlay.remove(); });
 }
 
 // ============================================================

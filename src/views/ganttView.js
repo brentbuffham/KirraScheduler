@@ -19,6 +19,7 @@ import { initGanttReorder } from "../ui/ganttReorder.js";
 import { renderConnectors } from "../ui/ganttConnectors.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { getDelayType } from "../state/delayTypes.js";
+import { getBlastStatus } from "../state/blastStatus.js";
 import { renderDelayPalette } from "../ui/delayPalette.js";
 import { buildConflictCellSet } from "../engine/fleetConflicts.js";
 import { recalcBlastAuto } from "../engine/autoCalc.js";
@@ -63,6 +64,13 @@ function hexToRgba(hex, alpha) {
 
 // Step 0) Track collapsed sections between re-renders
 var _collapsedSections = {};
+
+// Step 0b-status) Build the colour dot + status pill shown beside a blast name
+function buildStatusBadge(blast) {
+  var st = getBlastStatus(blast.status);
+  return "<span class=\"status-dot\" style=\"background:" + st.color + "\" title=\"" + st.label + "\"></span>" +
+    "<span class=\"status-badge " + st.badgeClass + "\">" + st.label + "</span>";
+}
 
 // Step 0c) Build draggable drill-ID chips for the info column.
 //  Each chip can be dragged back to the palette to unassign.
@@ -149,8 +157,9 @@ function renderGantt() {
   var totalVolume = APP.blasts.reduce(function(s, b) { return s + (b.volume || 0); }, 0);
   var totalExp = APP.blasts.reduce(function(s, b) { return s + (b.expMass || 0); }, 0);
   var totalDrillM = APP.blasts.reduce(function(s, b) { return s + getTotalDrillMeters(b); }, 0);
-  var activeCount = APP.blasts.filter(function(b) { return b.status === "active"; }).length;
+  var activeCount = APP.blasts.filter(function(b) { return b.status === "drilling" || b.status === "loading"; }).length;
   var plannedCount = APP.blasts.filter(function(b) { return b.status === "planned"; }).length;
+  var firedCount = APP.blasts.filter(function(b) { return b.status === "fired"; }).length;
   var effectiveHours = APP.rigHours * APP.availability * APP.utilisation;
 
   // Step 1c) Render stats cards
@@ -158,7 +167,7 @@ function renderGantt() {
   statsHtml += "<div class=\"stat-card accent-blue\">";
   statsHtml += "  <div class=\"stat-label\">Total Blasts</div>";
   statsHtml += "  <div class=\"stat-value\">" + APP.blasts.length + "</div>";
-  statsHtml += "  <div class=\"stat-sub\">" + activeCount + " active &middot; " + plannedCount + " planned</div>";
+  statsHtml += "  <div class=\"stat-sub\">" + plannedCount + " planned &middot; " + activeCount + " active &middot; " + firedCount + " fired</div>";
   statsHtml += "</div>";
   statsHtml += "<div class=\"stat-card accent-amber\">";
   statsHtml += "  <div class=\"stat-label\">Total Volume</div>";
@@ -446,9 +455,10 @@ function renderGantt() {
           var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockPctBadge + blockCrewHtml;
 
           // Step) Block row with edit icon, mode toggle, and indented name
-          html += "<tr class=\"gantt-row gantt-block-row\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
+          var blockFiredCls = (blast.status === "fired") ? " fired-row" : "";
+          html += "<tr class=\"gantt-row gantt-block-row" + blockFiredCls + "\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
           html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"drilling\" data-ctx-block=\"" + blockIdx + "\">";
-          html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name;
+          html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name + buildStatusBadge(blast);
           html += "</td>";
           html += "<td class=\"sticky-col-2\">" + blockInfo + "</td>";
           html += renderBarCells(blockRange, blast, idx, sectionName, deps, comp, block.assignedDrills, block.drillStartTime, block);
@@ -516,9 +526,10 @@ function renderGantt() {
       if (blast.noDrill) phaseBadges += "<span class=\"no-drill-badge\" title=\"No Drilling\">ND</span>";
       if (blast.noLoad) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-blast);\" title=\"No Loading\">NL</span>";
       if (blast.noBlast) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-prep);\" title=\"No Blasting\">NB</span>";
-      html += "<tr class=\"gantt-row\" data-blast=\"" + idx + "\" data-section=\"" + secKey + "\">";
+      var firedCls = (blast.status === "fired") ? " fired-row" : "";
+      html += "<tr class=\"gantt-row" + firedCls + "\" data-blast=\"" + idx + "\" data-section=\"" + secKey + "\">";
       html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"" + secKey + "\">";
-      html += REORDER_GRIP + EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name + phaseBadges;
+      html += REORDER_GRIP + EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name + buildStatusBadge(blast) + phaseBadges;
       html += "</td>";
       html += "<td class=\"sticky-col-2\">" + info + "</td>";
       html += renderBarCells(range, blast, idx, sectionName, deps, comp, null, null);

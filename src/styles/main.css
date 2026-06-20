@@ -740,6 +740,37 @@ body {
 .badge-presplit { background: rgba(167,139,250,0.15); color: var(--presplit); }
 .badge-buffer { background: rgba(56,189,248,0.15); color: var(--buffer); }
 .badge-production { background: rgba(249,115,22,0.15); color: var(--production); }
+.badge-muted { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+
+/* Blast lifecycle status badges (mirror blastStatus.js colours) */
+.badge-planned  { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.badge-drilling { background: rgba(59,130,246,0.15);  color: #3b82f6; }
+.badge-loading  { background: rgba(245,158,11,0.15);  color: #f59e0b; }
+.badge-fired    { background: rgba(239,68,68,0.18);   color: #ef4444; }
+
+/* Compact status pill + colour dot shown beside a blast name in the Gantt */
+.status-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+/* Fired blast = completed/terminal: dim the whole row, keep it readable */
+.gantt-row.fired-row td,
+.gantt-block-row.fired-row td { opacity: 0.55; }
 
 /* Step 15) Pattern cards */
 .pattern-grid {
@@ -1054,6 +1085,8 @@ body {
   min-width: 180px;
   padding: 4px 0;
   display: none;
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
 }
 .context-menu .ctx-item {
   padding: 7px 14px;

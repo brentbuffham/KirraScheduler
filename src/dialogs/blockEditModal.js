@@ -8,6 +8,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
+import { closeOnBackdrop } from "../utils/domUtils.js";
 import { drills as drillFleet } from "../state/equipmentState.js";
 import { calcBlockDays, syncBlastFromBlocks } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
@@ -138,10 +139,8 @@ function showBlockEditor(blastIdx, blockIdx) {
     overlay.remove();
   });
 
-  // Step 2h) Overlay click to close
-  overlay.addEventListener("click", function(e) {
-    if (e.target === overlay) overlay.remove();
-  });
+  // Step 2h) Overlay click to close (ignores drags that start inside the dialog)
+  closeOnBackdrop(overlay, function() { overlay.remove(); });
 
   // Step 2i) Save button
   document.getElementById("beSaveBtn").addEventListener("click", function() {

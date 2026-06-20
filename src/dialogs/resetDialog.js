@@ -6,6 +6,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
+import { closeOnBackdrop } from "../utils/domUtils.js";
 import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
@@ -260,10 +261,8 @@ function showResetDialog() {
     overlay.remove();
   });
 
-  // Step 6e) Click outside dialog to close
-  overlay.addEventListener("click", function(e) {
-    if (e.target === overlay) overlay.remove();
-  });
+  // Step 6e) Click outside dialog to close (ignores drags that start inside)
+  closeOnBackdrop(overlay, function() { overlay.remove(); });
 
   // Step 6f) Escape key to close
   var escHandler = function(e) {

@@ -6,6 +6,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
+import { closeOnBackdrop } from "../utils/domUtils.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDelayPalette } from "../ui/delayPalette.js";
 
@@ -162,10 +163,9 @@ function showPatternDialog(editIdx, prefill) {
     document.getElementById("patternDialogOverlay").remove();
   });
 
-  // Step 0e) Close on overlay click
-  document.getElementById("patternDialogOverlay").addEventListener("click", function(e) {
-    if (e.target === this) this.remove();
-  });
+  // Step 0e) Close on overlay click (ignores drags that start inside the dialog)
+  var patternDialogOverlay = document.getElementById("patternDialogOverlay");
+  closeOnBackdrop(patternDialogOverlay, function() { patternDialogOverlay.remove(); });
 }
 
 // ============================================================

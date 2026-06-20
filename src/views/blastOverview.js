@@ -6,6 +6,8 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
+import { closeOnBackdrop } from "../utils/domUtils.js";
+import { getBlastStatus } from "../state/blastStatus.js";
 import { getBlastDeps, recalcDependencies } from "../engine/dependencyEngine.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { editBlast } from "../dialogs/blastModal.js";
@@ -57,7 +59,7 @@ function renderBlasts() {
   var statsHtml = "";
   statsHtml += "<div class=\"stat-card accent-blue\">";
   statsHtml += "  <div class=\"stat-label\">Active Blasts</div>";
-  statsHtml += "  <div class=\"stat-value\">" + APP.blasts.filter(function(b) { return b.status === "active"; }).length + "</div>";
+  statsHtml += "  <div class=\"stat-value\">" + APP.blasts.filter(function(b) { return b.status === "drilling" || b.status === "loading"; }).length + "</div>";
   statsHtml += "</div>";
   statsHtml += "<div class=\"stat-card accent-amber\">";
   statsHtml += "  <div class=\"stat-label\">Total Volume</div>";
@@ -86,7 +88,7 @@ function renderBlasts() {
   APP.blasts.forEach(function(b, idx) {
     var pf = b.volume ? (b.expMass / b.volume).toFixed(2) : "\u2014";
     var drillM = getTotalDrillMeters(b);
-    var statusBadge = b.status === "active" ? "badge-active" : b.status === "fired" ? "badge-blast" : "badge-drill";
+    var statusDef = getBlastStatus(b.status);
     var holeTypeSummary = (b.holeTypes || []).map(function(ht) {
       var badge = ht.type === "PRESPLIT" ? "badge-presplit" : ht.type === "BUFFER" ? "badge-buffer" : "badge-production";
       return "<span class=\"badge " + badge + "\">" + ht.type + "</span>";
@@ -101,7 +103,7 @@ function renderBlasts() {
 
     html += "<tr data-blast-idx=\"" + idx + "\" style=\"cursor:pointer\">";
     html += "<td style=\"color:var(--text-primary);font-weight:600;\">" + b.name + hasWarning + "</td>";
-    html += "<td><span class=\"badge " + statusBadge + "\">" + b.status + "</span></td>";
+    html += "<td><span class=\"badge " + statusDef.badgeClass + "\">" + statusDef.label + "</span></td>";
     html += "<td>" + b.mode + "</td>";
     html += "<td>" + (b.pattern || "\u2014") + "</td>";
     html += "<td>" + holeTypeSummary + "</td>";
@@ -358,10 +360,9 @@ function showPatternAllocDialog(blast, blastIdx, pattern) {
     if (overlay) overlay.remove();
   });
 
-  // Step 6k) Close on overlay click outside dialog
-  document.getElementById("patternAllocOverlay").addEventListener("click", function(e) {
-    if (e.target === this) this.remove();
-  });
+  // Step 6k) Close on overlay click outside dialog (ignores drags that start inside)
+  var patternAllocOverlay = document.getElementById("patternAllocOverlay");
+  closeOnBackdrop(patternAllocOverlay, function() { patternAllocOverlay.remove(); });
 }
 
 // Step 7) Live-recalculate drill meters and explosive mass in the allocation dialog.

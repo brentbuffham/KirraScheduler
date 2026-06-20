@@ -18,6 +18,35 @@ import { isoDate } from "../utils/dateUtils.js";
 import { getSelection, clearSelection } from "./ganttSelect.js";
 import { drills } from "../state/equipmentState.js";
 
+// Step 0-pos) Position the context menu at the cursor, clamped to stay
+//  fully on-screen. Flips above/left of the cursor when there isn't
+//  room below/right; never lets an edge run off the viewport. The menu
+//  must already be display:block so its size can be measured.
+function positionContextMenu(menu, e) {
+  var margin = 6;
+  var mw = menu.offsetWidth;
+  var mh = menu.offsetHeight;
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+
+  var left = e.clientX;
+  var top = e.clientY;
+
+  // Horizontal: clamp inside the viewport (shift left if it would overflow)
+  if (left + mw + margin > vw) left = vw - mw - margin;
+  if (left < margin) left = margin;
+
+  // Vertical: prefer flipping above the cursor when there's no room below
+  if (top + mh + margin > vh) {
+    var above = e.clientY - mh;
+    top = (above >= margin) ? above : (vh - mh - margin);
+  }
+  if (top < margin) top = margin;
+
+  menu.style.left = left + "px";
+  menu.style.top = top + "px";
+}
+
 // Step 0) Update phase toggle labels in context menu
 function updatePhaseToggleLabels(blast) {
   var nd = document.getElementById("ctxToggleNoDrill");
@@ -66,8 +95,7 @@ function showCtxMenu(e, idx, section, blockIdx) {
   if (sel.length > 1) {
     setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
     menu.style.display = "block";
-    menu.style.left = e.clientX + "px";
-    menu.style.top = e.clientY + "px";
+    positionContextMenu(menu, e);
     return;
   }
   setMultiSelectMode(menu, false, 0);
@@ -109,8 +137,7 @@ function showCtxMenu(e, idx, section, blockIdx) {
   buildDynamicEquipItems(menu, blast, section, APP.ctxBlockIdx);
 
   menu.style.display = "block";
-  menu.style.left = e.clientX + "px";
-  menu.style.top = e.clientY + "px";
+  positionContextMenu(menu, e);
 }
 
 // Step 1f) Show context menu from bar right-click — supports delay bars too
@@ -130,8 +157,7 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
   if (sel.length > 1) {
     setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
     menu.style.display = "block";
-    menu.style.left = e.clientX + "px";
-    menu.style.top = e.clientY + "px";
+    positionContextMenu(menu, e);
     return;
   }
   setMultiSelectMode(menu, false, 0);
@@ -171,8 +197,7 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
   }
 
   menu.style.display = "block";
-  menu.style.left = e.clientX + "px";
-  menu.style.top = e.clientY + "px";
+  positionContextMenu(menu, e);
 }
 
 // Step 1g) Build dynamic "Remove Drill" / "Remove MPU" items in context menu
@@ -660,6 +685,7 @@ function initContextMenu() {
   document.getElementById("ctxDrilling").addEventListener("click", function() { setBlastStatus("drilling"); });
   document.getElementById("ctxLoading").addEventListener("click", function() { setBlastStatus("loading"); });
   document.getElementById("ctxFired").addEventListener("click", function() { setBlastStatus("fired"); });
+  document.getElementById("ctxPlanned").addEventListener("click", function() { setBlastStatus("planned"); });
   document.getElementById("ctxToggleNoDrill").addEventListener("click", toggleNoDrillFromCtx);
   document.getElementById("ctxToggleNoLoad").addEventListener("click", toggleNoLoadFromCtx);
   document.getElementById("ctxToggleNoBlast").addEventListener("click", toggleNoBlastFromCtx);
