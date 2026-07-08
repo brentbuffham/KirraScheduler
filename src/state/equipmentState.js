@@ -82,14 +82,17 @@ var mpus = [
   }
 ];
 
-// Step 2b) Ancillary fleet — dozers, graders, loaders, excavators, rollers
+// Step 2b) Ancillary fleet — dozers, graders, loaders, excavators, rollers.
+//  rateM2_per_day  = Pattern-Prep clearing rate (area/day)
+//  rateBCM_per_day = Excavation dig-out rate (bank cubic metres/day); 0 for
+//                    units that don't excavate (grader/roller).
 var ancillary = [
-  { id: "DZ-01", name: "D9 Dozer #1", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
-  { id: "DZ-02", name: "D9 Dozer #2", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, status: "available", maintenance: [] },
-  { id: "GR-01", name: "Grader #1", brand: "Cat", model: "16M", type: "Grader", rateM2_per_day: 12000, status: "available", maintenance: [] },
-  { id: "EX-01", name: "Excavator #1", brand: "Hitachi", model: "EX5600", type: "Excavator", rateM2_per_day: 5000, status: "available", maintenance: [] },
-  { id: "LD-01", name: "Loader #1", brand: "Cat", model: "992K", type: "Loader", rateM2_per_day: 6000, status: "available", maintenance: [] },
-  { id: "RL-01", name: "Roller #1", brand: "Cat", model: "CS78B", type: "Roller", rateM2_per_day: 15000, status: "available", maintenance: [] }
+  { id: "DZ-01", name: "D9 Dozer #1", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, rateBCM_per_day: 4000, status: "available", maintenance: [] },
+  { id: "DZ-02", name: "D9 Dozer #2", brand: "Cat", model: "D9T", type: "Dozer", rateM2_per_day: 8000, rateBCM_per_day: 4000, status: "available", maintenance: [] },
+  { id: "GR-01", name: "Grader #1", brand: "Cat", model: "16M", type: "Grader", rateM2_per_day: 12000, rateBCM_per_day: 0, status: "available", maintenance: [] },
+  { id: "EX-01", name: "Excavator #1", brand: "Hitachi", model: "EX5600", type: "Excavator", rateM2_per_day: 5000, rateBCM_per_day: 20000, status: "available", maintenance: [] },
+  { id: "LD-01", name: "Loader #1", brand: "Cat", model: "992K", type: "Loader", rateM2_per_day: 6000, rateBCM_per_day: 10000, status: "available", maintenance: [] },
+  { id: "RL-01", name: "Roller #1", brand: "Cat", model: "CS78B", type: "Roller", rateM2_per_day: 15000, rateBCM_per_day: 0, status: "available", maintenance: [] }
 ];
 
 // Step 3) Personnel list

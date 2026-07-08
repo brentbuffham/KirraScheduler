@@ -14,6 +14,7 @@ import { syncBlastFromBlocks, calcBlockDays } from "../engine/blockHelpers.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { pushUndo } from "../state/undoManager.js";
 
 var CELL_WIDTH = 32;
 
@@ -88,6 +89,9 @@ function onResizeStart(e) {
   } else if (section === "loading") {
     originalDays = blast.loadDays || Math.ceil((blast.expMass || 0) / (blast.loadRate || 100000));
     originalStart = blast.loadStart;
+  } else if (section === "excavation") {
+    originalDays = blast.excavDays || 1;
+    originalStart = blast.excavStart;
   }
 
   resizeState.active = true;
@@ -173,6 +177,9 @@ function onResizeEnd(e) {
     var blast = APP.blasts[resizeState.blastIdx];
     if (blast) {
 
+      // Step 5b-undo) Snapshot before committing the resize
+      pushUndo("resize " + resizeState.section + " bar");
+
       // Step 5b-i) Auto-switch to Manual mode when user drags a resize handle
       if (blast.mode !== "Manual") {
         blast.mode = "Manual";
@@ -226,6 +233,17 @@ function onResizeEnd(e) {
       // Step 5f) Loading resize — adjust MPU rate
       } else if (resizeState.section === "loading") {
         applyLoadResize(blast, dayOffset, resizeState.edge, resizeState.originalDays, resizeState.originalStart);
+
+      // Step 5f-ii) Excavation resize — set excavDays manually (flag stops the
+      //  rate-driven recalc from clobbering the user's chosen duration)
+      } else if (resizeState.section === "excavation") {
+        var newExcavDays = Math.max(resizeState.originalDays + (resizeState.edge === "right" ? dayOffset : -dayOffset), 1);
+        blast.excavDays = newExcavDays;
+        blast.excavDaysManual = true;
+        if (resizeState.edge === "left") {
+          blast.excavStart = isoDate(addDays(new Date(resizeState.originalStart), dayOffset));
+          blast.excavStartManual = true;
+        }
       }
 
       recalcDependencies();

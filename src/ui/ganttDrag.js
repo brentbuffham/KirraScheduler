@@ -16,6 +16,7 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { getSelection, isSelected, clearSelection, applySelectionHighlight } from "./ganttSelect.js";
+import { pushUndo } from "../state/undoManager.js";
 
 var CELL_WIDTH = 32;
 
@@ -76,6 +77,7 @@ function onDragStart(e) {
   if (section === "pattern prep" && !blast.prepStart) return;
   if (section === "loading" && !blast.loadStart) return;
   if (section === "blasting" && !blast.blastDate) return;
+  if (section === "excavation" && !blast.excavStart) return;
 
   e.preventDefault();
   dragState.active = true;
@@ -164,6 +166,10 @@ function onDragEnd(e) {
   // Step 4b) Apply offset if non-zero
   if (dayOffset !== 0 && blastIdx !== null) {
 
+    // Step 4b-undo) Snapshot before committing the move so the whole drag
+    //   can be reverted in one Ctrl+Z.
+    pushUndo("move " + section + " bar");
+
     if (dragState.multiDrag) {
       // Step 4b-multi) Multi-drag: apply offset to every selected blast/section
       var sel = getSelection();
@@ -235,6 +241,11 @@ function applyOffsetToBlast(blastIdx, section, blockIdx, dayOffset) {
     var newBlast = addDays(new Date(blast.blastDate), dayOffset);
     blast.blastDate = isoDate(newBlast);
     blast.blastDateManual = true;
+
+  } else if (section === "excavation" && blast.excavStart) {
+    var newExcav = addDays(new Date(blast.excavStart), dayOffset);
+    blast.excavStart = isoDate(newExcav);
+    blast.excavStartManual = true;
   }
 }
 

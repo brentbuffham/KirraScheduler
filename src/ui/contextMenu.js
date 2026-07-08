@@ -17,6 +17,9 @@ import { debouncedSave } from "../state/schedulerDB.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { getSelection, clearSelection } from "./ganttSelect.js";
 import { drills } from "../state/equipmentState.js";
+import { sendAllToPatternPrep, applyPrepToBlast } from "../utils/prep.js";
+import { sendAllToExcavation, applyExcavToBlast } from "../utils/excav.js";
+import { pushUndo } from "../state/undoManager.js";
 
 // Step 0-pos) Position the context menu at the cursor, clamped to stay
 //  fully on-screen. Flips above/left of the cursor when there isn't
@@ -94,6 +97,7 @@ function showCtxMenu(e, idx, section, blockIdx) {
   var sel = getSelection();
   if (sel.length > 1) {
     setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
+    updateRemoveSectionLabel(section, true);
     menu.style.display = "block";
     positionContextMenu(menu, e);
     return;
@@ -133,6 +137,9 @@ function showCtxMenu(e, idx, section, blockIdx) {
   // Step 1e-ii) Update phase toggle labels
   updatePhaseToggleLabels(blast);
 
+  // Step 1e-iii) Set the section-scoped remove label to match the clicked phase
+  updateRemoveSectionLabel(section);
+
   // Step 1f-pre) Build dynamic equipment items for this blast/section
   buildDynamicEquipItems(menu, blast, section, APP.ctxBlockIdx);
 
@@ -156,6 +163,7 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
   var sel = getSelection();
   if (sel.length > 1) {
     setMultiSelectMode(menu, true, getUniqueBlastIndices(sel).length);
+    updateRemoveSectionLabel(section, true);
     menu.style.display = "block";
     positionContextMenu(menu, e);
     return;
@@ -191,6 +199,9 @@ function showBarCtxMenu(e, blastIdx, section, blockIdx, delayIdx, clickDate) {
 
     // Step 1f-iii) Update phase toggle labels
     updatePhaseToggleLabels(blast);
+
+    // Step 1f-iii-b) Set the section-scoped remove label to match the clicked phase
+    updateRemoveSectionLabel(section);
 
     // Step 1f-iv) Build dynamic equipment items for bar context too
     buildDynamicEquipItems(menu, blast, section, APP.ctxBlockIdx);
@@ -394,6 +405,7 @@ function editBlastFromCtx() {
 
 // Step 3) Set blast status from context menu
 function setBlastStatus(status) {
+  pushUndo("set status " + status);
   APP.blasts[APP.ctxBlastIdx].status = status;
   debouncedSave();
   renderGantt();
@@ -401,6 +413,7 @@ function setBlastStatus(status) {
 
 // Step 4) Duplicate a blast
 function duplicateBlast() {
+  pushUndo("duplicate blast");
   var b = JSON.parse(JSON.stringify(APP.blasts[APP.ctxBlastIdx]));
   b.name += "_copy";
   b.status = "planned";
@@ -409,9 +422,48 @@ function duplicateBlast() {
   renderGantt();
 }
 
+// Step 4b) Seed a 1-day Pattern Prep window on just the right-clicked blast.
+function sendThisToPrepFromCtx() {
+  var b = APP.blasts[APP.ctxBlastIdx];
+  if (!b) return;
+  pushUndo("send this to prep");
+  applyPrepToBlast(b, 1);
+  debouncedSave();
+  renderGantt();
+}
+
+// Step 4c) Bulk-seed a 1-day Pattern Prep window on every blast that has none.
+function sendAllToPrepFromCtx() {
+  pushUndo("send all to prep");
+  sendAllToPatternPrep(1);
+  debouncedSave();
+  renderGantt();
+}
+
+// Step 4d) Seed an excavation cycle on just the right-clicked blast.
+function sendThisToExcavFromCtx() {
+  var b = APP.blasts[APP.ctxBlastIdx];
+  if (!b) return;
+  pushUndo("send this to excavation");
+  applyExcavToBlast(b);
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+}
+
+// Step 4e) Bulk-seed an excavation cycle on every blast that has none.
+function sendAllToExcavFromCtx() {
+  pushUndo("send all to excavation");
+  sendAllToExcavation();
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+}
+
 // Step 5) Remove a blast with confirmation
 function removeBlast() {
-  if (confirm("Remove " + APP.blasts[APP.ctxBlastIdx].name + "?")) {
+  if (confirm("Remove the entire blast \"" + APP.blasts[APP.ctxBlastIdx].name + "\" from the schedule?")) {
+    pushUndo("remove blast");
     APP.blasts.splice(APP.ctxBlastIdx, 1);
     debouncedSave();
     renderGantt();
@@ -422,6 +474,7 @@ function removeBlast() {
 function splitDrillFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast) return;
+  pushUndo("split drill");
 
   if (hasBlocks(blast)) {
     // Step 6a) Already split — add another block
@@ -452,6 +505,7 @@ function splitDrillFromCtx() {
 function mergeBlocksFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast) return;
+  pushUndo("merge blocks");
   mergeBlocks(blast);
   recalcDependencies();
   debouncedSave();
@@ -469,6 +523,7 @@ function editBlockFromCtx() {
 function removeDelayFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast || !blast.delays || APP.ctxDelayIdx === null) return;
+  pushUndo("remove delay");
   blast.delays.splice(APP.ctxDelayIdx, 1);
   renderGantt();
 }
@@ -494,6 +549,7 @@ function shrinkDelayFromCtx() {
 function toggleNoDrillFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast) return;
+  pushUndo("toggle no-drill");
 
   blast.noDrill = !blast.noDrill;
 
@@ -513,6 +569,7 @@ function toggleNoDrillFromCtx() {
 function toggleNoLoadFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast) return;
+  pushUndo("toggle no-load");
   blast.noLoad = !blast.noLoad;
   recalcDependencies();
   debouncedSave();
@@ -523,6 +580,7 @@ function toggleNoLoadFromCtx() {
 function toggleNoBlastFromCtx() {
   var blast = APP.blasts[APP.ctxBlastIdx];
   if (!blast) return;
+  pushUndo("toggle no-blast");
   blast.noBlast = !blast.noBlast;
   recalcDependencies();
   debouncedSave();
@@ -550,11 +608,12 @@ function getUniqueBlastIndices(sel) {
 // Step MS-2) Recalculate block meters for all selected blasts.
 // Uses Volume / Surface Area as the average bench height for each blast,
 // then recalculates hole depth, drill meters, and explosive mass per holeType.
-function recalcBlockMetersMulti() {
+function recalcBlockMetersMulti(skipUndo) {
   var sel = getSelection();
   var indices = getUniqueBlastIndices(sel);
   var updated = 0;
   var skipped = 0;
+  if (skipUndo !== true) pushUndo("recalc block meters");
 
   for (var i = 0; i < indices.length; i++) {
     var blast = APP.blasts[indices[i]];
@@ -645,21 +704,26 @@ function recalcBlockMetersMulti() {
 
 // Step MS-3) Enable "Use Block Depth" on all selected blasts, then recalculate
 function enableBlockDepthMulti() {
+  pushUndo("enable block depth");
   var sel = getSelection();
   var indices = getUniqueBlastIndices(sel);
   for (var i = 0; i < indices.length; i++) {
     var blast = APP.blasts[indices[i]];
     if (blast) blast.useBlockDepth = true;
   }
-  recalcBlockMetersMulti();
+  recalcBlockMetersMulti(true);
 }
 
-// Step MS-4) Remove all selected blasts with confirmation
+// Step MS-4) Remove all selected blasts ENTIRELY, with an explicit warning.
+//   This deletes whole blasts from the schedule — use "Remove from <phase>"
+//   if you only want to clear one cycle. Undoable via Ctrl+Z.
 function removeSelectedBlasts() {
   var sel = getSelection();
   var indices = getUniqueBlastIndices(sel);
   if (indices.length === 0) return;
-  if (!confirm("Remove " + indices.length + " selected blast" + (indices.length !== 1 ? "s" : "") + "?")) return;
+  if (!confirm("Delete " + indices.length + " whole blast" + (indices.length !== 1 ? "s" : "") + " from the schedule?\n\nThis removes ALL their phases (prep, drill, load, blast, excavation), not just the section you clicked.\n\nTip: use \"Remove from <phase>\" to clear a single cycle instead. This can be undone with Ctrl+Z.")) return;
+
+  pushUndo("remove " + indices.length + " blast(s)");
 
   // Step MS-4a) Sort descending so splice indices stay valid
   indices.sort(function(a, b) { return b - a; });
@@ -669,6 +733,82 @@ function removeSelectedBlasts() {
   clearSelection();
   debouncedSave();
   recalcDependencies();
+  renderGantt();
+  renderBlasts();
+}
+
+// ============================================================
+//  SECTION-SCOPED REMOVE
+//  Clears ONE phase from a blast (or all selected blasts) without
+//  deleting the blast itself. Prep/Excavation clear their optional
+//  fields; Drill/Load flip the noDrill/noLoad flags.
+// ============================================================
+
+// Step SR-1) Clear a single phase on one blast object.
+function clearPhaseOnBlast(blast, phase) {
+  if (!blast) return;
+  if (phase === "pattern prep") {
+    blast.prepStart = null;
+    blast.prepDays = 0;
+    blast.assignedAncillary = [];
+  } else if (phase === "drilling") {
+    blast.noDrill = true;
+  } else if (phase === "loading") {
+    blast.noLoad = true;
+  } else if (phase === "blasting") {
+    blast.noBlast = true;
+  } else if (phase === "excavation") {
+    blast.assignedExcavators = [];
+    blast.excavStart = null;
+    blast.excavStartManual = false;
+    blast.excavDays = 0;
+    blast.excavDaysManual = false;
+    blast.noExcav = true;
+  }
+}
+
+// Step SR-2) Human-readable phase name for labels/toasts.
+function phaseLabel(phase) {
+  if (phase === "pattern prep") return "Prep";
+  if (phase === "drilling") return "Drill";
+  if (phase === "loading") return "Load";
+  if (phase === "blasting") return "Blast";
+  if (phase === "excavation") return "Excavation";
+  return phase;
+}
+
+// Step SR-2b) Point the "Remove from <phase>" items at the clicked section.
+//   Hidden when the section isn't a known phase. Updates the single-blast
+//   item by default; pass isMulti=true to target the multi-select item.
+function updateRemoveSectionLabel(section, isMulti) {
+  var known = section === "pattern prep" || section === "drilling" ||
+              section === "loading" || section === "blasting" ||
+              section === "excavation";
+  var id = isMulti ? "ctxRemoveSectionMulti" : "ctxRemoveSection";
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (!known) { el.style.display = "none"; return; }
+  el.style.display = "";
+  el.innerHTML = "\u232B Remove from " + phaseLabel(section) + (isMulti ? " (selected)" : "");
+}
+
+// Step SR-3) Remove the clicked phase from the right-clicked blast (or,
+//   when a multi-selection is active, from every selected blast).
+function removeSectionFromCtx() {
+  var phase = APP.ctxSection;
+  if (!phase) return;
+
+  var sel = getSelection();
+  var indices = (sel.length > 1) ? getUniqueBlastIndices(sel) : [APP.ctxBlastIdx];
+  if (indices.length === 0) return;
+
+  pushUndo("remove from " + phaseLabel(phase));
+  for (var i = 0; i < indices.length; i++) {
+    clearPhaseOnBlast(APP.blasts[indices[i]], phase);
+  }
+  if (sel.length > 1) clearSelection();
+  recalcDependencies();
+  debouncedSave();
   renderGantt();
   renderBlasts();
 }
@@ -691,6 +831,18 @@ function initContextMenu() {
   document.getElementById("ctxToggleNoBlast").addEventListener("click", toggleNoBlastFromCtx);
   document.getElementById("ctxDuplicate").addEventListener("click", duplicateBlast);
   document.getElementById("ctxRemove").addEventListener("click", removeBlast);
+  var ctxSendThisPrep = document.getElementById("ctxSendThisPrep");
+  if (ctxSendThisPrep) ctxSendThisPrep.addEventListener("click", sendThisToPrepFromCtx);
+  var ctxSendAllPrep = document.getElementById("ctxSendAllPrep");
+  if (ctxSendAllPrep) ctxSendAllPrep.addEventListener("click", sendAllToPrepFromCtx);
+  var ctxSendThisExcav = document.getElementById("ctxSendThisExcav");
+  if (ctxSendThisExcav) ctxSendThisExcav.addEventListener("click", sendThisToExcavFromCtx);
+  var ctxSendAllExcav = document.getElementById("ctxSendAllExcav");
+  if (ctxSendAllExcav) ctxSendAllExcav.addEventListener("click", sendAllToExcavFromCtx);
+  var ctxRemoveSection = document.getElementById("ctxRemoveSection");
+  if (ctxRemoveSection) ctxRemoveSection.addEventListener("click", removeSectionFromCtx);
+  var ctxRemoveSectionMulti = document.getElementById("ctxRemoveSectionMulti");
+  if (ctxRemoveSectionMulti) ctxRemoveSectionMulti.addEventListener("click", removeSectionFromCtx);
   document.getElementById("ctxSplitDrill").addEventListener("click", splitDrillFromCtx);
   document.getElementById("ctxMergeBlocks").addEventListener("click", mergeBlocksFromCtx);
   document.getElementById("ctxEditBlock").addEventListener("click", editBlockFromCtx);

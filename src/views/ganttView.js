@@ -7,7 +7,7 @@
 import { APP, getTotalDrillMeters } from "../state/appState.js";
 import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
 import { calcDrillCrewRequired, calcLoadCrewRequired, ensureCrewAllocated, buildCrewBadges } from "../state/crewRoles.js";
-import { getBlastDeps } from "../engine/dependencyEngine.js";
+import { getBlastDeps, recalcDependencies } from "../engine/dependencyEngine.js";
 import { hasBlocks } from "../engine/blockHelpers.js";
 import { formatNum, addDays, isoDate, getWeekNumber, isWeekend, isToday } from "../utils/dateUtils.js";
 import { showBarTooltip, hideTooltip } from "../ui/tooltip.js";
@@ -25,6 +25,9 @@ import { renderDelayPalette } from "../ui/delayPalette.js";
 import { buildConflictCellSet } from "../engine/fleetConflicts.js";
 import { recalcBlastAuto } from "../engine/autoCalc.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { sendAllToPatternPrep } from "../utils/prep.js";
+import { sendAllToExcavation } from "../utils/excav.js";
+import { pushUndo } from "../state/undoManager.js";
 
 // Step 0-pre) Plan week banding helpers
 function getPlanWeekIdx(date) {
@@ -61,6 +64,21 @@ function hexToRgba(hex, alpha) {
   var g = parseInt(hex.substring(2, 4), 16);
   var b = parseInt(hex.substring(4, 6), 16);
   return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+}
+
+// Step 0-pre-d) Lightweight transient toast (reuses the .drop-feedback styles).
+function ganttToast(message, success) {
+  var existing = document.getElementById("dropFeedback");
+  if (existing) existing.remove();
+  var toast = document.createElement("div");
+  toast.id = "dropFeedback";
+  toast.className = "drop-feedback " + (success ? "drop-feedback-ok" : "drop-feedback-warn");
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function() {
+    toast.classList.add("drop-feedback-fade");
+    setTimeout(function() { toast.remove(); }, 400);
+  }, 2000);
 }
 
 // Step 0) Track collapsed sections between re-renders
@@ -284,7 +302,7 @@ function renderGantt() {
       var isLastBar = false;
 
       if (range.start && range.end && ds >= range.start && ds <= range.end) {
-        barClass = sectionName === "PATTERN PREP" ? "prep" : sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : "blast";
+        barClass = sectionName === "PATTERN PREP" ? "prep" : sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : sectionName === "EXCAVATION" ? "excav" : "blast";
         if (blast.status === "planned" && sectionName !== "BLASTING") barClass += " planned";
 
         // Step) Determine if this is the first or last cell of the bar for resize handles
@@ -451,6 +469,16 @@ function renderGantt() {
     html += "<td colspan=\"" + (dates.length + getColumnCount()) + "\">";
     html += "<span class=\"collapse-arrow\">\u25BC</span>";
     html += "<span class=\"section-icon\" style=\"background:" + color + "\"></span>" + sectionName;
+    // Step 1f-0) DRILLING header gets a bulk "Send all patterns to Pattern Prep"
+    //  action. It seeds a 1-day prep window on every blast that has none.
+    if (sectionName === "DRILLING") {
+      html += "<button type=\"button\" class=\"btn btn-sm gantt-section-action\" id=\"btnSendAllPrep\" title=\"Give every blast a 1-day Pattern Prep window (blasts that already have prep are left as-is). Drag the prep bars to adjust.\">\u2192 Send all to Prep</button>";
+    }
+    // Step 1f-0b) EXCAVATION header gets a bulk "Send all to Excavation" action.
+    //  It seeds an excavation cycle (day after firing) on every blast that has none.
+    if (sectionName === "EXCAVATION") {
+      html += "<button type=\"button\" class=\"btn btn-sm gantt-section-action\" id=\"btnSendAllExcav\" title=\"Give every blast an excavation cycle starting the day after it fires. Assign dig equipment in the blast to make the duration rate-driven, or drag/resize the bars.\">\u2192 Send all to Excavation</button>";
+    }
     html += "</td></tr>";
 
     APP.blasts.forEach(function(blast, idx) {
@@ -546,6 +574,11 @@ function renderGantt() {
         var loadCrewHtml = buildCrewBadges(loadCrewAlloc, loadCrewReq);
         var loadPctBadge = (blast.loadProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.loadProgress * 100) + "%</span>" : "";
         valueHtml = formatNum(blast.expMass) + "kg" + loadPctBadge + depIcon + loadCrewHtml;
+      } else if (sectionName === "EXCAVATION") {
+        // Step 1f-ii-excav) Assigned excavation ancillary + days/volume
+        var excavIds = blast.assignedExcavators || [];
+        equipHtml = excavIds.length > 0 ? excavIds.join(", ") : "";
+        valueHtml = (blast.excavDays ? (blast.excavDays + "d ") : "") + formatNum(blast.volume) + " bcm";
       } else {
         valueHtml = formatNum(blast.volume) + " bcm";
       }
@@ -554,6 +587,7 @@ function renderGantt() {
       if (blast.noDrill) phaseBadges += "<span class=\"no-drill-badge\" title=\"No Drilling\">ND</span>";
       if (blast.noLoad) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-blast);\" title=\"No Loading\">NL</span>";
       if (blast.noBlast) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-prep);\" title=\"No Blasting\">NB</span>";
+      if (blast.noExcav) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-excav);\" title=\"No Excavation\">NE</span>";
       var firedCls = (blast.status === "fired") ? " fired-row" : "";
 
       // Step 1f-ii-emit) Shared ctx attributes so any frozen cell resolves the blast index
@@ -600,6 +634,17 @@ function renderGantt() {
     if (b.noBlast) return null;
     if (!b.blastDate) return null;
     return { start: b.blastDate, end: b.blastDate };
+  });
+
+  // Step 1g-ii) EXCAVATION section — dig-out cycle after the blast fires.
+  //  Duration is rate-driven by the assigned ancillary (see dependencyEngine),
+  //  stored as excavStart/excavDays. Hidden until the blast has both.
+  renderSection("EXCAVATION", "var(--accent-excav)", function(b) {
+    if (b.noExcav) return null;
+    if (!b.excavStart || !b.excavDays) return null;
+    var start = b.excavStart;
+    var end = isoDate(addDays(new Date(b.excavStart), Math.max((b.excavDays || 1) - 1, 0)));
+    return { start: start, end: end };
   });
 
   html += "</tbody>";
@@ -715,6 +760,34 @@ function renderGantt() {
       chip.classList.remove("chip-dragging");
     });
   });
+
+  // Step 1k-0) Bulk "Send all to Prep" button in the DRILLING header.
+  //  stopPropagation so the click doesn't also collapse the section.
+  var sendPrepBtn = document.getElementById("btnSendAllPrep");
+  if (sendPrepBtn) {
+    sendPrepBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      pushUndo("send all to prep");
+      var n = sendAllToPatternPrep(1);
+      debouncedSave();
+      renderGantt();
+      ganttToast(n > 0 ? (n + " blast(s) sent to Pattern Prep") : "All blasts already have Pattern Prep", n > 0);
+    });
+  }
+
+  // Step 1k-0b) Bulk "Send all to Excavation" button in the EXCAVATION header.
+  var sendExcavBtn = document.getElementById("btnSendAllExcav");
+  if (sendExcavBtn) {
+    sendExcavBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      pushUndo("send all to excavation");
+      var n = sendAllToExcavation();
+      recalcDependencies();
+      debouncedSave();
+      renderGantt();
+      ganttToast(n > 0 ? (n + " blast(s) sent to Excavation") : "All blasts already have Excavation", n > 0);
+    });
+  }
 
   // Step 1k) Attach section collapse/expand toggle
   document.querySelectorAll(".gantt-section-header[data-section-toggle]").forEach(function(hdr) {

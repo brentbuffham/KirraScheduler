@@ -11,6 +11,8 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { applyPrepToBlast } from "../utils/prep.js";
+import { pushUndo } from "../state/undoManager.js";
 
 // Step 1) Format number with locale separators
 function fmtNum(v) {
@@ -159,20 +161,15 @@ function resolveKapManifest(loadBlasts) {
   if (mergeBtn) mergeBtn.textContent = "Merge into Schedule";
 }
 
-// Step 2D) Optionally seed a Pattern Prep window on a blast so the Prep section of
-//  the Gantt is populated on import. Prep finishes the day before drilling starts.
-//  Existing prep is left untouched; blasts without a drillStart are skipped.
-function applyPrepToBlast(blast, prepDays) {
-  if (!blast || !prepDays || prepDays < 1) return;
-  if (blast.prepStart && blast.prepDays) return;
-  var anchor = blast.drillStart || isoDate(APP.planStart);
-  // Step 2D-i) Prep runs the prepDays immediately BEFORE the drill start
-  blast.prepStart = isoDate(addDays(new Date(anchor), -prepDays));
-  blast.prepDays = prepDays;
-}
+// Step 2D) Pattern Prep seeding now lives in src/utils/prep.js (applyPrepToBlast)
+//  so the import merge, the Gantt toolbar button and the right-click menu all
+//  share one implementation. Imported at the top of this module.
 
 // Step 3) Merge imported blasts into the main schedule
 function mergeImported() {
+  // Step 3-undo) Snapshot before merging so an import can be reverted with Ctrl+Z.
+  pushUndo("import merge");
+
   // Resolve a pending KAP manifest first — selected surfaces become the
   // importedBlasts the loop below commits; the rest become pit surfaces.
   if (APP.kapSurfaceManifest) {

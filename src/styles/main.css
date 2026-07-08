@@ -28,6 +28,7 @@
   --click-color: #cc0000;
   --selected-color: #ff5555;
   --accent-prep: #14b8a6;
+  --accent-excav: #a16207;
   --presplit: #a78bfa;
   --buffer: #38bdf8;
   --production: #f97316;
@@ -46,6 +47,7 @@
   --gantt-drill: #3b82f6;
   --gantt-load: #f59e0b;
   --gantt-blast: #ef4444;
+  --gantt-excav: #a16207;
   --gantt-complete: #10b981;
   --gantt-planned: #374151;
   --shadow: 0 4px 24px rgba(0,0,0,0.5);
@@ -487,6 +489,14 @@ input[type="range"] {
 .gantt-section-header.collapsed td .collapse-arrow {
   transform: rotate(-90deg);
 }
+/* Step) Bulk action button that lives in a section header (e.g. Send all to Prep).
+   Floats to the right, small, and follows the neutral->Kirra-red button brand. */
+.gantt-section-action {
+  float: right;
+  margin: -2px 8px 0 0;
+  font-size: 11px;
+  padding: 2px 8px;
+}
 .gantt-row.section-hidden {
   display: none;
 }
@@ -552,6 +562,7 @@ input[type="range"] {
 .gantt-bar.drill { background: var(--gantt-drill); }
 .gantt-bar.load { background: var(--gantt-load); }
 .gantt-bar.blast { background: var(--gantt-blast); }
+.gantt-bar.excav { background: var(--gantt-excav); }
 .gantt-bar.complete { background: var(--gantt-complete); }
 .gantt-bar.planned { background: var(--gantt-planned); border: 1px dashed var(--text-muted); }
 .gantt-bar.milestone {

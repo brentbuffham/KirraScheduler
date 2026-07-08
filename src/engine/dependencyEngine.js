@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { drills, mpus, isDrillInMaintenance } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, isDrillInMaintenance } from "../state/equipmentState.js";
 import { hasBlocks, syncBlastFromBlocks, getLatestBlockEnd } from "../engine/blockHelpers.js";
 import { addDays, isoDate, formatDate } from "../utils/dateUtils.js";
 
@@ -111,6 +111,14 @@ function recalcDependencies() {
             var predDrillEnd = pred.drillStart ? addDays(new Date(pred.drillStart), pred.drillDays || 1) : null;
             if (predDrillEnd && drillStartDate < predDrillEnd) {
               blast._depWarning = "Drill overlaps with predecessor " + pred.name + " drill (ends " + formatDate(predDrillEnd) + ")";
+            }
+          } else if (deps.predType === "excav-before-drill") {
+            // Step 2d-i-excav) This blast's drilling must wait until the
+            //   predecessor's excavation (dig-out) is complete.
+            var predExcavEnd = (!pred.noExcav && pred.excavStart && pred.excavDays)
+              ? addDays(new Date(pred.excavStart), pred.excavDays) : null;
+            if (predExcavEnd && drillStartDate < predExcavEnd) {
+              blast._depWarning = "Drill starts before predecessor " + pred.name + " is excavated (ends " + formatDate(predExcavEnd) + ")";
             }
           }
         }
@@ -246,6 +254,30 @@ function recalcDependencies() {
       }
     }
 
+    // Step 2f-ii) Excavation cycle — dig-out after the blast fires.
+    //  Only active once excavation ancillary is assigned. Duration is
+    //  rate-driven (volume / sum of assigned dig rates in bcm/day) unless the
+    //  user has manually resized it; start anchors to blastDate + 1 unless the
+    //  user has manually dragged it.
+    var excavIds = blast.assignedExcavators || [];
+    if (!blast.noExcav && excavIds.length > 0 && blast.blastDate) {
+      if (!blast.excavDaysManual) {
+        var excavRateSum = 0;
+        excavIds.forEach(function(id) {
+          var unit = ancillary.find(function(a) { return a.id === id; });
+          if (unit && unit.rateBCM_per_day) excavRateSum += unit.rateBCM_per_day;
+        });
+        var excavVol = blast.volume || 0;
+        blast.excavDays = (excavRateSum > 0 && excavVol > 0)
+          ? Math.max(1, Math.ceil(excavVol / excavRateSum))
+          : (blast.excavDays || 1);
+      }
+      if (!blast.excavStartManual) {
+        // Step 2f-ii-a) Excavation begins the day after the blast fires
+        blast.excavStart = isoDate(addDays(new Date(blast.blastDate), 1));
+      }
+    }
+
     // Step 2g) Store computed dependency info for rendering
     var drillEndIso = hasDrill ? isoDate(addDays(drillStartDate, drillDays - 1)) : null;
     var loadEndIso = (hasLoad && blast.loadStart) ? isoDate(addDays(new Date(blast.loadStart), (blast.loadDays || 1) - 1)) : null;
@@ -341,6 +373,10 @@ function autoSchedule() {
         } else if (deps.predType === "drill-before-drill" && pred.drillStart && pred.drillDays) {
           // Step) Drill starts after predecessor finishes drilling
           newStart = addDays(new Date(pred.drillStart), pred.drillDays || 1);
+
+        } else if (deps.predType === "excav-before-drill" && !pred.noExcav && pred.excavStart && pred.excavDays) {
+          // Step) Drill starts the day after the predecessor's excavation ends
+          newStart = addDays(new Date(pred.excavStart), pred.excavDays);
 
         } else if (deps.predType === "blast-before-load" && pred.blastDate) {
           // Step) For blast-before-load, drill still stacks off prev using overlap

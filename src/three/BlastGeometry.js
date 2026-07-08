@@ -23,6 +23,8 @@ var PHASE_COLORS = {
   loading:   0xf59e0b,   // Orange/Yellow — loading explosives
   loaded:    0xb8860b,   // Muted amber — loading done, awaiting blast (retained state)
   blastDay:  0xef4444,   // Red — detonation (will flash)
+  excavating: 0xa16207,  // Brown — active dig-out (excavation cycle)
+  excavated: 0x3a2a10,   // Dark brown — dug out, material removed
   completed: 0x111111,   // Near-black — post-blast shadow
   active:    0x3b82f6    // Alias for drilling
 };
@@ -37,6 +39,8 @@ var PHASE_OPACITY = {
   loading:   1.0,
   loaded:    1.0,
   blastDay:  1.0,
+  excavating: 1.0,
+  excavated: 0.15,
   completed: 0.10
 };
 

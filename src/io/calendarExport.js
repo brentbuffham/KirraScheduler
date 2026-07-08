@@ -94,6 +94,11 @@ function getPhaseRange(blast, phaseKey) {
     var end = addDays(new Date(blast.blastDate + "T00:00:00"), 1);
     return { start: blast.blastDate, end: localIso(end), days: 1 };
   }
+  if (phaseKey === "excav") {
+    if (blast.noExcav || !blast.excavStart || !blast.excavDays) return null;
+    var end = addDays(new Date(blast.excavStart + "T00:00:00"), blast.excavDays);
+    return { start: blast.excavStart, end: localIso(end), days: blast.excavDays };
+  }
   return null;
 }
 
@@ -131,7 +136,7 @@ function exportICS(mode) {
     (now.getMinutes() < 10 ? "0" : "") + now.getMinutes() +
     (now.getSeconds() < 10 ? "0" : "") + now.getSeconds();
 
-  var phases = ["prep", "drill", "load", "blast"];
+  var phases = ["prep", "drill", "load", "blast", "excav"];
 
   for (var bi = 0; bi < APP.blasts.length; bi++) {
     var blast = APP.blasts[bi];
@@ -191,7 +196,7 @@ function exportICS(mode) {
 
 function exportCSV(mode) {
   var rows = [];
-  var phases = ["prep", "drill", "load", "blast"];
+  var phases = ["prep", "drill", "load", "blast", "excav"];
 
   if (mode === "per-phase") {
     // Step 5a) Per-phase: one row per phase per blast
@@ -229,7 +234,7 @@ function exportCSV(mode) {
     // Step 5b) Per-blast: one row per blast with all phase dates
     rows.push([
       "Blast Name", "Prep Start", "Prep Days", "Drill Start", "Drill Days",
-      "Load Start", "Load Days", "Blast Date",
+      "Load Start", "Load Days", "Blast Date", "Excav Start", "Excav Days",
       "Status", "Volume (m3)", "Surface Area (m2)", "Exp Mass (kg)",
       "Assigned Drills", "Assigned MPUs", "Hole Types"
     ].join(","));
@@ -245,6 +250,8 @@ function exportCSV(mode) {
         blast.loadStart || "",
         blast.loadDays || 0,
         blast.blastDate || "",
+        blast.excavStart || "",
+        blast.excavDays || 0,
         blast.status || "planned",
         Math.round(blast.volume || 0),
         Math.round(blast.surfaceArea || 0),

@@ -528,7 +528,7 @@ function applyLabelVisibility(day) {
   // Step 4d-iii) Master on + day filter — show only blasts actively worked today.
   //   Retained-state phases (drilled/loaded) and idle/planned/completed are NOT
   //   "worked today", so their labels stay hidden to reduce clutter.
-  var ACTIVE_PHASES = { prep: 1, drilling: 1, loading: 1, blastDay: 1 };
+  var ACTIVE_PHASES = { prep: 1, drilling: 1, loading: 1, blastDay: 1, excavating: 1 };
   APP.blasts.forEach(function(b) {
     var state = day.blastStates[b.name];
     var phase = state ? state.phase : "planned";

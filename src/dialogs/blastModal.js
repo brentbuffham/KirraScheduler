@@ -15,6 +15,7 @@ import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDepthProfilePanel } from "../engine/depthBinning.js";
 // Step 0) Canonical prefix-tolerant blast->solid matcher (shared with 3D playback).
 import { findMatchingSolid } from "../utils/solidMatch.js";
+import { pushUndo } from "../state/undoManager.js";
 
 // ============================================================
 //  HOLE TYPE TABLE HELPERS
@@ -486,6 +487,22 @@ function populateAncillaryDropdown(selectedIds) {
   });
 }
 
+// Step 5d-ii) Populate excavation equipment multi-select — only units that can
+//  actually dig (rateBCM_per_day > 0), so graders/rollers are excluded.
+function populateExcavatorDropdown(selectedIds) {
+  var sel = document.getElementById("fAssignedExcavators");
+  if (!sel) return;
+  sel.innerHTML = "";
+  ancillary.forEach(function(a) {
+    if (!a.rateBCM_per_day || a.rateBCM_per_day <= 0) return;
+    var opt = document.createElement("option");
+    opt.value = a.id;
+    opt.textContent = a.id + " (" + a.type + ", " + a.rateBCM_per_day + " bcm/d)";
+    if (selectedIds && selectedIds.indexOf(a.id) !== -1) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
 // ============================================================
 //  SHOW / EDIT / SAVE
 // ============================================================
@@ -732,6 +749,12 @@ function showAddBlastModal() {
   if (prepStartEl) prepStartEl.value = "";
   if (prepDaysEl) prepDaysEl.value = "";
   populateAncillaryDropdown([]);
+  // Step 6b-ii) Reset excavation fields
+  populateExcavatorDropdown([]);
+  var excavStartEl0 = document.getElementById("fExcavStart");
+  if (excavStartEl0) excavStartEl0.value = "";
+  var noExcavEl0 = document.getElementById("fNoExcav");
+  if (noExcavEl0) noExcavEl0.checked = false;
   document.getElementById("fDrillProgress").value = "";
   document.getElementById("fLoadProgress").value = "";
   populateSolidStats(null);
@@ -782,6 +805,12 @@ function editBlast(idx) {
   if (prepStartEl) prepStartEl.value = b.prepStart || "";
   if (prepDaysEl) prepDaysEl.value = b.prepDays || "";
   populateAncillaryDropdown(b.assignedAncillary || []);
+  // Step 7b-ii) Populate excavation fields
+  populateExcavatorDropdown(b.assignedExcavators || []);
+  var excavStartElE = document.getElementById("fExcavStart");
+  if (excavStartElE) excavStartElE.value = b.excavStart || "";
+  var noExcavElE = document.getElementById("fNoExcav");
+  if (noExcavElE) noExcavElE.checked = !!b.noExcav;
   document.getElementById("fDrillProgress").value = b.drillProgress ? Math.round(b.drillProgress * 100) : "";
   document.getElementById("fLoadProgress").value = b.loadProgress ? Math.round(b.loadProgress * 100) : "";
   populateSolidStats(b.solidStats || null);
@@ -794,6 +823,9 @@ function editBlast(idx) {
 function saveBlast() {
   var name = document.getElementById("fBlastName").value.trim();
   if (!name) { alert("Blast name required"); return; }
+
+  // Step 8-undo) Snapshot before add/edit so the change can be reverted.
+  pushUndo(APP.editingBlastIdx !== null ? "edit blast" : "add blast");
 
   var area = parseFloat(document.getElementById("fSurfaceArea").value) || 0;
   var volume = parseFloat(document.getElementById("fVolume").value) || 0;
@@ -893,6 +925,19 @@ function saveBlast() {
     }
   }
 
+  // Step 8h-ii) Read excavation fields
+  var noExcavEl = document.getElementById("fNoExcav");
+  var noExcav = noExcavEl ? noExcavEl.checked : false;
+  var excavStartEl = document.getElementById("fExcavStart");
+  var excavStartVal = excavStartEl ? excavStartEl.value : "";
+  var assignedExcavators = [];
+  var excSelect = document.getElementById("fAssignedExcavators");
+  if (excSelect) {
+    for (var ei = 0; ei < excSelect.selectedOptions.length; ei++) {
+      assignedExcavators.push(excSelect.selectedOptions[ei].value);
+    }
+  }
+
   // Step 8i) Build blast object
   var blastData = {
     name: name,
@@ -920,6 +965,10 @@ function saveBlast() {
     prepStart: prepStart || null,
     prepDays: prepDays || 0,
     assignedAncillary: assignedAncillary,
+    noExcav: noExcav,
+    assignedExcavators: assignedExcavators,
+    excavStart: excavStartVal || null,
+    excavStartManual: excavStartVal ? true : false,
     holeTypes: holeTypes,
     solidBounds: matchedSolid ? matchedSolid.bounds : null,
     solidBenchHt: matchedSolid ? matchedSolid.benchHt : null,
@@ -939,6 +988,11 @@ function saveBlast() {
     if (!blastData.prepStart && prev.prepStart) blastData.prepStart = prev.prepStart;
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
+    // Step 8j-excav) Preserve excavation resize/drag flags + fields the form does not collect
+    if (blastData.assignedExcavators.length === 0 && prev.assignedExcavators) blastData.assignedExcavators = prev.assignedExcavators;
+    if (!blastData.excavStart && prev.excavStart) { blastData.excavStart = prev.excavStart; blastData.excavStartManual = prev.excavStartManual; }
+    if (prev.excavDays) blastData.excavDays = prev.excavDays;
+    if (prev.excavDaysManual) blastData.excavDaysManual = prev.excavDaysManual;
     if (prev.drillBlocks) blastData.drillBlocks = prev.drillBlocks;
     // Step 8j-ii) Preserve 3D geometry that the modal form does NOT collect.
     //   Without this, editing a blast (e.g. to change a rate) drops its boundary

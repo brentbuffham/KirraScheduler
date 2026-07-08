@@ -34,6 +34,14 @@
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
+    <button class="btn" id="btnUndo" title="Undo (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+      Undo
+    </button>
+    <button class="btn" id="btnRedo" title="Redo (Ctrl+Y)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+      Redo
+    </button>
     <button class="btn btn-danger" id="btnResetGantt" title="Reset scheduler data">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       Reset
@@ -847,8 +855,14 @@
   <div class="ctx-item ctx-general" id="ctxToggleNoLoad">&#x1F6AB; No Load</div>
   <div class="ctx-item ctx-general" id="ctxToggleNoBlast">&#x1F6AB; No Blast</div>
   <div class="ctx-divider ctx-general"></div>
+  <div class="ctx-item ctx-general" id="ctxSendThisPrep">&#x1F6A7; Send This to Prep</div>
+  <div class="ctx-item ctx-general" id="ctxSendAllPrep">&#x1F6A7; Send all to Prep</div>
+  <div class="ctx-item ctx-general" id="ctxSendThisExcav">&#x26CF;&#xFE0F; Send This to Excavation</div>
+  <div class="ctx-item ctx-general" id="ctxSendAllExcav">&#x26CF;&#xFE0F; Send all to Excavation</div>
+  <div class="ctx-divider ctx-general"></div>
   <div class="ctx-item ctx-general" id="ctxDuplicate">&#x1F4CB; Duplicate</div>
-  <div class="ctx-item ctx-general" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove</div>
+  <div class="ctx-item ctx-general" id="ctxRemoveSection" style="color:var(--accent-load)">&#x232B; Remove from Section</div>
+  <div class="ctx-item ctx-general" id="ctxRemove" style="color:var(--accent-blast)">&#x1F5D1; Remove Whole Blast</div>
 
   <!-- Delay-specific items (shown only when right-clicking a delay bar) -->
   <div class="ctx-item ctx-delay-only" id="ctxExtendDelay" style="display:none;">&#x2795; Extend +1 Day</div>
@@ -861,7 +875,8 @@
   <div class="ctx-item ctx-multi" id="ctxRecalcBlockMeters" style="display:none;">&#x1F4D0; Recalc Block Meters</div>
   <div class="ctx-item ctx-multi" id="ctxEnableBlockDepth" style="display:none;">&#x2705; Enable Block Depth</div>
   <div class="ctx-divider ctx-multi" style="display:none;"></div>
-  <div class="ctx-item ctx-multi" id="ctxRemoveSelected" style="color:var(--accent-blast);display:none;">&#x1F5D1; Remove Selected</div>
+  <div class="ctx-item ctx-multi" id="ctxRemoveSectionMulti" style="color:var(--accent-load);display:none;">&#x232B; Remove from Section (selected)</div>
+  <div class="ctx-item ctx-multi" id="ctxRemoveSelected" style="color:var(--accent-blast);display:none;">&#x1F5D1; Delete Whole Blasts (selected)</div>
 </div>
 
 <!-- Step 6) Add/Edit Blast Modal -->
@@ -1068,6 +1083,30 @@
           </div>
         </div>
 
+        <!-- Excavation -->
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-excav);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+            Excavation <span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">— dig-out after firing; duration driven by assigned equipment (optional)</span>
+          </div>
+          <div class="form-row">
+            <div class="form-field" style="flex:1;">
+              <label>Assigned Excavation Equipment (multi-select)</label>
+              <select id="fAssignedExcavators" multiple style="height:80px;"></select>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:4px;">Dig rate (bcm/day) drives duration \u2014 Excavator / Loader / Dozer push / Dragline</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Excavation Start Date <span style="color:var(--text-muted);">(auto: day after blast)</span></label>
+              <input type="date" id="fExcavStart">
+            </div>
+            <div class="form-field">
+              <label>&nbsp;</label>
+              <label class="playback-toggle" style="margin-top:6px;"><input type="checkbox" id="fNoExcav"> No Excavation</label>
+            </div>
+          </div>
+        </div>
+
         <!-- Dependency Overrides -->
         <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
@@ -1106,6 +1145,7 @@
                 <option value="blast-before-drill">Predecessor must fire before drill starts</option>
                 <option value="blast-before-load">Predecessor must fire before loading starts</option>
                 <option value="drill-before-drill">Predecessor drill done before this drill</option>
+                <option value="excav-before-drill">Predecessor excavated before this drill</option>
               </select>
             </div>
           </div>

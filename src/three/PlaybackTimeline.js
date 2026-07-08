@@ -27,7 +27,7 @@ function buildTimeline() {
   var latest = null;
 
   APP.blasts.forEach(function(b) {
-    var dates = [b.prepStart, b.drillStart, b.loadStart, b.blastDate];
+    var dates = [b.prepStart, b.drillStart, b.loadStart, b.blastDate, b.excavStart];
     dates.forEach(function(d) {
       if (!d) return;
       if (!earliest || d < earliest) earliest = d;
@@ -54,6 +54,13 @@ function buildTimeline() {
       endL.setDate(endL.getDate() + (b.loadDays || 0));
       var endLStr = isoDate(endL);
       if (!latest || endLStr > latest) latest = endLStr;
+    }
+    // Step 2a-iv) Account for excavation duration
+    if (b.excavStart && b.excavDays) {
+      var endE = new Date(b.excavStart);
+      endE.setDate(endE.getDate() + (b.excavDays || 0));
+      var endEStr = isoDate(endE);
+      if (!latest || endEStr > latest) latest = endEStr;
     }
   });
 
@@ -99,6 +106,22 @@ function getBlastPhase(blast, dateStr) {
   // Step 3a) Blast day — highest priority
   if (!blast.noBlast && blast.blastDate && dateStr === blast.blastDate) {
     return { phase: "blastDay", drills: drillsList, mpus: mpusList };
+  }
+
+  // Step 3a-ii) Excavation phase — dig-out window after firing. Checked BEFORE
+  //   "completed" so the excavation days show their own colour rather than the
+  //   generic post-blast completed state.
+  if (!blast.noExcav && blast.excavStart && blast.excavDays) {
+    var excEnd = new Date(blast.excavStart);
+    excEnd.setDate(excEnd.getDate() + blast.excavDays - 1);
+    var excEndStr = isoDate(excEnd);
+    if (dateStr >= blast.excavStart && dateStr <= excEndStr) {
+      return { phase: "excavating", drills: [], mpus: [], excavators: blast.assignedExcavators || [] };
+    }
+    // Step 3a-iii) After excavation finishes the ground is dug out.
+    if (dateStr > excEndStr) {
+      return { phase: "excavated", drills: [], mpus: [] };
+    }
   }
 
   // Step 3b) Completed — past blast date
