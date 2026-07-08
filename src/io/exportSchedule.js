@@ -17,14 +17,18 @@ function exportKGP() {
     version: "1.0.0",
     exportDate: new Date().toISOString(),
 
-    // Step 1b) Global settings
+    // Step 1b) Global settings — full snapshot so an imported project reproduces
+    //   the exact same schedule (including all dependency thresholds and plan-week config)
     settings: {
       planStart: isoDate(APP.planStart),
       ganttWeeks: APP.ganttWeeks,
       rigHours: APP.rigHours,
       availability: APP.availability,
       utilisation: APP.utilisation,
-      deps: APP.deps
+      deps: APP.deps,
+      planWeekStartDay: APP.planWeekStartDay,
+      planCycleWeeks: APP.planCycleWeeks,
+      planWeekColors: APP.planWeekColors
     },
 
     // Step 1c) Schedule data

@@ -105,6 +105,12 @@ _themeObserver.observe(document.documentElement, { attributes: true, attributeFi
 // Step 3) Resize renderer to fit container
 function resizeRenderer(width, height) {
   if (!_renderer) return;
+  // Step 3-guard) Ignore zero/invalid sizes. A ResizeObserver can fire a 0x0
+  //   box while the playback tab is display:none (or mid-layout). Passing a 0
+  //   height makes the camera aspect Infinity/NaN, which breaks the projection
+  //   matrix so the ENTIRE scene (grid, blasts, surfaces) stops rendering until
+  //   a valid resize arrives. Bailing keeps the last good aspect intact.
+  if (!width || !height || width < 1 || height < 1) return;
   _renderer.setSize(width, height);
   var aspect = width / height;
 

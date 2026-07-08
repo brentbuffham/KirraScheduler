@@ -138,7 +138,10 @@ function renderDrillTable() {
   html += sortTh("drill", "model", "Model");
   html += sortTh("drill", "type", "Drill Type");
   html += "<th class=\"num\">Min Diam (mm)</th><th class=\"num\">Max Diam (mm)</th>";
-  html += sortTh("drill", "rateM_per_day", "Rate (m/day)", "num");
+  // Step 3-note) The stored drill rate is a penetration rate in metres/hour
+  //   (see blockHelpers.js — it is multiplied by effective rig hours to get m/day),
+  //   so the column header must read m/hr, not m/day.
+  html += sortTh("drill", "rateM_per_day", "Rate (m/hr)", "num");
   html += "<th>Crew Req</th>";
   html += sortTh("drill", "status", "Status");
   html += "<th>Assigned To</th><th>Maintenance</th><th>Actions</th>";

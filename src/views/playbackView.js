@@ -6,6 +6,7 @@
 
 import { APP } from "../state/appState.js";
 import { drills, mpus } from "../state/equipmentState.js";
+import { findSolidForBlast } from "../utils/solidMatch.js";
 import {
   initScene, resizeRenderer, setLocalOrigin, startRenderLoop, stopRenderLoop,
   fitCameraToBounds, setCameraTopDown, setCameraIsometric, setCameraPerspective,
@@ -19,7 +20,7 @@ import {
 } from "../three/PitShellRenderer.js";
 import {
   addBlastPolygon, addBlastSolid, createBlastLabel, setBlastPhase,
-  setAllLabelsVisible, updateFlashAnimation,
+  setAllLabelsVisible, setBlastLabelVisible, updateFlashAnimation,
   clearBlasts, getBlastCentroid, getBlastTopZ, setAllBlastsVisible
 } from "../three/BlastGeometry.js";
 import {
@@ -114,11 +115,18 @@ function initPlayback() {
     setGridVisible(e.target.checked);
   });
 
-  // Step 1f-ii) Wire up label toggles
+  // Step 1f-ii) Wire up label toggles — both re-run the central visibility logic so the
+  //   master "Show blast labels" toggle and the "Only active-day blasts" option compose.
   var pbLabels = document.getElementById("pbShowLabels");
   if (pbLabels) {
-    pbLabels.addEventListener("change", function(e) {
-      setAllLabelsVisible(e.target.checked);
+    pbLabels.addEventListener("change", function() {
+      applyLabelVisibility(getCurrentDay());
+    });
+  }
+  var pbLabelsDayOnly = document.getElementById("pbLabelsDayOnly");
+  if (pbLabelsDayOnly) {
+    pbLabelsDayOnly.addEventListener("change", function() {
+      applyLabelVisibility(getCurrentDay());
     });
   }
   var pbEquipLabels = document.getElementById("pbShowEquipLabels");
@@ -174,6 +182,18 @@ function initPlayback() {
 // Step 2) Refresh playback data (called whenever tab is shown or data changes)
 function refreshPlayback() {
   if (!_initialised) initPlayback();
+
+  // Step 2-resize) Re-measure the viewport and resize the renderer every time the
+  //   tab is shown. This guarantees a valid camera aspect even if a prior 0x0
+  //   ResizeObserver event (fired while the tab was hidden) had broken it — the
+  //   reported "3D scene / grid / blasts all disappeared" symptom.
+  var vpEl = document.getElementById("playbackViewport");
+  if (vpEl) {
+    var vpRect = vpEl.getBoundingClientRect();
+    if (vpRect.width > 0 && vpRect.height > 0) {
+      resizeRenderer(vpRect.width, vpRect.height);
+    }
+  }
 
   // Step 2a) Clear existing scene objects
   clearSurfaces();
@@ -283,30 +303,58 @@ function refreshPlayback() {
     }
   });
 
-  // Step 2f) Add blast polygons
+  // Step 2f) Add blast polygons.
+  //   Per-blast try/catch so one malformed blast can't abort the whole loop and
+  //   leave the scene with only the surface (the reported regression).
   APP.blasts.forEach(function(b) {
-    if (b.polygons && b.polygons.length > 0) {
-      var avgZ = 0;
-      b.polygons.forEach(function(p) { avgZ += (p.z || 0); });
-      avgZ /= b.polygons.length;
-      addBlastPolygon(b.name, b.polygons, avgZ, b.status || "planned");
-    }
-  });
-
-  // Step 2f-ii) Add blast solids (3D volumes matched by name)
-  APP.blasts.forEach(function(b) {
-    for (var si = 0; si < solids.length; si++) {
-      if (solids[si].name === b.name) {
-        addBlastSolid(b.name, solids[si]);
-        break;
+    try {
+      if (b.polygons && b.polygons.length > 0) {
+        var avgZ = 0;
+        b.polygons.forEach(function(p) { avgZ += (p.z || 0); });
+        avgZ /= b.polygons.length;
+        addBlastPolygon(b.name, b.polygons, avgZ, b.status || "planned");
       }
+    } catch (err) {
+      console.error("Playback: failed to add blast polygon for '" + b.name + "'", err);
     }
   });
 
-  // Step 2f-iv) Create blast labels
+  // Step 2f-ii) Add blast solids (3D volumes matched by name) — also guarded.
+  //   The 3D scene regenerates off the gantt's blast list (APP.blasts). Each
+  //   blast is resolved to its solid with the shared prefix-tolerant matcher so
+  //   a rename or "EXTRUDED_" prefix drift can't orphan the blast from its solid
+  //   (which previously made blasts vanish while the surface stayed visible).
+  var _solidMatched = 0;
+  var _unmatched = [];
   APP.blasts.forEach(function(b) {
-    createBlastLabel(b.name);
+    try {
+      var solid = findSolidForBlast(b);
+      if (solid) { addBlastSolid(b.name, solid); _solidMatched++; }
+      else if (!(b.polygons && b.polygons.length > 0)) _unmatched.push(b.name);
+    } catch (err) {
+      console.error("Playback: failed to add blast solid for '" + b.name + "'", err);
+    }
   });
+  // Step 2f-iii) Diagnostic summary so name/geometry mismatches are visible.
+  console.log("Playback: " + _solidMatched + "/" + APP.blasts.length +
+    " blasts linked to a 3D solid. Solids available: " +
+    ((APP.kirraProjectSolids || []).map(function(s) { return s.name; }).join(", ") || "none"));
+  if (_unmatched.length > 0) {
+    console.warn("Playback: blasts with NO solid and NO polygon (won't show in 3D): " + _unmatched.join(", "));
+  }
+
+  // Step 2f-iv) Create blast labels, then immediately sync their visibility to the
+  //   current checkbox state. Labels are recreated on every refresh (default visible),
+  //   so without this re-sync they would reappear even when "Show blast labels" is off
+  //   — the reported "stale labels keep coming back" bug.
+  APP.blasts.forEach(function(b) {
+    try {
+      createBlastLabel(b.name);
+    } catch (err) {
+      console.error("Playback: failed to create label for '" + b.name + "'", err);
+    }
+  });
+  applyLabelVisibility(getCurrentDay());
 
   // Step 2g) Update surface list in sidebar
   updateSurfaceList();
@@ -319,15 +367,31 @@ function refreshPlayback() {
     setSurfaceColorMode("single", hex);
   }
 
-  // Step 2h) Fit camera to scene bounds and store for camera presets
+  // Step 2h) Fit camera to scene bounds and store for camera presets.
+  //   Prefer surface bounds, but fall back to the bounds of ALL collected spatial data
+  //   (blast solids + polygons) so the schedule still renders and frames correctly when
+  //   there is no base surface loaded — e.g. a project of 3D blast solids only.
   var bounds = getAllSurfaceBounds();
+  if (!bounds && allX.length > 0) {
+    bounds = {
+      minX: Math.min.apply(null, allX), maxX: Math.max.apply(null, allX),
+      minY: Math.min.apply(null, allY), maxY: Math.max.apply(null, allY),
+      minZ: Math.min.apply(null, allZ), maxZ: Math.max.apply(null, allZ)
+    };
+  }
   if (bounds) {
     setDataBounds(bounds);
     fitCameraToBounds(bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, bounds.minZ, bounds.maxZ);
   }
 
-  // Step 2i) Build and apply timeline
-  buildTimeline();
+  // Step 2i) Build and apply timeline.
+  //   Guarded so a timeline error cannot prevent the already-added blast/surface
+  //   geometry from remaining on screen.
+  try {
+    buildTimeline();
+  } catch (err) {
+    console.error("Playback: buildTimeline failed", err);
+  }
   var totalDays = getDayCount();
 
   var rangeEl = document.getElementById("pbTlRange");
@@ -340,7 +404,11 @@ function refreshPlayback() {
   var day0 = getCurrentDay();
   if (day0) {
     updateTimelineUI(day0);
-    updateSceneForDay(day0);
+    try {
+      updateSceneForDay(day0);
+    } catch (err) {
+      console.error("Playback: updateSceneForDay(day0) failed", err);
+    }
   } else {
     document.getElementById("pbTlDay").textContent = "No schedule data";
     document.getElementById("pbTlDate").textContent = "";
@@ -380,6 +448,10 @@ function updateSceneForDay(day) {
       setBlastPhase(b.name, "planned");
     }
   });
+
+  // Step 4a-ii) Re-apply label visibility for the current day (keeps the
+  //   "Only active-day blasts" option in sync as the timeline advances)
+  applyLabelVisibility(day);
 
   // Step 4b) Position equipment
   clearEquipment();
@@ -428,6 +500,40 @@ function updateSceneForDay(day) {
   // Step 4c) Sync equipment label visibility with checkbox
   var eqLabelCb = document.getElementById("pbShowEquipLabels");
   if (eqLabelCb) setAllEquipLabelsVisible(eqLabelCb.checked);
+}
+
+// Step 4d) Central blast-label visibility logic.
+//   Composes the master "Show blast labels" toggle with the "Only active-day blasts"
+//   option. When day-only is on, only blasts that are actively being worked on the
+//   given schedule day (any phase except "planned" or "completed") show their label,
+//   so fired blasts and yet-to-be-worked blasts don't clutter the view.
+function applyLabelVisibility(day) {
+  var master = document.getElementById("pbShowLabels");
+  var dayOnly = document.getElementById("pbLabelsDayOnly");
+  var showLabels = master ? master.checked : true;
+  var activeDayOnly = dayOnly ? dayOnly.checked : false;
+
+  // Step 4d-i) Master off — hide everything and stop.
+  if (!showLabels) {
+    setAllLabelsVisible(false);
+    return;
+  }
+
+  // Step 4d-ii) Master on, no day filter — show all labels.
+  if (!activeDayOnly || !day) {
+    setAllLabelsVisible(true);
+    return;
+  }
+
+  // Step 4d-iii) Master on + day filter — show only blasts actively worked today.
+  //   Retained-state phases (drilled/loaded) and idle/planned/completed are NOT
+  //   "worked today", so their labels stay hidden to reduce clutter.
+  var ACTIVE_PHASES = { prep: 1, drilling: 1, loading: 1, blastDay: 1 };
+  APP.blasts.forEach(function(b) {
+    var state = day.blastStates[b.name];
+    var phase = state ? state.phase : "planned";
+    setBlastLabelVisible(b.name, !!ACTIVE_PHASES[phase]);
+  });
 }
 
 // Step 5) Update surface list in sidebar

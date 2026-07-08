@@ -13,18 +13,8 @@ import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDepthProfilePanel } from "../engine/depthBinning.js";
-
-// Step 0) Find a matching solid in APP.kirraProjectSolids by blast name.
-//  Handles "EXTRUDED_" prefix that KAP solids may carry.
-function findMatchingSolid(blastName) {
-  var solids = APP.kirraProjectSolids || [];
-  for (var i = 0; i < solids.length; i++) {
-    if (solids[i].name === blastName) return solids[i];
-    var stripped = solids[i].name || "";
-    if (stripped.indexOf("EXTRUDED_") === 0 && stripped.substring(9) === blastName) return solids[i];
-  }
-  return null;
-}
+// Step 0) Canonical prefix-tolerant blast->solid matcher (shared with 3D playback).
+import { findMatchingSolid } from "../utils/solidMatch.js";
 
 // ============================================================
 //  HOLE TYPE TABLE HELPERS
@@ -314,6 +304,44 @@ function updateDrillDayEstimate() {
     parts.push("Est. Drill Days: add hole types to calculate");
   }
   el.innerHTML = parts.join(" &nbsp;|&nbsp; ");
+}
+
+// Step 3f) Default loading rate used only when no MPU is assigned yet.
+var DEFAULT_LOAD_RATE = 100000;
+
+// Step 3g) Read the currently-selected MPU ids from the multi-select.
+function readSelectedMPUs() {
+  var sel = document.getElementById("fAssignedMPUs");
+  var ids = [];
+  if (sel) {
+    for (var i = 0; i < sel.selectedOptions.length; i++) {
+      ids.push(sel.selectedOptions[i].value);
+    }
+  }
+  return ids;
+}
+
+// Step 3h) Sum the daily loading rate (kg/day) of the given MPU ids. The MPU is
+//   the sole driver of loading rate — multiple MPUs load in parallel, so their
+//   daily rates add. This replaces the old hand-entered Loading Rate field.
+function mpuLoadRate(mpuIds) {
+  var total = 0;
+  (mpuIds || []).forEach(function(id) {
+    var m = mpus.find(function(x) { return x.id === id; });
+    if (m) total += m.rateKg_per_day || 0;
+  });
+  return total;
+}
+
+// Step 3i) Refresh the read-only Loading Rate field from the selected MPUs.
+//   Blank (with a hint placeholder) when none are assigned, so it's clear the
+//   value comes from the MPU assignment and not manual entry.
+function updateLoadRateField() {
+  var el = document.getElementById("fLoadRate");
+  if (!el) return;
+  var rate = mpuLoadRate(readSelectedMPUs());
+  el.value = rate > 0 ? rate : "";
+  el.placeholder = "Assign an MPU (default " + DEFAULT_LOAD_RATE + ")";
 }
 
 // Step 4) Collect hole types from table into array.
@@ -682,7 +710,6 @@ function showAddBlastModal() {
   var fBlastDateMan = document.getElementById("fBlastDateManual");
   if (fBlastDateMan) fBlastDateMan.value = "";
   toggleDecoupleUI();
-  document.getElementById("fLoadRate").value = 100000;
   document.getElementById("fVolume").value = "";
   document.getElementById("fExpMass").value = "";
   // Step 6a) Clear hole type table and add one blank row
@@ -699,6 +726,7 @@ function showAddBlastModal() {
   document.getElementById("fDepMinLead").placeholder = "Global: " + APP.deps.minLeadDays;
   populateDrillDropdown([]);
   populateMPUDropdown([]);
+  updateLoadRateField();
   var prepStartEl = document.getElementById("fPrepStart");
   var prepDaysEl = document.getElementById("fPrepDays");
   if (prepStartEl) prepStartEl.value = "";
@@ -731,7 +759,6 @@ function editBlast(idx) {
   var fBlastDateMan2 = document.getElementById("fBlastDateManual");
   if (fBlastDateMan2) fBlastDateMan2.value = b.blastDate || "";
   toggleDecoupleUI();
-  document.getElementById("fLoadRate").value = b.loadRate;
   document.getElementById("fVolume").value = b.volume || "";
   document.getElementById("fExpMass").value = b.expMass || "";
   // Step 7a) Populate hole type table from blast
@@ -749,6 +776,7 @@ function editBlast(idx) {
   document.getElementById("fDepMinLead").placeholder = "Global: " + APP.deps.minLeadDays;
   populateDrillDropdown(b.assignedDrills || []);
   populateMPUDropdown(b.assignedMPUs || (b.assignedMPU ? [b.assignedMPU] : []));
+  updateLoadRateField();
   var prepStartEl = document.getElementById("fPrepStart");
   var prepDaysEl = document.getElementById("fPrepDays");
   if (prepStartEl) prepStartEl.value = b.prepStart || "";
@@ -798,7 +826,10 @@ function saveBlast() {
     if (firstPat) volume = area * firstPat.benchHt;
   }
 
-  var loadRate = parseFloat(document.getElementById("fLoadRate").value) || 100000;
+  // Step 8d-ii) Loading rate is DERIVED from the assigned MPUs (sum of their
+  //   kg/day rates), not entered by hand. Fall back to the default only when no
+  //   MPU is assigned so loadDays still computes sensibly.
+  var loadRate = mpuLoadRate(readSelectedMPUs()) || DEFAULT_LOAD_RATE;
   var noDrill = document.getElementById("fNoDrill").checked;
   var noLoad = document.getElementById("fNoLoad").checked;
   var noBlast = document.getElementById("fNoBlast").checked;
@@ -830,12 +861,8 @@ function saveBlast() {
   }
   var loadDays = (loadRate > 0 && expMass > 0) ? Math.max(1, Math.ceil(expMass / loadRate)) : 1;
 
-  // Step 8f) Read assigned MPUs
-  var assignedMPUs = [];
-  var mpuSelect = document.getElementById("fAssignedMPUs");
-  for (var mi = 0; mi < mpuSelect.selectedOptions.length; mi++) {
-    assignedMPUs.push(mpuSelect.selectedOptions[mi].value);
-  }
+  // Step 8f) Read assigned MPUs (also the source of loadRate above)
+  var assignedMPUs = readSelectedMPUs();
 
   // Step 8g) Read dependency overrides
   var fDepDL = document.getElementById("fDepDrillForLoad").value;
@@ -913,6 +940,11 @@ function saveBlast() {
     if (!blastData.prepDays && prev.prepDays) blastData.prepDays = prev.prepDays;
     if (blastData.assignedAncillary.length === 0 && prev.assignedAncillary) blastData.assignedAncillary = prev.assignedAncillary;
     if (prev.drillBlocks) blastData.drillBlocks = prev.drillBlocks;
+    // Step 8j-ii) Preserve 3D geometry that the modal form does NOT collect.
+    //   Without this, editing a blast (e.g. to change a rate) drops its boundary
+    //   polygon, which makes the blast, its equipment and its phase colour vanish
+    //   from the 3D playback — the reported "only the surface shows" regression.
+    if (prev.polygons) blastData.polygons = prev.polygons;
     APP.blasts[APP.editingBlastIdx] = blastData;
   } else {
     APP.blasts.push(blastData);
@@ -957,6 +989,12 @@ function initBlastModal() {
   // Step 9c) Update drill-day estimate when drill assignment changes
   document.getElementById("fAssignedDrills").addEventListener("change", function() {
     updateDrillDayEstimate();
+  });
+
+  // Step 9c-ii) Loading rate is driven by the assigned MPUs — refresh the
+  //   read-only Loading Rate field whenever the MPU selection changes.
+  document.getElementById("fAssignedMPUs").addEventListener("change", function() {
+    updateLoadRateField();
   });
 
   // Step 9c) Recalculate holes from % when surface area changes

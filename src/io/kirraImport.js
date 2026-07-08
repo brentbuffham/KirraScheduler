@@ -16,7 +16,7 @@ import { renderForecast } from "../views/forecastView.js";
 import { renderConformance } from "../views/conformanceView.js";
 import { renderEquipment } from "../views/equipmentView.js";
 import { showImportPreview } from "./importPreview.js";
-import { debouncedSave } from "../state/schedulerDB.js";
+import { debouncedSave, syncUIFromState } from "../state/schedulerDB.js";
 
 // Step 1) Parse Kirra charge configuration file (JSON, .kirra, or .zip)
 function parseKirraConfig(file) {
@@ -294,7 +294,8 @@ function parseKGPProject(file) {
       log.innerHTML += "<div class=\"log-ok\">Kirra Gantt Project v" + (data.version || "?") + " (" + Math.round(file.size / 1024) + " KB)</div>";
       log.innerHTML += "<div class=\"log-info\">Exported: " + (data.exportDate || "unknown") + "</div>";
 
-      // Step 2b) Restore global settings
+      // Step 2b) Restore global settings (including all dependency thresholds and
+      //   plan-week config) so the shared project reproduces the exact same schedule
       if (data.settings) {
         var s = data.settings;
         if (s.planStart) APP.planStart = new Date(s.planStart);
@@ -303,6 +304,9 @@ function parseKGPProject(file) {
         if (s.availability !== undefined) APP.availability = s.availability;
         if (s.utilisation !== undefined) APP.utilisation = s.utilisation;
         if (s.deps) APP.deps = s.deps;
+        if (s.planWeekStartDay !== undefined) APP.planWeekStartDay = s.planWeekStartDay;
+        if (s.planCycleWeeks !== undefined) APP.planCycleWeeks = s.planCycleWeeks;
+        if (s.planWeekColors) APP.planWeekColors = s.planWeekColors;
         log.innerHTML += "<div class=\"log-ok\">Settings restored</div>";
       }
 
@@ -381,15 +385,15 @@ function parseKGPProject(file) {
 
       log.innerHTML += "<div class=\"log-ok\" style=\"font-weight:700;margin-top:6px;\">Project restored successfully</div>";
 
-      // Step 2i) Sync toolbar inputs
-      var elWeeks = document.getElementById("ganttWeeks");
-      var elRigHours = document.getElementById("rigHours");
-      var elAvail = document.getElementById("availability");
-      var elUtil = document.getElementById("utilisation");
-      if (elWeeks) elWeeks.value = APP.ganttWeeks;
-      if (elRigHours) elRigHours.value = APP.rigHours;
-      if (elAvail) elAvail.value = APP.availability;
-      if (elUtil) elUtil.value = APP.utilisation;
+      // Step 2i) Sync ALL toolbar inputs from the restored settings.
+      //   CRITICAL: this must run BEFORE recalcDependencies(), because that function
+      //   reads the dependency thresholds (drill%, blast%, min-lead, overlap, enforce-seq)
+      //   straight from these DOM inputs and writes them back into APP.deps. If the inputs
+      //   still hold stale/default values, the restored deps are clobbered and the load/blast
+      //   dates are recomputed incorrectly. The previous manual sync used the wrong element
+      //   IDs (availability/utilisation instead of rigAvail/rigUtil) and skipped the dep inputs
+      //   entirely — the root cause of the "dependencies not carried over" bug.
+      syncUIFromState();
 
       // Step 2j) Persist and re-render everything
       recalcDependencies();

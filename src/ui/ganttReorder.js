@@ -38,7 +38,7 @@ function onReorderStart(e) {
   var grip = e.target.closest(".gantt-reorder-grip");
   if (!grip) return;
 
-  var td = grip.closest("td.sticky-col");
+  var td = grip.closest("td.gantt-sticky");
   if (!td) return;
   var blastIdx = parseInt(td.dataset.ctxIdx);
   if (isNaN(blastIdx)) return;

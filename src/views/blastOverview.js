@@ -94,6 +94,16 @@ function renderBlasts() {
       return "<span class=\"badge " + badge + "\">" + ht.type + "</span>";
     }).join(" ");
 
+    // Step 3a-ii) Derive the pattern list from holeTypes (matches CSV export),
+    //   so the Pattern column shows the actual assigned pattern IDs rather than the
+    //   legacy single b.pattern field (which is usually blank and rendered as a hyphen).
+    var patternIds = [];
+    (b.holeTypes || []).forEach(function(ht) {
+      var pid = ht.patternId || "";
+      if (pid && patternIds.indexOf(pid) === -1) patternIds.push(pid);
+    });
+    var patternSummary = patternIds.length > 0 ? patternIds.join(", ") : (b.pattern || "\u2014");
+
     var deps = getBlastDeps(b);
     var depSummary = Math.round(deps.drillPctForLoad * 100) + "%\u2192L";
     if (deps.drillPctForBlast < 1) depSummary += " " + Math.round(deps.drillPctForBlast * 100) + "%D\u2192B";
@@ -105,7 +115,7 @@ function renderBlasts() {
     html += "<td style=\"color:var(--text-primary);font-weight:600;\">" + b.name + hasWarning + "</td>";
     html += "<td><span class=\"badge " + statusDef.badgeClass + "\">" + statusDef.label + "</span></td>";
     html += "<td>" + b.mode + "</td>";
-    html += "<td>" + (b.pattern || "\u2014") + "</td>";
+    html += "<td>" + patternSummary + "</td>";
     html += "<td>" + holeTypeSummary + "</td>";
     html += "<td class=\"num\">" + formatNum(b.volume) + "</td>";
     html += "<td class=\"num\">" + formatNum(b.expMass) + "</td>";

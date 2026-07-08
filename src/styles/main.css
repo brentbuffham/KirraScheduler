@@ -21,7 +21,12 @@
   --accent-green: #10b981;
   --accent-purple: #8b5cf6;
   --accent-cyan: #06b6d4;
-  --accent-brand: #e53935;
+  /* Kirra brand interaction palette (matches Kirra/src/kirra.css :root).
+     Red is THE Kirra brand highlight — hover, click and selected all use it. */
+  --accent-brand: #ff0000;
+  --mouseover-color: #ff0000;
+  --click-color: #cc0000;
+  --selected-color: #ff5555;
   --accent-prep: #14b8a6;
   --presplit: #a78bfa;
   --buffer: #38bdf8;
@@ -118,15 +123,39 @@ body {
   font-family: 'DM Sans', 'Arial', 'Helvetica', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  overflow-x: hidden;
-  min-height: 100vh;
+  /* App-shell layout: fixed-height column so the header + tabs stay put and the
+     main content area owns the scroll. This lets the Gantt fill the remaining
+     viewport height and keep its horizontal scrollbar pinned to the bottom. */
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Step 3) Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Step) Scrollbars sized 15px so the horizontal (base) + vertical bars are
+   clearly noticeable and easy to grab. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
-::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-drill); }
+::-webkit-scrollbar-thumb {
+  background: var(--border-active);
+  border-radius: 7px;
+  /* transparent border creates padding around the thumb so it reads as a pill */
+  border: 3px solid var(--bg-secondary);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--accent-brand); background-clip: padding-box; }
+/* Firefox */
+* { scrollbar-width: auto; scrollbar-color: var(--border-active) var(--bg-secondary); }
+
+/* Step 3b) Form-control accent — Kirra brand red on every checkbox, radio and
+   slider by default (matches Kirra/src/kirra.css `accent-color: red`). More
+   specific rules (e.g. category-coded calendar toggles) can still override. */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--mouseover-color);
+}
 
 /* Step 4) Header */
 .app-header {
@@ -136,8 +165,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: sticky;
-  top: 0;
+  /* Fixed band in the app-shell column (no longer needs sticky) */
+  flex: 0 0 auto;
   z-index: 100;
 }
 .app-logo {
@@ -197,13 +226,36 @@ body {
   gap: 6px;
   white-space: nowrap;
 }
-.btn:hover { border-color: var(--border-active); color: var(--text-primary); background: var(--bg-card); }
-.btn-primary { background: var(--accent-drill); border-color: var(--accent-drill); color: #fff; }
-.btn-primary:hover { background: #2563eb; }
-.btn-danger { background: var(--accent-blast); border-color: var(--accent-blast); color: #fff; }
-.btn-danger:hover { background: #dc2626; }
-.btn-success { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
-.btn-warning { background: var(--accent-load); border-color: var(--accent-load); color: #000; }
+/* Kirra brand: buttons are neutral ("blank") by default and turn Kirra red on
+   hover, darker red while pressed. The semantic variant classes keep their
+   names (referenced by JS/markup) but render neutral like .btn so the whole
+   toolbar stays consistent — the only always-on colour cue is icon-based. */
+.btn:hover,
+.btn-primary:hover,
+.btn-danger:hover,
+.btn-success:hover,
+.btn-warning:hover {
+  background: var(--mouseover-color);
+  border-color: var(--mouseover-color);
+  color: #fff;
+}
+.btn:active,
+.btn-primary:active,
+.btn-danger:active,
+.btn-success:active,
+.btn-warning:active {
+  background: var(--click-color);
+  border-color: var(--click-color);
+  color: #fff;
+}
+.btn-primary,
+.btn-danger,
+.btn-success,
+.btn-warning {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
 .btn svg { width: 14px; height: 14px; }
 
 /* Step 6) Tabs */
@@ -214,6 +266,8 @@ body {
   padding: 0 24px;
   gap: 0;
   overflow-x: auto;
+  /* Fixed band in the app-shell column */
+  flex: 0 0 auto;
 }
 .tab {
   font-family: 'JetBrains Mono', monospace;
@@ -228,12 +282,45 @@ body {
 .tab:hover { color: var(--text-secondary); }
 .tab.active { color: var(--accent-brand); border-bottom-color: var(--accent-brand); }
 
-/* Step 7) Main Layout */
-.main-content { padding: 16px 24px; }
+/* Step 7) Main Layout — the single scroll region of the app shell.
+   Non-Gantt tabs scroll here; the Gantt tab fills this area and manages its own
+   internal scroll (see #tab-gantt.active below). */
+.main-content {
+  padding: 16px 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 /* Tab Panels */
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
+
+/* Step 7a) Gantt tab fills the main-content height and lays out as a column so
+   the Gantt scroll region (and its always-visible horizontal scrollbar) grows to
+   fill whatever space the settings/stats bars leave, regardless of their height. */
+#tab-gantt.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+#tab-gantt.active > .settings-bar,
+#tab-gantt.active > .stats-row {
+  flex: 0 0 auto;
+}
+#tab-gantt.active .gantt-body-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Keep the delay palette at its natural height rather than stretching full-height */
+#tab-gantt.active .gantt-body-row > .delay-palette {
+  align-self: flex-start;
+}
 
 /* Step 8) Settings bar */
 .settings-bar {
@@ -272,7 +359,7 @@ body {
 }
 .setting-group input:focus, .setting-group select:focus {
   outline: none;
-  border-color: var(--accent-drill);
+  border-color: var(--accent-brand);
 }
 
 /* Step 9) Gantt Chart */
@@ -281,11 +368,22 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  /* Column so the inner scroll region can flex-fill the container height */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 .gantt-scroll {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 280px);
+  /* Fill the container; the flex parent bounds the height to the viewport so the
+     horizontal scrollbar is always pinned to the bottom and visible. Fallback
+     max-height keeps it sane if the flex chain is ever broken. */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - 160px);
 }
 .gantt-table {
   width: max-content;
@@ -308,17 +406,36 @@ body {
   font-weight: 500;
   text-align: center;
 }
-.gantt-table thead th.sticky-col {
+/* Step 9a-ii) Frozen (sticky) columns — the left/width are set inline per column
+   by ganttColumns.js so the columns can be resized by dragging their grabber. */
+.gantt-table thead th.gantt-sticky {
   position: sticky;
-  left: 0;
   z-index: 40;
   background: var(--bg-secondary);
+  overflow: hidden;
+  white-space: nowrap;
 }
-.gantt-table thead th.sticky-col-2 {
-  position: sticky;
-  left: 180px;
-  z-index: 40;
-  background: var(--bg-secondary);
+/* Step 9a-iii) Column resize grabber sits on the right edge of each header cell.
+   At rest it shows a visible divider so users can see the column boundary;
+   on hover/drag it highlights in the Kirra brand red. */
+.gantt-col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 45;
+  user-select: none;
+  /* Resting: a clearly visible 2px divider on the right edge */
+  border-right: 2px solid var(--border-active);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.gantt-col-resize:hover,
+.gantt-col-resize:active {
+  /* Kirra icon red highlight while hovering / dragging */
+  border-right-color: var(--accent-brand);
+  background: rgba(229, 57, 53, 0.28);
 }
 /* Step 9b) Stacked sticky header rows — top offsets set by JS after render
    for pixel-accurate alignment. Default top:0 as fallback.
@@ -389,30 +506,30 @@ body {
   font-size: 12px;
   background: var(--bg-card);
 }
-.gantt-row td.sticky-col {
+/* Step 10b) Frozen row cells — left/width set inline per column by ganttColumns.js */
+.gantt-row td.gantt-sticky {
   position: sticky;
-  left: 0;
   background: var(--bg-card);
   z-index: 20;
-  padding-left: 16px;
-  padding-right: 8px;
-  min-width: 180px;
-  max-width: 180px;
+  padding: 3px 6px;
   font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Subtle vertical separator so body columns line up with the header dividers */
+  border-right: 1px solid var(--border-row);
 }
-.gantt-row td.sticky-col-2 {
-  position: sticky;
-  left: 180px;
-  background: var(--bg-card);
-  z-index: 20;
-  padding: 3px 8px;
+/* Step 10b-ii) The name column reads left-aligned; equip + qty read right-aligned muted */
+.gantt-row td.gantt-col-name { padding-left: 4px; }
+.gantt-row td.gantt-col-equip,
+.gantt-row td.gantt-col-value {
   text-align: right;
   color: var(--text-muted);
-  min-width: 90px;
 }
+.gantt-row td.gantt-col-handle { padding: 0; text-align: center; }
+.gantt-row td.gantt-col-edit { padding: 3px 2px; }
 .gantt-row:hover td { background: var(--bg-tertiary); }
-.gantt-row:hover td.sticky-col,
-.gantt-row:hover td.sticky-col-2 { background: var(--bg-tertiary); }
+.gantt-row:hover td.gantt-sticky { background: var(--bg-tertiary); }
 
 /* Step 11) Gantt bar cells */
 .gantt-cell {
@@ -520,7 +637,7 @@ body {
   opacity: 1;
   color: var(--accent-brand);
 }
-.gantt-row td.sticky-col:hover .gantt-edit-btn {
+.gantt-row td.gantt-sticky:hover .gantt-edit-btn {
   opacity: 0.8;
 }
 
@@ -577,9 +694,11 @@ body {
   background: rgba(245, 158, 11, 0.2);
 }
 
-/* Step 11c) Block sub-row styling */
-.gantt-block-row td.sticky-col {
-  padding-left: 26px;
+/* Step 11c) Block sub-row styling — indent the name cell, smaller text on frozen cells */
+.gantt-block-row td.gantt-col-name {
+  padding-left: 12px;
+}
+.gantt-block-row td.gantt-sticky {
   font-size: 11px;
 }
 .block-label {
@@ -709,6 +828,34 @@ body {
 .data-table {
   width: 100%;
   border-collapse: collapse;
+}
+/* Step) Inline rename inputs in the import preview / KAP manifest tables.
+   Look like editable cells (not heavy form fields) but highlight on focus. */
+.import-rename,
+.kap-rename {
+  width: 100%;
+  min-width: 120px;
+  box-sizing: border-box;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+}
+.import-rename::placeholder,
+.kap-rename::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+.import-rename:focus,
+.kap-rename:focus {
+  outline: none;
+  border-color: var(--accent-brand);
+  background: var(--bg-card);
 }
 .data-table th {
   font-family: 'JetBrains Mono', monospace;
@@ -858,7 +1005,7 @@ body {
   user-select: none;
 }
 .pat-action-toggle input[type="checkbox"] {
-  accent-color: var(--accent-cyan);
+  accent-color: var(--mouseover-color);
   width: 13px;
   height: 13px;
   cursor: pointer;
@@ -876,7 +1023,7 @@ body {
   background: rgba(59,130,246,0.02);
 }
 .drop-zone:hover, .drop-zone.dragover {
-  border-color: var(--accent-drill);
+  border-color: var(--accent-brand);
   background: rgba(59,130,246,0.06);
 }
 .drop-zone .drop-icon { font-size: 38px; margin-bottom: 12px; opacity: 0.4; }
@@ -1034,7 +1181,18 @@ body {
 }
 .form-field input:focus, .form-field select:focus {
   outline: none;
-  border-color: var(--accent-drill);
+  border-color: var(--accent-brand);
+}
+/* Read-only / derived fields (e.g. Loading Rate from MPUs) read as auto-filled:
+   dimmed, non-interactive, and never show the focus accent. */
+.form-field input[readonly] {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.form-field input[readonly]:focus {
+  border-color: var(--border);
 }
 
 /* Step 19) Import log */
@@ -1236,7 +1394,7 @@ select[multiple] option {
   padding: 3px 6px;
 }
 select[multiple] option:checked {
-  background: var(--accent-drill);
+  background: var(--accent-brand);
   color: #fff;
 }
 
@@ -1604,8 +1762,8 @@ select[multiple] option:checked {
 
 /* Step 35) Delay drop target highlight */
 .gantt-cell.delay-drop-target {
-  background: rgba(59,130,246,0.15) !important;
-  outline: 2px dashed var(--accent-drill);
+  background: rgba(229,57,53,0.15) !important;
+  outline: 2px dashed var(--accent-brand);
   outline-offset: -2px;
 }
 
@@ -2025,7 +2183,7 @@ select[multiple] option:checked {
 .reset-option input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #ef4444;
+  accent-color: var(--mouseover-color);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -2220,8 +2378,8 @@ select[multiple] option:checked {
   transform: translateY(-2px);
 }
 .startup-btn-examples:hover {
-  border-color: var(--accent-drill);
-  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--accent-brand);
+  background: rgba(229, 57, 53, 0.08);
 }
 .startup-btn-fresh:hover {
   border-color: var(--accent-green);

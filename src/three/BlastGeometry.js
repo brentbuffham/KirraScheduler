@@ -18,8 +18,10 @@ var PHASE_COLORS = {
   planned:   0x666677,   // Grey — not yet active
   prep:      0x22c55e,   // Green — pattern prep
   drilling:  0x3b82f6,   // Blue — active drilling
+  drilled:   0x2c5aa8,   // Muted blue — drilling done, awaiting load (retained state)
   inactive:  0x555566,   // Grey — gap between phases
   loading:   0xf59e0b,   // Orange/Yellow — loading explosives
+  loaded:    0xb8860b,   // Muted amber — loading done, awaiting blast (retained state)
   blastDay:  0xef4444,   // Red — detonation (will flash)
   completed: 0x111111,   // Near-black — post-blast shadow
   active:    0x3b82f6    // Alias for drilling
@@ -30,8 +32,10 @@ var PHASE_OPACITY = {
   planned:   1.0,
   prep:      1.0,
   drilling:  1.0,
+  drilled:   1.0,
   inactive:  1.0,
   loading:   1.0,
+  loaded:    1.0,
   blastDay:  1.0,
   completed: 0.10
 };
@@ -321,6 +325,12 @@ function setAllLabelsVisible(visible) {
   }
 }
 
+// Step 7c) Show or hide a single blast's label (used for the "active-day only" option)
+function setBlastLabelVisible(blastName, visible) {
+  var entry = _blastMeshes[blastName];
+  if (entry && entry.label) entry.label.visible = visible;
+}
+
 // Step 8) Get blast centroid (local coords)
 function getBlastCentroid(blastName) {
   var entry = _blastMeshes[blastName];
@@ -394,6 +404,7 @@ export {
   createBlastLabel,
   setBlastPhase,
   setAllLabelsVisible,
+  setBlastLabelVisible,
   updateFlashAnimation,
   getBlastCentroid,
   getBlastTopZ,

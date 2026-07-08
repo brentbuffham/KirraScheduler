@@ -6,7 +6,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { isoDate } from "../utils/dateUtils.js";
+import { isoDate, addDays } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { renderBlasts } from "../views/blastOverview.js";
@@ -16,6 +16,17 @@ import { debouncedSave } from "../state/schedulerDB.js";
 function fmtNum(v) {
   if (v === null || v === undefined || v === 0) return "\u2014";
   return Math.round(v).toLocaleString();
+}
+
+// Step 1b) Escape a string for safe use inside an HTML attribute value.
+//   Blast/solid names can be blank or contain quotes, so the rename inputs
+//   must escape them before being interpolated into the value="" attribute.
+function escapeAttr(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 // Step 2) Display imported blasts in the preview table
@@ -30,13 +41,16 @@ function showImportPreview() {
   html += "<th>Hole Types</th>";
   html += "</tr></thead><tbody>";
 
-  APP.importedBlasts.forEach(function(b) {
+  APP.importedBlasts.forEach(function(b, idx) {
     var sourceType = b._sourceType || "import";
     var sourceLabel = sourceType === "solid" ? "Solid" : "Holes";
     var sourceBadge = sourceType === "solid" ? "badge-buffer" : "badge-production";
 
     html += "<tr>";
-    html += "<td style=\"font-weight:600;color:var(--text-primary)\">" + b.name + "</td>";
+    // Step 2-i) Editable name so solids imported without (or with a generic)
+    //   name can be renamed before merge. data-imp-idx routes to the change handler.
+    html += "<td><input type=\"text\" class=\"import-rename\" data-imp-idx=\"" + idx +
+      "\" value=\"" + escapeAttr(b.name) + "\" placeholder=\"Unnamed solid\" title=\"Rename this blast solid\"></td>";
     html += "<td><span class=\"badge " + sourceBadge + "\">" + sourceLabel + "</span></td>";
     html += "<td class=\"num\">" + fmtNum(b.volume) + "</td>";
     html += "<td class=\"num\">" + fmtNum(b.surfaceArea) + "</td>";
@@ -93,7 +107,10 @@ function showKapSurfaceManifest() {
       : "<span class=\"badge badge-presplit\">" + m.openEdges + " open</span>";
     html += "<tr>";
     html += "<td><input type=\"checkbox\" class=\"kap-manifest-cb\" data-idx=\"" + idx + "\"" + (m.isBlast ? " checked" : "") + "></td>";
-    html += "<td style=\"font-weight:600;color:var(--text-primary)\">" + m.name + "</td>";
+    // Step 2B-i) Editable surface/solid name — renames the underlying surfObj
+    //   AND its blastEntry so the blast<->solid link survives the merge.
+    html += "<td><input type=\"text\" class=\"kap-rename\" data-kap-idx=\"" + idx +
+      "\" value=\"" + escapeAttr(m.name) + "\" placeholder=\"Unnamed surface\" title=\"Rename this surface / blast solid\"></td>";
     html += "<td>" + meshBadge + "</td>";
     html += "<td class=\"num\">" + fmtNum(m.volume) + "</td>";
     html += "<td class=\"num\">" + fmtNum(m.surfaceArea) + "</td>";
@@ -142,6 +159,18 @@ function resolveKapManifest(loadBlasts) {
   if (mergeBtn) mergeBtn.textContent = "Merge into Schedule";
 }
 
+// Step 2D) Optionally seed a Pattern Prep window on a blast so the Prep section of
+//  the Gantt is populated on import. Prep finishes the day before drilling starts.
+//  Existing prep is left untouched; blasts without a drillStart are skipped.
+function applyPrepToBlast(blast, prepDays) {
+  if (!blast || !prepDays || prepDays < 1) return;
+  if (blast.prepStart && blast.prepDays) return;
+  var anchor = blast.drillStart || isoDate(APP.planStart);
+  // Step 2D-i) Prep runs the prepDays immediately BEFORE the drill start
+  blast.prepStart = isoDate(addDays(new Date(anchor), -prepDays));
+  blast.prepDays = prepDays;
+}
+
 // Step 3) Merge imported blasts into the main schedule
 function mergeImported() {
   // Resolve a pending KAP manifest first — selected surfaces become the
@@ -149,6 +178,12 @@ function mergeImported() {
   if (APP.kapSurfaceManifest) {
     resolveKapManifest(true);
   }
+
+  // Step 3-pre) Read the Pattern Prep import options from the footer controls
+  var prepToggle = document.getElementById("importAddPrep");
+  var prepDaysEl = document.getElementById("importPrepDays");
+  var addPrep = prepToggle ? prepToggle.checked : false;
+  var prepDays = prepDaysEl ? (parseInt(prepDaysEl.value) || 2) : 2;
 
   APP.importedBlasts.forEach(function(imp) {
     var existing = APP.blasts.find(function(b) { return b.name === imp.name; });
@@ -189,11 +224,13 @@ function mergeImported() {
           };
         });
       }
+      // Step 3a-ii) Seed prep window if requested
+      if (addPrep) applyPrepToBlast(existing, prepDays);
     } else {
       // Step 3b) Create new blast entry with all available data.
       // Auto-enable useBlockDepth for solid-sourced imports that have volume.
       var isSolid = (imp._sourceType === "solid" && imp.volume > 0);
-      APP.blasts.push({
+      var newBlast = {
         name: imp.name,
         mode: "Manual",
         surfaceArea: imp.surfaceArea || 0,
@@ -231,7 +268,10 @@ function mergeImported() {
         depthBinData: imp.depthBinData || null,
         drillProgress: 0,
         loadProgress: 0
-      });
+      };
+      // Step 3b-ii) Seed prep window if requested, then commit
+      if (addPrep) applyPrepToBlast(newBlast, prepDays);
+      APP.blasts.push(newBlast);
     }
   });
 
@@ -273,6 +313,17 @@ function initImportPreview() {
   var table = document.getElementById("importTable");
   if (table) {
     table.addEventListener("change", function(e) {
+      // Step 5a-0) Rename handlers run first — they apply to both preview modes
+      //   and must not be blocked by the manifest early-return below.
+      if (e.target.classList.contains("kap-rename")) {
+        e.target.value = renameManifestRow(parseInt(e.target.getAttribute("data-kap-idx"), 10), e.target.value);
+        return;
+      }
+      if (e.target.classList.contains("import-rename")) {
+        e.target.value = renameImportedBlast(parseInt(e.target.getAttribute("data-imp-idx"), 10), e.target.value);
+        return;
+      }
+
       var manifest = APP.kapSurfaceManifest;
       if (!manifest) return;
 
@@ -299,6 +350,46 @@ function initImportPreview() {
       setManifestRow(idx, !m.isBlast, badge.closest("tr"));
     });
   }
+}
+
+// Step 5a-i) Rename a KAP manifest row. Renames the display name, the
+//   underlying surfObj, and the blastEntry together so the blast<->solid
+//   link (matched by name) stays intact through the merge. Blank input
+//   falls back to a generated "Surface_N" name so nothing is ever nameless.
+function renameManifestRow(idx, rawName) {
+  var manifest = APP.kapSurfaceManifest;
+  if (!manifest || !manifest[idx]) return rawName;
+  var m = manifest[idx];
+  var name = (rawName || "").trim();
+  if (!name) name = "Surface_" + (idx + 1);
+  m.name = name;
+  if (m.surfObj) m.surfObj.name = name;
+  if (m.blastEntry) m.blastEntry.name = name;
+  debouncedSave();
+  return name;
+}
+
+// Step 5a-ii) Rename an imported blast (DXF holes or committed solid). If a
+//   matching solid already sits in APP.kirraProjectSolids under the old name,
+//   rename it too so findMatchingSolid() still resolves after merge.
+function renameImportedBlast(idx, rawName) {
+  var list = APP.importedBlasts || [];
+  if (!list[idx]) return rawName;
+  var oldName = list[idx].name;
+  var name = (rawName || "").trim();
+  if (!name) name = "Solid_" + (idx + 1);
+
+  var solids = APP.kirraProjectSolids || [];
+  for (var i = 0; i < solids.length; i++) {
+    var sName = solids[i].name || "";
+    var stripped = sName.indexOf("EXTRUDED_") === 0 ? sName.substring(9) : sName;
+    if (sName === oldName || stripped === oldName) {
+      solids[i].name = name;
+    }
+  }
+  list[idx].name = name;
+  debouncedSave();
+  return name;
 }
 
 // Step 5b) Apply a Blast/Surface choice to one manifest row and sync the

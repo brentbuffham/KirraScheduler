@@ -150,10 +150,50 @@ function getBlastPhase(blast, dateStr) {
     }
   }
 
-  // Step 3f) Date falls within the overall blast window but no active phase = inactive
+  // Step 3f) Date falls within the overall blast window but nothing is actively
+  //   worked today. Instead of a flat grey "inactive", carry a muted "retained"
+  //   colour reflecting the last milestone the blast passed, so it keeps a
+  //   semblance of its last state:
+  //     - loading finished (awaiting blast)  -> "loaded"  (muted yellow)
+  //     - drilling finished (awaiting load)   -> "drilled" (muted blue)
+  //     - otherwise (e.g. gap before drilling) -> "inactive" (grey)
   var anyStart = blast.prepStart || blast.drillStart || blast.loadStart;
   var anyEnd = blast.blastDate || blast.loadStart || blast.drillStart;
   if (anyStart && dateStr >= anyStart && anyEnd && dateStr <= anyEnd) {
+    // Step 3f-i) Has loading already finished before today?
+    if (!blast.noLoad && blast.loadStart && blast.loadDays) {
+      var lEnd = new Date(blast.loadStart);
+      lEnd.setDate(lEnd.getDate() + blast.loadDays - 1);
+      if (dateStr > isoDate(lEnd)) {
+        return { phase: "loaded", drills: [], mpus: [] };
+      }
+    }
+
+    // Step 3f-ii) Has drilling already finished before today? (use the latest
+    //   block end when drill blocks are present, else the single drill window)
+    var drillEndStr = null;
+    if (!blast.noDrill) {
+      if (blast.drillBlocks && blast.drillBlocks.length > 0) {
+        for (var bi = 0; bi < blast.drillBlocks.length; bi++) {
+          var blk = blast.drillBlocks[bi];
+          if (blk.drillStart && blk.drillDays) {
+            var bEnd = new Date(blk.drillStart);
+            bEnd.setDate(bEnd.getDate() + blk.drillDays - 1);
+            var bEndStr = isoDate(bEnd);
+            if (!drillEndStr || bEndStr > drillEndStr) drillEndStr = bEndStr;
+          }
+        }
+      } else if (blast.drillStart && blast.drillDays) {
+        var dEnd = new Date(blast.drillStart);
+        dEnd.setDate(dEnd.getDate() + blast.drillDays - 1);
+        drillEndStr = isoDate(dEnd);
+      }
+    }
+    if (drillEndStr && dateStr > drillEndStr) {
+      return { phase: "drilled", drills: [], mpus: [] };
+    }
+
+    // Step 3f-iii) No milestone reached yet — fall back to grey inactive
     return { phase: "inactive", drills: [], mpus: [] };
   }
 

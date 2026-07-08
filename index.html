@@ -147,15 +147,15 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
         Recalc Dates
       </button>
-      <button class="btn" id="btnAutoSchedule" style="background:var(--accent-purple);color:#fff;">
+      <button class="btn" id="btnAutoSchedule">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
         Auto Schedule
       </button>
     </div>
 
     <div class="stats-row" id="ganttStats"></div>
-    <div style="display:flex;gap:12px;align-items:flex-start;">
-      <div class="gantt-container" style="flex:1;min-width:0;">
+    <div class="gantt-body-row">
+      <div class="gantt-container">
         <div class="gantt-scroll" id="ganttScroll">
           <table class="gantt-table" id="ganttTable"></table>
         </div>
@@ -408,6 +408,7 @@
             <label class="playback-toggle"><input type="checkbox" id="pbShowAllBlasts" checked> Show all blasts</label>
             <label class="playback-toggle"><input type="checkbox" id="pbShowHoles"> Show drill holes</label>
             <label class="playback-toggle"><input type="checkbox" id="pbShowLabels" checked> Show blast labels</label>
+            <label class="playback-toggle"><input type="checkbox" id="pbLabelsDayOnly"> Only active-day blasts</label>
           </div>
         </div>
         <div class="playback-sidebar-section">
@@ -640,6 +641,13 @@
         <table class="data-table" id="importTable"></table>
       </div>
       <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <label style="cursor:pointer; font-size:12px; color:var(--text-secondary); margin-right:12px;">
+          <input type="checkbox" id="importAddPrep" style="width:auto; min-width:auto; vertical-align:middle;"> Add Pattern Prep
+        </label>
+        <label style="font-size:12px; color:var(--text-secondary); margin-right:16px;">
+          Prep days
+          <input type="number" id="importPrepDays" value="2" min="1" max="30" style="width:56px; margin-left:4px;">
+        </label>
         <button class="btn btn-success" id="btnMergeImported">Merge into Schedule</button>
         <button class="btn" id="btnClearImported" style="margin-left:8px;">Discard</button>
       </div>
@@ -985,8 +993,8 @@
 
         <div class="form-row" style="margin-top:12px;">
           <div class="form-field">
-            <label>Loading Rate (kg/day)</label>
-            <input type="number" id="fLoadRate" value="100000">
+            <label>Loading Rate (kg/day) — from assigned MPUs</label>
+            <input type="number" id="fLoadRate" readonly title="Driven by the assigned MPU rate(s). Assign MPUs under the Equipment &amp; Progress tab to change this.">
           </div>
           <div class="form-field">
             <label>Volume (bcm) — auto-summed from hole types</label>

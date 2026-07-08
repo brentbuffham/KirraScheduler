@@ -17,6 +17,7 @@ import { initGanttResize } from "../ui/ganttResize.js";
 import { applySelectionHighlight } from "../ui/ganttSelect.js";
 import { initGanttReorder } from "../ui/ganttReorder.js";
 import { renderConnectors } from "../ui/ganttConnectors.js";
+import { getColumns, getColumnCount, cellStyle, setWidth, applyColumnLayout } from "../ui/ganttColumns.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { getDelayType } from "../state/delayTypes.js";
 import { getBlastStatus } from "../state/blastStatus.js";
@@ -133,6 +134,17 @@ function buildModeToggle(blastIdx, isManual) {
     "</label>";
 }
 
+// Step 0e) Build one frozen (sticky) row cell for a given column.
+//   colIdx = position in the column list (drives the left offset + width),
+//   key = column key (drives data-col-key used by the resize + layout logic),
+//   ctxAttrs = the shared data-ctx-* attributes so context-menu / edit / reorder
+//   handlers can resolve the blast index from ANY frozen cell in the row.
+function stickyTd(colIdx, key, inner, ctxAttrs, extraCls) {
+  return "<td class=\"gantt-sticky gantt-col-" + key + (extraCls ? " " + extraCls : "") + "\" " +
+    "data-col-key=\"" + key + "\" style=\"" + cellStyle(colIdx) + "\"" + (ctxAttrs || "") + ">" +
+    (inner || "") + "</td>";
+}
+
 // Step 1) Main Gantt rendering function
 function renderGantt() {
   // Step 1a) Read settings from UI
@@ -192,9 +204,18 @@ function renderGantt() {
   // Step 1d) Build Gantt table header
   var html = "<thead>";
 
-  // Month row
-  html += "<tr class=\"header-row-month\"><th class=\"sticky-col\" rowspan=\"3\" style=\"text-align:left;min-width:180px;\">Blast</th>";
-  html += "<th class=\"sticky-col-2\" rowspan=\"3\" style=\"min-width:90px;\">Info</th>";
+  // Month row — build one frozen header cell per column (grip | edit | name | equip | qty),
+  //   each with a right-edge resize grabber so the frozen columns are user-resizable.
+  html += "<tr class=\"header-row-month\">";
+  var cols = getColumns();
+  for (var ci0 = 0; ci0 < cols.length; ci0++) {
+    var col = cols[ci0];
+    var alignStyle = (col.key === "name") ? "text-align:left;" : "";
+    html += "<th class=\"gantt-sticky gantt-col-" + col.key + "\" data-col-key=\"" + col.key + "\" rowspan=\"3\" style=\"" + alignStyle + cellStyle(ci0) + "\">" +
+      col.label +
+      "<span class=\"gantt-col-resize\" data-col-key=\"" + col.key + "\" title=\"Drag to resize\"></span>" +
+      "</th>";
+  }
   var prevMonth = "";
   for (var mi = 0; mi < dates.length; mi++) {
     var d = dates[mi];
@@ -427,7 +448,7 @@ function renderGantt() {
     var secKey = sectionName.toLowerCase();
     var collapsed = _collapsedSections[secKey] ? " collapsed" : "";
     html += "<tr class=\"gantt-section-header" + collapsed + "\" data-section-toggle=\"" + secKey + "\">";
-    html += "<td colspan=\"" + (dates.length + 2) + "\">";
+    html += "<td colspan=\"" + (dates.length + getColumnCount()) + "\">";
     html += "<span class=\"collapse-arrow\">\u25BC</span>";
     html += "<span class=\"section-icon\" style=\"background:" + color + "\"></span>" + sectionName;
     html += "</td></tr>";
@@ -446,21 +467,26 @@ function renderGantt() {
             end: isoDate(addDays(new Date(block.drillStart), (block.drillDays || 1) - 1))
           };
 
-          // Step) Build info column for this block (including crew badges)
+          // Step) Build split frozen columns for this block
           var blockDrillTag = buildDrillChips(block.assignedDrills || [], idx, blockIdx);
           var blockCrewReq = calcDrillCrewRequired(blast, drills);
           var blockCrewAlloc = ensureCrewAllocated(blast).drilling;
           var blockCrewHtml = buildCrewBadges(blockCrewAlloc, blockCrewReq);
           var blockPctBadge = (block.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(block.drillProgress * 100) + "%</span>" : "";
-          var blockInfo = blockDrillTag + formatNum(block.meters || 0) + "m" + blockPctBadge + blockCrewHtml;
+          var blockValue = formatNum(block.meters || 0) + "m" + blockPctBadge + blockCrewHtml;
 
-          // Step) Block row with edit icon, mode toggle, and indented name
+          // Step) Shared ctx attributes for every frozen cell in this block row
+          var blockCtx = " data-ctx-idx=\"" + idx + "\" data-ctx-section=\"drilling\" data-ctx-block=\"" + blockIdx + "\"";
+          var blockNameHtml = "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name + buildStatusBadge(blast);
+
+          // Step) Block row — blocks are not reorderable, so the grip cell stays empty
           var blockFiredCls = (blast.status === "fired") ? " fired-row" : "";
           html += "<tr class=\"gantt-row gantt-block-row" + blockFiredCls + "\" data-blast=\"" + idx + "\" data-section=\"drilling\" data-block=\"" + blockIdx + "\">";
-          html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"drilling\" data-ctx-block=\"" + blockIdx + "\">";
-          html += EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + "<span class=\"block-label\">[" + block.label + "]</span> " + blast.name + buildStatusBadge(blast);
-          html += "</td>";
-          html += "<td class=\"sticky-col-2\">" + blockInfo + "</td>";
+          html += stickyTd(0, "handle", "", blockCtx);
+          html += stickyTd(1, "edit", EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual"), blockCtx);
+          html += stickyTd(2, "name", blockNameHtml, blockCtx);
+          html += stickyTd(3, "equip", blockDrillTag, blockCtx);
+          html += stickyTd(4, "value", blockValue, blockCtx);
           html += renderBarCells(blockRange, blast, idx, sectionName, deps, comp, block.assignedDrills, block.drillStartTime, block);
           html += "</tr>";
         });
@@ -484,14 +510,16 @@ function renderGantt() {
         maintIcon = "<span class=\"dep-warning\" title=\"" + blast._maintWarnings.join("; ") + "\">\u26A0</span>";
       }
 
-      var info = "";
+      // Step 1f-ii-cols) Build the EQUIPMENT and QTY columns separately per section
+      var equipHtml = "";
+      var valueHtml = "";
       if (sectionName === "PATTERN PREP") {
-        // Step 1f-ii-prep) Show assigned ancillary equipment
+        // Step 1f-ii-prep) Ancillary equipment + prep-days
         var ancIds = blast.assignedAncillary || [];
-        info = ancIds.length > 0 ? ancIds.join(", ") : "";
-        if (blast.prepDays) info += (info ? " " : "") + blast.prepDays + "d";
+        equipHtml = ancIds.length > 0 ? ancIds.join(", ") : "";
+        valueHtml = blast.prepDays ? (blast.prepDays + "d") : "";
       } else if (sectionName === "DRILLING") {
-        var drillTag = buildDrillChips(blast.assignedDrills || [], idx, null);
+        equipHtml = buildDrillChips(blast.assignedDrills || [], idx, null);
         // Step) Crew fill badges for drilling
         var drillCrewReq = calcDrillCrewRequired(blast, drills);
         var drillCrewAlloc = ensureCrewAllocated(blast).drilling;
@@ -507,19 +535,19 @@ function renderGantt() {
           if (hasConflict) conflictBadge = "<span class=\"fleet-conflict-badge\" title=\"Drill rig double-booked\">\u26A0 CONFLICT</span>";
         }
         var drillPctBadge = (blast.drillProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.drillProgress * 100) + "%</span>" : "";
-        info = drillTag + formatNum(getTotalDrillMeters(blast)) + "m" + drillPctBadge + depIcon + maintIcon + drillCrewHtml + conflictBadge;
+        valueHtml = formatNum(getTotalDrillMeters(blast)) + "m" + drillPctBadge + depIcon + maintIcon + drillCrewHtml + conflictBadge;
       } else if (sectionName === "LOADING") {
         // Step 1f-ii-mpu) Build MPU chips from array (backward compat with legacy single assignedMPU)
         var mpuList = blast.assignedMPUs || (blast.assignedMPU ? [blast.assignedMPU] : []);
-        var mpuTag = buildMPUChips(mpuList, idx);
+        equipHtml = buildMPUChips(mpuList, idx);
         // Step) Crew fill badges for loading
         var loadCrewReq = calcLoadCrewRequired(blast, mpus);
         var loadCrewAlloc = ensureCrewAllocated(blast).loading;
         var loadCrewHtml = buildCrewBadges(loadCrewAlloc, loadCrewReq);
         var loadPctBadge = (blast.loadProgress > 0) ? "<span class=\"progress-badge\">" + Math.round(blast.loadProgress * 100) + "%</span>" : "";
-        info = mpuTag + formatNum(blast.expMass) + "kg" + loadPctBadge + depIcon + loadCrewHtml;
+        valueHtml = formatNum(blast.expMass) + "kg" + loadPctBadge + depIcon + loadCrewHtml;
       } else {
-        info = formatNum(blast.volume) + " bcm";
+        valueHtml = formatNum(blast.volume) + " bcm";
       }
 
       var phaseBadges = "";
@@ -527,11 +555,17 @@ function renderGantt() {
       if (blast.noLoad) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-blast);\" title=\"No Loading\">NL</span>";
       if (blast.noBlast) phaseBadges += "<span class=\"no-drill-badge\" style=\"background:var(--accent-prep);\" title=\"No Blasting\">NB</span>";
       var firedCls = (blast.status === "fired") ? " fired-row" : "";
+
+      // Step 1f-ii-emit) Shared ctx attributes so any frozen cell resolves the blast index
+      var rowCtx = " data-ctx-idx=\"" + idx + "\" data-ctx-section=\"" + secKey + "\"";
+      var nameHtml = blast.name + buildStatusBadge(blast) + phaseBadges;
+
       html += "<tr class=\"gantt-row" + firedCls + "\" data-blast=\"" + idx + "\" data-section=\"" + secKey + "\">";
-      html += "<td class=\"sticky-col\" data-ctx-idx=\"" + idx + "\" data-ctx-section=\"" + secKey + "\">";
-      html += REORDER_GRIP + EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual") + blast.name + buildStatusBadge(blast) + phaseBadges;
-      html += "</td>";
-      html += "<td class=\"sticky-col-2\">" + info + "</td>";
+      html += stickyTd(0, "handle", REORDER_GRIP, rowCtx);
+      html += stickyTd(1, "edit", EDIT_ICON + buildModeToggle(idx, blast.mode === "Manual"), rowCtx);
+      html += stickyTd(2, "name", nameHtml, rowCtx);
+      html += stickyTd(3, "equip", equipHtml, rowCtx);
+      html += stickyTd(4, "value", valueHtml, rowCtx);
       html += renderBarCells(range, blast, idx, sectionName, deps, comp, null, null);
       html += "</tr>";
     });
@@ -592,8 +626,8 @@ function renderGantt() {
     bar.addEventListener("mouseleave", hideTooltip);
   });
 
-  // Step 1i) Attach context menu to sticky-col cells
-  document.querySelectorAll(".gantt-row td.sticky-col[data-ctx-idx]").forEach(function(td) {
+  // Step 1i) Attach context menu to every frozen (sticky) cell in a row
+  document.querySelectorAll(".gantt-row td.gantt-sticky[data-ctx-idx]").forEach(function(td) {
     td.addEventListener("contextmenu", function(e) {
       var blockIdx = td.dataset.ctxBlock !== undefined ? parseInt(td.dataset.ctxBlock) : null;
       showCtxMenu(e, parseInt(td.dataset.ctxIdx), td.dataset.ctxSection, blockIdx);
@@ -625,7 +659,7 @@ function renderGantt() {
   document.querySelectorAll(".gantt-edit-btn").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();
-      var td = btn.closest("td.sticky-col");
+      var td = btn.closest("td.gantt-sticky");
       if (!td) return;
       var idx = parseInt(td.dataset.ctxIdx);
       var blockIdx = td.dataset.ctxBlock !== undefined ? parseInt(td.dataset.ctxBlock) : null;
@@ -725,6 +759,9 @@ function renderGantt() {
     }, { passive: false });
   }
 
+  // Step 1l-b) Initialise frozen-column resize dragging (bound once)
+  initColumnResize();
+
   // Step 1m) Render dependency connectors (deferred for layout)
   requestAnimationFrame(function() {
     renderConnectors();
@@ -735,6 +772,56 @@ function renderGantt() {
 
   // Step 1o) Re-apply selection highlight after DOM rebuild
   applySelectionHighlight();
+}
+
+// Step 2) Frozen-column resize — drag the grabber on a header cell to resize.
+//   Live drag re-applies the layout without a full re-render (cheap); on release
+//   the widths are already persisted by setWidth() and connectors are redrawn.
+var _colResize = { active: false, key: null, startX: 0, startW: 0 };
+var _colResizeBound = false;
+
+function initColumnResize() {
+  if (_colResizeBound) return;
+  _colResizeBound = true;
+
+  // Step 2a) Start drag on a resize grabber (delegated from the document)
+  document.addEventListener("mousedown", function(e) {
+    var grabber = e.target.closest(".gantt-col-resize");
+    if (!grabber) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var key = grabber.dataset.colKey;
+    var cols = getColumns();
+    var startW = 0;
+    for (var i = 0; i < cols.length; i++) {
+      if (cols[i].key === key) { startW = cols[i].width; break; }
+    }
+    _colResize.active = true;
+    _colResize.key = key;
+    _colResize.startX = e.clientX;
+    _colResize.startW = startW;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  });
+
+  // Step 2b) Live resize — update width + re-apply frozen layout inline
+  document.addEventListener("mousemove", function(e) {
+    if (!_colResize.active) return;
+    e.preventDefault();
+    var delta = e.clientX - _colResize.startX;
+    setWidth(_colResize.key, _colResize.startW + delta);
+    applyColumnLayout();
+  });
+
+  // Step 2c) Finish — settle connectors against the final column widths
+  document.addEventListener("mouseup", function() {
+    if (!_colResize.active) return;
+    _colResize.active = false;
+    _colResize.key = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    requestAnimationFrame(function() { renderConnectors(); });
+  });
 }
 
 export { renderGantt, getPlanWeekIdx, getPlanBandStyle, hexToRgba };

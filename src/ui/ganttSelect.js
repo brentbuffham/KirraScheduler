@@ -60,8 +60,7 @@ function initGanttSelect() {
   container.addEventListener("click", function(e) {
     if (e.target.closest(".gantt-bar")) return;
     if (e.target.closest(".gantt-resize-handle")) return;
-    if (e.target.closest(".sticky-col")) return;
-    if (e.target.closest(".sticky-col-2")) return;
+    if (e.target.closest(".gantt-sticky")) return;
     if (!_band.justFinished) {
       clearSelection();
     }
@@ -74,8 +73,7 @@ function onSelectStart(e) {
   // Step 7a) Only start on empty space — not on bars, handles, or sticky columns
   if (e.target.closest(".gantt-bar")) return;
   if (e.target.closest(".gantt-resize-handle")) return;
-  if (e.target.closest(".sticky-col")) return;
-  if (e.target.closest(".sticky-col-2")) return;
+  if (e.target.closest(".gantt-sticky")) return;
   if (e.target.closest(".gantt-reorder-grip")) return;
   if (e.button !== 0) return;
 
