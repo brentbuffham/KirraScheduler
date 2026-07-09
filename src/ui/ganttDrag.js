@@ -17,8 +17,24 @@ import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { getSelection, isSelected, clearSelection, applySelectionHighlight } from "./ganttSelect.js";
 import { pushUndo } from "../state/undoManager.js";
+import { getDayWidth, isHoursMode } from "./ganttScale.js";
 
-var CELL_WIDTH = 32;
+// NOTE: the per-slot column width is no longer a constant — it follows the
+//  horizontal zoom (ganttScale.js). Read it live via getDayWidth() so drag
+//  offsets stay 1 cell = 1 slot at any zoom. In hours mode a slot is an hour;
+//  drilling then drags by the hour (adjusting start date + time), while the
+//  other phases (prep/load/blast/excav) still snap to whole days.
+
+// Step 0) Shift a date+time pair by whole hours, rolling across midnight.
+function shiftDateTimeByHours(dateStr, timeStr, hours) {
+  var d = new Date(dateStr);
+  var hh = 0, mm = 0;
+  if (timeStr) { var p = timeStr.split(":"); hh = parseInt(p[0]) || 0; mm = parseInt(p[1]) || 0; }
+  d.setHours(hh, mm, 0, 0);
+  d.setHours(d.getHours() + hours);
+  var pad = function(n) { return n < 10 ? "0" + n : "" + n; };
+  return { date: isoDate(d), time: pad(d.getHours()) + ":" + pad(d.getMinutes()) };
+}
 
 var dragState = {
   active: false,
@@ -101,11 +117,18 @@ function onDragMove(e) {
   if (!dragState.active) return;
   e.preventDefault();
 
+  var cw = getDayWidth();
   var dx = e.clientX - dragState.startX;
-  var dayOffset = Math.round(dx / CELL_WIDTH);
-  dragState.dayOffset = dayOffset;
+  var slotOffset = Math.round(dx / cw);
+  dragState.dayOffset = slotOffset;   // raw slot offset (hours in hours mode)
 
-  var translatePx = dayOffset * CELL_WIDTH;
+  // Step) Non-drill phases have no sub-day time, so snap their visual drag to
+  //  whole days even in hours view; drilling moves freely by the hour.
+  var visualOffset = slotOffset;
+  if (isHoursMode() && dragState.section !== "drilling") {
+    visualOffset = Math.round(slotOffset / 24) * 24;
+  }
+  var translatePx = visualOffset * cw;
 
   if (dragState.multiDrag) {
     // Step 3a) Multi-drag: move all selected rows
@@ -197,8 +220,10 @@ function onDragEnd(e) {
   dragState.multiDrag = false;
 }
 
-// Step 4f) Apply a day offset to a single blast/section/block
-function applyOffsetToBlast(blastIdx, section, blockIdx, dayOffset) {
+// Step 4f) Apply a slot offset to a single blast/section/block.
+//  In hours mode the offset is in HOURS: drilling shifts start date + time by
+//  the hour; every other phase snaps to whole days (round(hours/24)).
+function applyOffsetToBlast(blastIdx, section, blockIdx, slotOffset) {
   var blast = APP.blasts[blastIdx];
   if (!blast) return;
 
@@ -206,24 +231,45 @@ function applyOffsetToBlast(blastIdx, section, blockIdx, dayOffset) {
     blast.mode = "Manual";
   }
 
+  // Step) Resolve the offset for this mode.
+  var hoursMode = isHoursMode();
+  var hourOffset = hoursMode ? slotOffset : 0;
+  var dayOffset = hoursMode ? Math.round(slotOffset / 24) : slotOffset;
+
   if (section === "drilling" && blockIdx !== null) {
     var block = blast.drillBlocks && blast.drillBlocks[blockIdx];
     if (block && block.drillStart) {
-      var newBlockStart = addDays(new Date(block.drillStart), dayOffset);
-      block.drillStart = isoDate(newBlockStart);
+      if (hoursMode) {
+        var sBlk = shiftDateTimeByHours(block.drillStart, block.drillStartTime, hourOffset);
+        block.drillStart = sBlk.date;
+        block.drillStartTime = sBlk.time;
+      } else {
+        block.drillStart = isoDate(addDays(new Date(block.drillStart), dayOffset));
+      }
       syncBlastFromBlocks(blast);
     }
 
   } else if (section === "drilling" && blast.drillStart) {
-    var newDrill = addDays(new Date(blast.drillStart), dayOffset);
-    blast.drillStart = isoDate(newDrill);
+    if (hoursMode) {
+      var sMain = shiftDateTimeByHours(blast.drillStart, blast.drillStartTime, hourOffset);
+      blast.drillStart = sMain.date;
+      blast.drillStartTime = sMain.time;
+    } else {
+      blast.drillStart = isoDate(addDays(new Date(blast.drillStart), dayOffset));
+    }
     blast.loadStartManual = false;
     blast.blastDateManual = false;
 
     if (blast.drillBlocks) {
       blast.drillBlocks.forEach(function(b) {
         if (b.drillStart) {
-          b.drillStart = isoDate(addDays(new Date(b.drillStart), dayOffset));
+          if (hoursMode) {
+            var sb = shiftDateTimeByHours(b.drillStart, b.drillStartTime, hourOffset);
+            b.drillStart = sb.date;
+            b.drillStartTime = sb.time;
+          } else {
+            b.drillStart = isoDate(addDays(new Date(b.drillStart), dayOffset));
+          }
         }
       });
     }

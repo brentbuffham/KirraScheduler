@@ -7,6 +7,7 @@
 
 import { APP } from "../state/appState.js";
 import { isoDate } from "../utils/dateUtils.js";
+import { resolveExcavatorsForBlast } from "../state/equipmentState.js";
 
 // Step 1) Timeline state
 var _days = [];
@@ -116,7 +117,7 @@ function getBlastPhase(blast, dateStr) {
     excEnd.setDate(excEnd.getDate() + blast.excavDays - 1);
     var excEndStr = isoDate(excEnd);
     if (dateStr >= blast.excavStart && dateStr <= excEndStr) {
-      return { phase: "excavating", drills: [], mpus: [], excavators: blast.assignedExcavators || [] };
+      return { phase: "excavating", drills: [], mpus: [], excavators: resolveExcavatorsForBlast(blast) };
     }
     // Step 3a-iii) After excavation finishes the ground is dug out.
     if (dateStr > excEndStr) {

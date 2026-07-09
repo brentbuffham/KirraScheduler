@@ -88,6 +88,101 @@ function buildMPUMesh() {
   return group;
 }
 
+// Step 3e) Universal excavation meshes — procedural stand-ins for ancillary
+//  fleet types shown during the excavation playback phase.
+function buildExcavatorMesh(equipType) {
+  var group = new THREE.Group();
+  var t = equipType || "Excavator";
+
+  if (t === "Dozer") {
+    // Step 3e-i) Dozer — wide blade + tracked body
+    var dzBody = new THREE.Mesh(
+      new THREE.BoxGeometry(5, 8, 2.2),
+      new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true })
+    );
+    dzBody.position.set(0, 0, 1.1);
+    group.add(dzBody);
+    var blade = new THREE.Mesh(
+      new THREE.BoxGeometry(6.5, 0.8, 2.8),
+      new THREE.MeshPhongMaterial({ color: 0x888888, flatShading: true })
+    );
+    blade.position.set(0, 4.2, 1.4);
+    group.add(blade);
+  } else if (t === "Loader") {
+    // Step 3e-ii) Wheel loader — cab + front bucket
+    var ldBody = new THREE.Mesh(
+      new THREE.BoxGeometry(3.5, 5, 2.5),
+      new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true })
+    );
+    ldBody.position.set(0, -0.5, 2);
+    group.add(ldBody);
+    var bucket = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 2.5, 2),
+      new THREE.MeshPhongMaterial({ color: 0x888888, flatShading: true })
+    );
+    bucket.position.set(0, 3.5, 1.5);
+    group.add(bucket);
+  } else if (t === "Dragline") {
+    // Step 3e-iii) Dragline — tall A-frame + boom
+    var dlBase = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 6, 1.5),
+      new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true })
+    );
+    dlBase.position.set(0, 0, 0.75);
+    group.add(dlBase);
+    var mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.5, 22, 8),
+      new THREE.MeshPhongMaterial({ color: 0xaaaaaa, flatShading: true })
+    );
+    mast.rotation.x = Math.PI / 2;
+    mast.position.set(0, 0, 12);
+    group.add(mast);
+    var boom = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.25, 14, 6),
+      new THREE.MeshPhongMaterial({ color: 0x888888, flatShading: true })
+    );
+    boom.rotation.z = Math.PI / 2;
+    boom.position.set(7, 0, 18);
+    group.add(boom);
+  } else {
+    // Step 3e-iv) Excavator (default universal) — tracks, cab, boom, bucket
+    var trk = new THREE.Mesh(
+      new THREE.BoxGeometry(4, 6, 1.8),
+      new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true })
+    );
+    trk.position.set(0, 0, 0.9);
+    group.add(trk);
+    var cab = new THREE.Mesh(
+      new THREE.BoxGeometry(2.5, 2.5, 2.2),
+      new THREE.MeshPhongMaterial({ color: 0xfbbf24, flatShading: true })
+    );
+    cab.position.set(0, -1.5, 2.8);
+    group.add(cab);
+    var arm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.3, 8, 6),
+      new THREE.MeshPhongMaterial({ color: 0x888888, flatShading: true })
+    );
+    arm.rotation.z = -0.6;
+    arm.position.set(2.5, 1.5, 4);
+    group.add(arm);
+    var bkt = new THREE.Mesh(
+      new THREE.BoxGeometry(1.8, 1.2, 1.5),
+      new THREE.MeshPhongMaterial({ color: 0x666666, flatShading: true })
+    );
+    bkt.position.set(5, 3.5, 3);
+    group.add(bkt);
+  }
+
+  return group;
+}
+
+// Step 3f) Ancillary types that use excavation meshes (not drill rigs)
+var EXCAV_EQUIP_TYPES = { Excavator: 1, Loader: 1, Dozer: 1, Dragline: 1 };
+
+function isExcavEquipType(type) {
+  return EXCAV_EQUIP_TYPES.hasOwnProperty(type);
+}
+
 // Step 4) Build a floating text label sprite
 function buildLabelSprite(text) {
   var canvas = document.createElement("canvas");
@@ -124,18 +219,23 @@ function placeEquipment(equipId, type, position) {
     disposeGroup(_equipmentMap[equipId].group);
   }
 
-  // Step 5b) Build appropriate mesh — "MPU" builds truck, everything else builds drill rig
+  // Step 5b) Build appropriate mesh — MPU truck, excavation ancillary, or drill rig
   var group;
-  var isDrill = (type !== "MPU");
-  if (isDrill) {
-    group = buildDrillMesh(type);
-  } else {
+  var isDrill = false;
+  var labelHeight = 12;
+  if (type === "MPU") {
     group = buildMPUMesh();
+  } else if (equipId === "EXC-GEN" || isExcavEquipType(type)) {
+    group = buildExcavatorMesh(equipId === "EXC-GEN" ? "Excavator" : type);
+    labelHeight = 14;
+  } else {
+    group = buildDrillMesh(type);
+    isDrill = true;
+    labelHeight = 48;
   }
 
   // Step 5c) Add label above equipment
   var label = buildLabelSprite(equipId);
-  var labelHeight = isDrill ? 48 : 12;
   label.position.set(0, 0, labelHeight);
   group.add(label);
 

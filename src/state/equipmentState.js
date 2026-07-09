@@ -137,6 +137,25 @@ function getDigRate(unit) {
   return 5000; // Step) sensible fallback for unknown ancillary types
 }
 
+// Step 4a-iii) Pick the first fleet unit that can dig (for auto-assign + playback).
+function pickDefaultExcavator() {
+  for (var i = 0; i < ancillary.length; i++) {
+    if (getDigRate(ancillary[i]) > 0) return ancillary[i];
+  }
+  return null;
+}
+
+// Step 4a-iv) Resolve which excavators to show/drive for a blast — assigned list
+//   first, else the first dig-capable ancillary in the fleet, else a generic
+//   placeholder id so playback always has something on the excavation timeline.
+function resolveExcavatorsForBlast(blast) {
+  var ids = blast.assignedExcavators || [];
+  if (ids.length > 0) return ids.slice();
+  var def = pickDefaultExcavator();
+  if (def) return [def.id];
+  return ["EXC-GEN"];
+}
+
 // Step 4b) Equipment status management — valid statuses: "available", "mobilised", "demobilised"
 function mobiliseEquipment(collection, equipId) {
   var equip = collection.find(function(e) { return e.id === equipId; });
@@ -236,6 +255,8 @@ export {
   canDrillDiameter,
   getDigRate,
   DEFAULT_DIG_RATE_BY_TYPE,
+  pickDefaultExcavator,
+  resolveExcavatorsForBlast,
   isDrillInMaintenance,
   getMaintenanceDays,
   getCompatibleDrills,

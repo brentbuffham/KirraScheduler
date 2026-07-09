@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus } from "../state/equipmentState.js";
+import { drills, mpus, ancillary } from "../state/equipmentState.js";
 import { findSolidForBlast } from "../utils/solidMatch.js";
 import {
   initScene, resizeRenderer, setLocalOrigin, startRenderLoop, stopRenderLoop,
@@ -495,6 +495,27 @@ function updateSceneForDay(day) {
         placed[mpuId] = true;
       }
     }
+
+    // Step 4b-iii) Place excavation ancillary during the dig-out phase.
+    //  Uses assigned excavators from the timeline state (with fleet fallback /
+    //  EXC-GEN universal model when none assigned).
+    if (state.phase === "excavating" && state.excavators && state.excavators.length > 0) {
+      for (var ei = 0; ei < state.excavators.length; ei++) {
+        var excId = state.excavators[ei];
+        if (placed[excId]) continue;
+        var centroidExc = getBlastCentroid(b.name);
+        var topZExc = getBlastTopZ(b.name);
+        if (!centroidExc) continue;
+        var ancUnit = ancillary.find(function(a) { return a.id === excId; });
+        var excType = ancUnit ? ancUnit.type : "Excavator";
+        if (excId === "EXC-GEN") excType = "Excavator";
+        var posExc = centroidExc.clone();
+        posExc.x += 12 + (ei * 10);
+        if (topZExc !== null) posExc.z = topZExc;
+        placeEquipment(excId, excType, posExc);
+        placed[excId] = true;
+      }
+    }
   });
 
   // Step 4c) Sync equipment label visibility with checkbox
@@ -532,7 +553,12 @@ function applyLabelVisibility(day) {
   APP.blasts.forEach(function(b) {
     var state = day.blastStates[b.name];
     var phase = state ? state.phase : "planned";
-    setBlastLabelVisible(b.name, !!ACTIVE_PHASES[phase]);
+    // Step 4d-iii-a) Dug-out and post-blast ghost blasts never show labels.
+    if (phase === "excavated" || phase === "completed") {
+      setBlastLabelVisible(b.name, false);
+      return;
+    }
+    setBlastLabelVisible(b.name, activeDayOnly ? !!ACTIVE_PHASES[phase] : true);
   });
 }
 

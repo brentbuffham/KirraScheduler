@@ -28,6 +28,7 @@ import { debouncedSave } from "../state/schedulerDB.js";
 import { sendAllToPatternPrep } from "../utils/prep.js";
 import { sendAllToExcavation } from "../utils/excav.js";
 import { pushUndo } from "../state/undoManager.js";
+import { getDayWidth, isHoursMode } from "../ui/ganttScale.js";
 
 // Step 0-pre) Plan week banding helpers
 function getPlanWeekIdx(date) {
@@ -183,6 +184,28 @@ function renderGantt() {
     dates.push(addDays(visStart, i));
   }
 
+  // Step 1a-ii) Horizontal granularity — in "hours" mode each day becomes 24
+  //  hour columns. Build a flat "slots" array the body + hour header iterate.
+  //  In day mode a slot is a whole day (hour = null); in hour mode a slot is
+  //  one hour. slot.iso is always the DAY string so existing day-range tests
+  //  (drillStart..end, loadStart..end, etc.) keep working unchanged.
+  var hoursMode = isHoursMode();
+  var slotsPerDay = hoursMode ? 24 : 1;
+  var slots = [];
+  for (var si = 0; si < dates.length; si++) {
+    var dBase = dates[si];
+    var dIso = isoDate(dBase);
+    if (hoursMode) {
+      for (var hh = 0; hh < 24; hh++) {
+        var dHour = new Date(dBase);
+        dHour.setHours(hh, 0, 0, 0);
+        slots.push({ date: dHour, iso: dIso, hour: hh });
+      }
+    } else {
+      slots.push({ date: dBase, iso: dIso, hour: null });
+    }
+  }
+
   // Step 1b) Compute stats
   var totalVolume = APP.blasts.reduce(function(s, b) { return s + (b.volume || 0); }, 0);
   var totalExp = APP.blasts.reduce(function(s, b) { return s + (b.expMass || 0); }, 0);
@@ -234,6 +257,10 @@ function renderGantt() {
       "<span class=\"gantt-col-resize\" data-col-key=\"" + col.key + "\" title=\"Drag to resize\"></span>" +
       "</th>";
   }
+  var dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  // Month row spans — each month covers (days-in-month * slotsPerDay) columns,
+  //  so the span stays correct whether columns are days or hours.
   var prevMonth = "";
   for (var mi = 0; mi < dates.length; mi++) {
     var d = dates[mi];
@@ -244,39 +271,70 @@ function renderGantt() {
         if (dates[j].toLocaleDateString("en-AU", { month: "long" }) === m) span++;
         else break;
       }
-      html += "<th colspan=\"" + span + "\" class=\"gantt-header-month\">" + m + "</th>";
+      html += "<th colspan=\"" + (span * slotsPerDay) + "\" class=\"gantt-header-month\">" + m + "</th>";
       prevMonth = m;
     }
   }
   html += "</tr>";
 
-  // Week row
-  html += "<tr class=\"header-row-week\">";
-  var prevWeek = -1;
-  for (var wi = 0; wi < dates.length; wi++) {
-    var w = getWeekNumber(dates[wi]);
-    if (w !== prevWeek) {
-      var wSpan = 0;
-      for (var wj = wi; wj < dates.length; wj++) {
-        if (getWeekNumber(dates[wj]) === w) wSpan++;
-        else break;
+  if (!hoursMode) {
+    // ---- DAY / WEEKS mode: month / week / date header tiers ----
+    // Week row
+    html += "<tr class=\"header-row-week\">";
+    var prevWeek = -1;
+    for (var wi = 0; wi < dates.length; wi++) {
+      var w = getWeekNumber(dates[wi]);
+      if (w !== prevWeek) {
+        var wSpan = 0;
+        for (var wj = wi; wj < dates.length; wj++) {
+          if (getWeekNumber(dates[wj]) === w) wSpan++;
+          else break;
+        }
+        html += "<th colspan=\"" + wSpan + "\" class=\"gantt-header-week\">Wk " + w + "</th>";
+        prevWeek = w;
       }
-      html += "<th colspan=\"" + wSpan + "\" class=\"gantt-header-week\">Wk " + w + "</th>";
-      prevWeek = w;
     }
-  }
-  html += "</tr>";
+    html += "</tr>";
 
-  // Date row
-  html += "<tr class=\"header-row-date\">";
-  var dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  for (var di = 0; di < dates.length; di++) {
-    var dd = dates[di];
-    var cls = isToday(dd) ? "today" : (isWeekend(dd) ? "weekend" : "");
-    // Step 1d-iii) Plan-week boundary tick on the start day
-    var pwBorder = (dd.getDay() === (APP.planWeekStartDay || 0)) ? "border-left:2px solid var(--accent-cyan);" : "";
-    var pwBandBg = getPlanBandStyle(dd);
-    html += "<th class=\"gantt-header-date " + cls + "\" style=\"" + pwBorder + pwBandBg + "\">" + dd.getDate() + "<br><span style=\"font-size:9px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
+    // Date row
+    html += "<tr class=\"header-row-date\">";
+    for (var di = 0; di < dates.length; di++) {
+      var dd = dates[di];
+      var cls = isToday(dd) ? "today" : (isWeekend(dd) ? "weekend" : "");
+      // Step 1d-iii) Plan-week boundary tick on the start day
+      var pwBorder = (dd.getDay() === (APP.planWeekStartDay || 0)) ? "border-left:2px solid var(--accent-cyan);" : "";
+      var pwBandBg = getPlanBandStyle(dd);
+      html += "<th class=\"gantt-header-date " + cls + "\" style=\"" + pwBorder + pwBandBg + "\">" + dd.getDate() + "<br><span style=\"font-size:9px;opacity:0.5;\">" + dayNames[dd.getDay()] + "</span></th>";
+    }
+  } else {
+    // ---- HOURS mode: month / day / hour header tiers (week row dropped) ----
+    //  Row 2 (reuses .header-row-week for sticky styling): one cell per day,
+    //  spanning its 24 hour columns, showing weekday + date.
+    html += "<tr class=\"header-row-week\">";
+    for (var di2 = 0; di2 < dates.length; di2++) {
+      var dd2 = dates[di2];
+      var cls2 = isToday(dd2) ? "today" : (isWeekend(dd2) ? "weekend" : "");
+      var pwBorder2 = (dd2.getDay() === (APP.planWeekStartDay || 0)) ? "border-left:2px solid var(--accent-cyan);" : "";
+      var pwBandBg2 = getPlanBandStyle(dd2);
+      html += "<th colspan=\"24\" class=\"gantt-header-week gantt-hour-day " + cls2 + "\" style=\"" + pwBorder2 + pwBandBg2 + "\">" +
+        dayNames[dd2.getDay()] + " " + dd2.getDate() + "/" + (dd2.getMonth() + 1) + "</th>";
+    }
+    html += "</tr>";
+
+    //  Row 3 (reuses .header-row-date): one cell per hour. Label the 0/6/12/18
+    //  ticks and leave the rest blank so it stays readable when zoomed tight.
+    html += "<tr class=\"header-row-date\">";
+    for (var di3 = 0; di3 < dates.length; di3++) {
+      var dd3 = dates[di3];
+      var pwBandBg3 = getPlanBandStyle(dd3);
+      var pwStartDay3 = (dd3.getDay() === (APP.planWeekStartDay || 0));
+      for (var hr = 0; hr < 24; hr++) {
+        var tickCls = (hr === 0) ? "hour-day-start" : ((hr % 6 === 0) ? "hour-tick" : "");
+        if (hr === 0 && pwStartDay3) tickCls += " hour-planweek-start";
+        var hrLabel = (hr % 6 === 0) ? (hr < 10 ? "0" + hr : "" + hr) : "";
+        html += "<th class=\"gantt-header-date gantt-hour-cell " + tickCls + "\" style=\"" + pwBandBg3 + "\">" + hrLabel + "</th>";
+      }
+    }
   }
   html += "</tr></thead><tbody>";
 
@@ -293,21 +351,50 @@ function renderGantt() {
     var secKey = sectionName.toLowerCase();
     var blastDelays = (blast.delays || []).filter(function(d) { return d.section === secKey; });
 
-    for (var ci = 0; ci < dates.length; ci++) {
-      var cd = dates[ci];
-      var ds = isoDate(cd);
+    // Step 1e-0) Hours-mode gate: the start hour of the FIRST active day.
+    //  Drilling has an explicit start time; other phases begin at hour 0.
+    var barStartHour = 0;
+    if (hoursMode && sectionName === "DRILLING") {
+      var _st = startTime || blast.drillStartTime;
+      if (_st) barStartHour = parseInt(_st.split(":")[0]) || 0;
+    }
+    // Step 1e-0b) Is the bar drawn at slot index k? (day-range test + first-day
+    //  start-hour gate in hours mode). Used to find the first/last segment cell.
+    function barActiveAt(k) {
+      if (k < 0 || k >= slots.length) return false;
+      var s = slots[k];
+      if (!(range.start && range.end && s.iso >= range.start && s.iso <= range.end)) return false;
+      if (hoursMode && s.iso === range.start && s.hour < barStartHour) return false;
+      return true;
+    }
+
+    for (var ci = 0; ci < slots.length; ci++) {
+      var slot = slots[ci];
+      var cd = slot.date;
+      var ds = slot.iso;
+      var slotHour = slot.hour;                     // null in day mode
+      var dayFirst = !hoursMode || slotHour === 0;  // first hour cell of a day
       var barClass = "";
       var barExtra = "";
       var isFirstBar = false;
       var isLastBar = false;
 
-      if (range.start && range.end && ds >= range.start && ds <= range.end) {
-        barClass = sectionName === "PATTERN PREP" ? "prep" : sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : sectionName === "EXCAVATION" ? "excav" : "blast";
-        if (blast.status === "planned" && sectionName !== "BLASTING") barClass += " planned";
+      // Step) segFirst/segLast = first/last VISIBLE segment cell (for continuous
+      //  bar rounding). isFirstBar/isLastBar = the bar's TRUE start/end (for
+      //  resize handles + start-time label) so a bar clipped by the window edge
+      //  does not sprout handles at the edge.
+      var segFirst = false;
+      var segLast = false;
+      if (barActiveAt(ci)) {
+        // BLASTING is always a single milestone diamond (set below), never a
+        //  filled bar — leave its base class empty so it is not painted per cell.
+        barClass = sectionName === "PATTERN PREP" ? "prep" : sectionName === "DRILLING" ? "drill" : sectionName === "LOADING" ? "load" : sectionName === "EXCAVATION" ? "excav" : "";
+        if (barClass && blast.status === "planned" && sectionName !== "BLASTING") barClass += " planned";
 
-        // Step) Determine if this is the first or last cell of the bar for resize handles
-        isFirstBar = (ds === range.start);
-        isLastBar = (ds === range.end);
+        segFirst = !barActiveAt(ci - 1);
+        segLast = !barActiveAt(ci + 1);
+        isFirstBar = (ds === range.start) && (!hoursMode || slotHour === barStartHour);
+        isLastBar = (ds === range.end) && (!hoursMode || slotHour === 23);
 
         // Step) Check for drill-load overlap zone on drill bars
         if (sectionName === "DRILLING" && comp.hasOverlap && comp.loadOverlapStart) {
@@ -317,8 +404,9 @@ function renderGantt() {
           }
         }
 
-        // Step) Add dependency threshold markers on drill bars (only for non-block rows)
-        if (sectionName === "DRILLING" && !blockDrills && blast.drillStart && blast.drillDays > 1) {
+        // Step) Add dependency threshold markers on drill bars (only for non-block rows).
+        //  Day mode only — the markers pin to a day cell's right edge (per-day px).
+        if (!hoursMode && sectionName === "DRILLING" && !blockDrills && blast.drillStart && blast.drillDays > 1) {
           var drillStartDate = new Date(blast.drillStart);
           var loadThreshDay = isoDate(addDays(drillStartDate, Math.ceil(blast.drillDays * deps.drillPctForLoad) - 1));
           if (ds === loadThreshDay && deps.drillPctForLoad < 1.0) {
@@ -332,8 +420,8 @@ function renderGantt() {
           }
         }
 
-        // Step) Add dependency threshold marker on load bars
-        if (sectionName === "LOADING" && blast.loadStart && blast.loadDays > 1) {
+        // Step) Add dependency threshold marker on load bars (day mode only)
+        if (!hoursMode && sectionName === "LOADING" && blast.loadStart && blast.loadDays > 1) {
           if (deps.loadPctForBlast < 1.0) {
             var loadStartDate2 = new Date(blast.loadStart);
             var blastThreshDay2 = isoDate(addDays(loadStartDate2, Math.ceil(blast.loadDays * deps.loadPctForBlast) - 1));
@@ -352,7 +440,9 @@ function renderGantt() {
         }
       }
 
-      if (sectionName === "BLASTING" && blast.blastDate && ds === blast.blastDate) {
+      // Step) Blast milestone — one diamond per day. In hours mode pin it to the
+      //  midday (12:00) slot so it renders once, centred in the day.
+      if (sectionName === "BLASTING" && blast.blastDate && ds === blast.blastDate && (!hoursMode || slotHour === 12)) {
         barClass = "milestone";
       }
 
@@ -380,26 +470,50 @@ function renderGantt() {
         }
       }
 
-      cellsHtml += "<td class=\"gantt-cell\" style=\"" + cellBg + "\">";
+      // Step) In hours mode, mark day-start and 6-hour tick cells so CSS can
+      //  draw vertical gridlines (day boundaries + 06/12/18 ticks).
+      var cellTick = "";
+      if (hoursMode) {
+        if (slotHour === 0) cellTick = " hour-cell-daystart";
+        else if (slotHour % 6 === 0) cellTick = " hour-cell-tick";
+      }
+      cellsHtml += "<td class=\"gantt-cell" + cellTick + "\" style=\"" + cellBg + "\">";
 
       // Step) Render main bar
       if (barClass) {
         var ttData = "data-tt-blast=\"" + blast.name + "\" data-tt-section=\"" + sectionName + "\" data-tt-date=\"" + ds + "\"";
         var barStyle = "";
 
-        // Step) Show start time on first drill day cell
+        // Step) Drill start-time label on the FIRST drawn segment of the bar.
         var effectiveStartTime = startTime || blast.drillStartTime;
-        if (sectionName === "DRILLING" && ds === range.start && effectiveStartTime) {
-          var hhmm = effectiveStartTime.split(":");
-          var startHour = parseInt(hhmm[0]) || 0;
-          var offsetPx = Math.round((startHour / 24) * 28);
-          barStyle = " style=\"left:" + (1 + offsetPx) + "px;\"";
+        if (sectionName === "DRILLING" && isFirstBar && effectiveStartTime) {
           barExtra += "<span class=\"start-time-label\">" + effectiveStartTime + "</span>";
+          if (!hoursMode) {
+            // Day mode: nudge the bar's left edge within the first day cell by the
+            //  start hour so the sub-day start reads visually (scaled to zoom).
+            var startHour = parseInt(effectiveStartTime.split(":")[0]) || 0;
+            var usableW = Math.max(getDayWidth() - 2, 4);
+            var offsetPx = Math.round((startHour / 24) * usableW);
+            barStyle = " style=\"left:" + (1 + offsetPx) + "px;\"";
+          }
+        }
+
+        // Step) Hours mode: draw the bar as a CONTINUOUS segment across hour
+        //  cells — square interior edges, rounded only at the first/last cell.
+        if (hoursMode && barClass !== "milestone") {
+          var lft = segFirst ? 1 : -1;
+          var rgt = segLast ? 1 : -1;
+          var brL = segFirst ? "3px" : "0";
+          var brR = segLast ? "3px" : "0";
+          barStyle = " style=\"left:" + lft + "px;right:" + rgt + "px;" +
+            "border-top-left-radius:" + brL + ";border-bottom-left-radius:" + brL + ";" +
+            "border-top-right-radius:" + brR + ";border-bottom-right-radius:" + brR + ";\"";
         }
 
         // Step) Overlay a conflict indicator if this drill is double-booked
+        //  (once per day in hours mode).
         var conflictOverlay = "";
-        if (sectionName === "DRILLING") {
+        if (sectionName === "DRILLING" && dayFirst) {
           var cKey = blast.name + "|" + ds;
           if (_conflictCells[cKey]) {
             conflictOverlay = "<div class=\"fleet-conflict-indicator\" title=\"Drill conflict: " + _conflictCells[cKey].join(", ") + " double-booked\"></div>";
@@ -437,8 +551,10 @@ function renderGantt() {
           var dt = getDelayType(delay.type);
           var delayColor = dt ? dt.color : "#888";
           var delayTextColor = dt ? dt.textColor : "#fff";
-          var isDelayFirst = (ds === delay.start);
-          var isDelayLast = (ds === delayEnd);
+          // Step) First/last drawn cell of the delay. In hours mode the delay
+          //  starts at hour 0 of its first day and ends at hour 23 of its last.
+          var isDelayFirst = (ds === delay.start) && dayFirst;
+          var isDelayLast = (ds === delayEnd) && (!hoursMode || slotHour === 23);
           var globalDelayIdx = (blast.delays || []).indexOf(delay);
 
           var delayHandles = "";
@@ -447,8 +563,14 @@ function renderGantt() {
 
           var delayLabel = isDelayFirst ? ("<span class=\"delay-bar-label\">" + delay.type + "</span>") : "";
 
+          // Step) Continuous delay segment across hour cells (square interior edges)
+          var delayEdge = "";
+          if (hoursMode) {
+            delayEdge = "left:" + (isDelayFirst ? 1 : -1) + "px;right:" + (isDelayLast ? 1 : -1) + "px;";
+          }
+
           cellsHtml += "<div class=\"gantt-bar delay-bar\" data-delay-idx=\"" + globalDelayIdx + "\" " +
-            "style=\"background:" + delayColor + ";color:" + delayTextColor + ";top:16px;bottom:-3px;z-index:3;\" " +
+            "style=\"background:" + delayColor + ";color:" + delayTextColor + ";top:16px;bottom:-3px;z-index:3;" + delayEdge + "\" " +
             "data-tt-blast=\"" + blast.name + "\" data-tt-section=\"" + sectionName + "\" data-tt-date=\"" + ds + "\">" +
             delayLabel + delayHandles + "</div>";
         }

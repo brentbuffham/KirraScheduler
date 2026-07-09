@@ -29,6 +29,8 @@
   --selected-color: #ff5555;
   --accent-prep: #14b8a6;
   --accent-excav: #a16207;
+  /* Horizontal Gantt zoom — per-day column width (overwritten at runtime by ganttScale.js) */
+  --gantt-day-width: 32px;
   --presplit: #a78bfa;
   --buffer: #38bdf8;
   --production: #f97316;
@@ -460,8 +462,11 @@ input[type="range"] {
 }
 .gantt-header-date {
   font-size: 11px;
-  min-width: 32px;
+  min-width: var(--gantt-day-width, 32px);
+  max-width: var(--gantt-day-width, 32px);
+  width: var(--gantt-day-width, 32px);
   padding: 2px 1px;
+  overflow: hidden;
 }
 .gantt-header-date.weekend { color: var(--accent-blast); }
 .gantt-header-date.today { color: var(--accent-cyan); font-weight: 700; }
@@ -543,9 +548,107 @@ input[type="range"] {
 
 /* Step 11) Gantt bar cells */
 .gantt-cell {
-  min-width: 32px;
-  max-width: 32px;
+  min-width: var(--gantt-day-width, 32px);
+  max-width: var(--gantt-day-width, 32px);
+  width: var(--gantt-day-width, 32px);
   position: relative;
+}
+
+/* ---- Horizontal zoom: compact header when zoomed out to a weeks overview ----
+   In the "weeks" scale the day columns are too narrow to read the day number +
+   weekday letters, so hide the weekday abbreviation and shrink the date number.
+   The month/week header tiers still read clearly and dominate the overview. */
+.gantt-scale-weeks .gantt-header-date { font-size: 9px; padding: 2px 0; line-height: 1; }
+.gantt-scale-weeks .gantt-header-date span { display: none; }
+/* At the tightest zoom, drop the date number entirely — week bands carry it */
+.gantt-scale-weeks .gantt-header-date { color: transparent; }
+.gantt-scale-weeks .gantt-header-date.today,
+.gantt-scale-weeks .gantt-header-date.weekend { color: transparent; }
+
+/* ---- Horizontal zoom: HOURS scale — one column per hour ----
+   Vertical gridlines: a strong line at each day boundary, a lighter line at
+   the 06/12/18 ticks, so the hourly grid stays legible when zoomed tight. */
+.gantt-cell.hour-cell-daystart { border-left: 1px solid var(--border-active); }
+.gantt-cell.hour-cell-tick { border-left: 1px solid var(--border-row); }
+
+/* Hour header row (row 3 in hours mode): tiny centred hour numbers */
+.gantt-hour-cell {
+  font-size: 8px;
+  text-align: center;
+  padding: 2px 0;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.gantt-hour-cell.hour-tick { border-left: 1px solid var(--border-row); }
+.gantt-hour-cell.hour-day-start { border-left: 1px solid var(--border-active); }
+.gantt-hour-cell.hour-planweek-start { border-left: 2px solid var(--accent-cyan); }
+
+/* Day label row (row 2 in hours mode): centred weekday + date over 24 columns */
+.gantt-header-week.gantt-hour-day {
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-left: 1px solid var(--border-active);
+}
+.gantt-header-week.gantt-hour-day.today { color: var(--accent-cyan); }
+.gantt-header-week.gantt-hour-day.weekend { color: var(--accent-blast); }
+
+/* ============================================================
+   Horizontal zoom control (segmented presets + slider)
+   ============================================================ */
+.gantt-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Segmented Weeks / Days / Hours preset buttons */
+.gantt-zoom-presets {
+  display: inline-flex;
+  border: 1px solid var(--border-active);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gantt-zoom-presets .zoom-preset {
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-right: 1px solid var(--border-active);
+  transition: background 0.12s, color 0.12s;
+}
+.gantt-zoom-presets .zoom-preset:last-child { border-right: none; }
+.gantt-zoom-presets .zoom-preset:hover { color: var(--mouseover-color); }
+.gantt-zoom-presets .zoom-preset.active {
+  background: var(--accent-brand);
+  color: #fff;
+}
+/* +/- step buttons */
+.zoom-step {
+  border: 1px solid var(--border-active);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, border-color 0.12s;
+}
+.zoom-step:hover { color: var(--mouseover-color); border-color: var(--accent-brand); }
+/* The zoom slider itself follows the Kirra red accent */
+#ganttZoom {
+  width: 120px;
+  min-width: 80px;
+  accent-color: var(--accent-brand);
+  cursor: ew-resize;
 }
 .gantt-bar {
   position: absolute;

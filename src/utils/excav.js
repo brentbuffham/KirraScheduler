@@ -10,6 +10,7 @@
 
 import { APP } from "../state/appState.js";
 import { isoDate, addDays } from "./dateUtils.js";
+import { pickDefaultExcavator } from "../state/equipmentState.js";
 
 // Step 1) Seed an Excavation cycle on a single blast.
 //   Excavation begins the day AFTER the blast fires. Blasts that already
@@ -29,6 +30,12 @@ export function applyExcavToBlast(blast) {
   blast.excavStartManual = false;
   if (!blast.excavDays) blast.excavDays = 1;
   blast.excavDaysManual = false;
+  // Step 1d) Auto-assign a dig unit when none selected so Gantt duration,
+  //  dependency recalc and 3D playback all have equipment to work with.
+  if (!blast.assignedExcavators || blast.assignedExcavators.length === 0) {
+    var defUnit = pickDefaultExcavator();
+    if (defUnit) blast.assignedExcavators = [defUnit.id];
+  }
   return true;
 }
 

@@ -214,24 +214,30 @@ function setBlastPhase(blastName, phase) {
   var color = PHASE_COLORS[phase] || PHASE_COLORS.planned;
   var opacity = PHASE_OPACITY[phase] !== undefined ? PHASE_OPACITY[phase] : 1.0;
   var isCompleted = (phase === "completed");
+  // Step 5-pre) After excavation the blasted material is gone — hide all geometry.
+  var isRemoved = (phase === "excavated");
 
   // Step 5a) Update polygon outline + fill
   if (entry.outline) {
+    entry.outline.visible = !isRemoved;
     entry.outline.material.color.setHex(color);
     entry.outline.material.opacity = isCompleted ? 0.1 : 1.0;
     entry.outline.material.transparent = isCompleted;
   }
   if (entry.fill) {
+    entry.fill.visible = !isRemoved;
     entry.fill.material.color.setHex(color);
     entry.fill.material.opacity = isCompleted ? 0.05 : 0.25;
   }
 
-  // Step 5b) Update solid mesh — opaque for active phases, transparent for completed
+  // Step 5b) Update solid mesh — opaque for active phases, transparent for completed,
+  //  invisible once excavation has removed the blasted block.
   if (entry.solidMesh) {
+    entry.solidMesh.visible = !isRemoved;
     entry.solidMesh.material.color.setHex(color);
     entry.solidMesh.material.transparent = isCompleted;
     entry.solidMesh.material.opacity = opacity;
-    entry.solidMesh.material.depthWrite = !isCompleted;
+    entry.solidMesh.material.depthWrite = !isCompleted && !isRemoved;
     // Step 5b-i) Reset emissive when leaving blastDay (flash animation sets it; otherwise grey appears tinted)
     if (phase !== "blastDay") {
       entry.solidMesh.material.emissive.setHex(0x000000);

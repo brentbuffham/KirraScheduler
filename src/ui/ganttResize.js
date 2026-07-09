@@ -15,8 +15,11 @@ import { recalcDependencies } from "../engine/dependencyEngine.js";
 import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { pushUndo } from "../state/undoManager.js";
+import { getDayWidth, isHoursMode } from "./ganttScale.js";
 
-var CELL_WIDTH = 32;
+// NOTE: per-slot column width follows the horizontal zoom (ganttScale.js);
+//  read it live via getDayWidth(). Durations are stored in whole DAYS, so in
+//  hours mode we snap the resize offset to whole days (round(hours/24)).
 
 // Step 1) Resize state
 var resizeState = {
@@ -116,7 +119,9 @@ function onResizeMove(e) {
   e.preventDefault();
 
   var dx = e.clientX - resizeState.startX;
-  var dayOffset = Math.round(dx / CELL_WIDTH);
+  var slotOffset = Math.round(dx / getDayWidth());
+  // Durations are day-based — snap hour-mode drags to whole days.
+  var dayOffset = isHoursMode() ? Math.round(slotOffset / 24) : slotOffset;
   resizeState.dayOffset = dayOffset;
 
   // Step 4a) Visual feedback — highlight bar edge being resized

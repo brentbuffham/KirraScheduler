@@ -18,8 +18,7 @@ import { renderGantt } from "../views/ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { showPatternAllocDialog } from "../views/blastOverview.js";
 import { getSelection, clearSelection } from "./ganttSelect.js";
-
-var CELL_WIDTH = 32;
+import { isHoursMode } from "./ganttScale.js";
 
 // Step 1) Track collapsed palette sections between renders
 var _paletteCollapsed = { patterns: false, drills: false, mpus: false, ancillary: true, crew: false, delays: false };
@@ -623,7 +622,9 @@ function getDateFromCell(cell, row) {
   var visStart = new Date(APP.planStart);
   visStart.setDate(visStart.getDate() - 5);
   var date = new Date(visStart);
-  date.setDate(date.getDate() + cellIdx);
+  // In hours mode each day is 24 cells — map the hour cell index back to a day.
+  var perDay = isHoursMode() ? 24 : 1;
+  date.setDate(date.getDate() + Math.floor(cellIdx / perDay));
   return isoDate(date);
 }
 

@@ -119,6 +119,25 @@
           Colours
         </button>
       </div>
+
+      <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
+
+      <!-- Horizontal zoom (video-editor style): segmented granularity presets +
+           a continuous slider that scales the per-day column width. -->
+      <div class="setting-group gantt-zoom-group" style="align-self:flex-end;">
+        <label>Zoom</label>
+        <div class="gantt-zoom-controls">
+          <div class="gantt-zoom-presets" role="group" aria-label="Gantt zoom presets">
+            <button type="button" class="zoom-preset" data-gran="weeks" title="Zoom out — weeks overview">Weeks</button>
+            <button type="button" class="zoom-preset active" data-gran="days" title="Day columns (default)">Days</button>
+            <button type="button" class="zoom-preset" data-gran="hours" title="Zoom in — hour detail">Hours</button>
+          </div>
+          <button type="button" class="zoom-step" id="ganttZoomOut" title="Zoom out (Ctrl + \u2212)">&#8722;</button>
+          <input type="range" id="ganttZoom" min="6" max="96" step="1" value="32" title="Drag to zoom the timeline horizontally (Ctrl + mouse wheel over the chart)">
+          <button type="button" class="zoom-step" id="ganttZoomIn" title="Zoom in (Ctrl + +)">&#43;</button>
+        </div>
+      </div>
+
       <button class="btn btn-primary" id="btnRefreshGantt" style="margin-left:auto">Refresh Gantt</button>
     </div>
 

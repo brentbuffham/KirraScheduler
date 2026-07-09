@@ -33,6 +33,7 @@ import { initCalendarExport } from "./io/calendarExport.js";
 import { initGanttSelect } from "./ui/ganttSelect.js";
 import { initGanttReorder } from "./ui/ganttReorder.js";
 import { renderGantt } from "./views/ganttView.js";
+import { initGanttScale, setDayWidth, setGranularity, zoomBy, getDayWidth, getGranularity, getScaleLimits } from "./ui/ganttScale.js";
 import { renderBlasts } from "./views/blastOverview.js";
 import { renderPatterns, initPatternLibrary } from "./views/patternLibrary.js";
 import { renderForecast } from "./views/forecastView.js";
@@ -52,6 +53,7 @@ initThemeToggle();
 initTabs();
 initContextMenu();
 initUndo();
+initGanttScale();
 initBlastModal();
 initModalTabs();
 initEquipmentModals();
@@ -76,6 +78,79 @@ document.getElementById("btnRecalcDates").addEventListener("click", function() {
   debouncedSave();
   renderGantt();
 });
+
+// Step 4a-zoom) Horizontal zoom controls (slider + Weeks/Days/Hours presets).
+//  The per-day column width is CSS-driven (--gantt-day-width), so scaling the
+//  cells is instant; we only need a light re-render so JS-positioned bits
+//  (drill start-time offset, connector arrows) re-measure at the new width.
+(function initGanttZoomControls() {
+  var slider = document.getElementById("ganttZoom");
+  var presetWrap = document.querySelector(".gantt-zoom-presets");
+  var scroll = document.getElementById("ganttScroll");
+  if (!slider) return;
+
+  // Step) Reflect current scale state into the slider (bounds + value) + preset.
+  //  Day and hour modes use different pixel bounds, so refresh min/max too.
+  function syncZoomUI() {
+    var lims = getScaleLimits();
+    slider.min = lims.min;
+    slider.max = lims.max;
+    slider.value = getDayWidth();
+    var gran = getGranularity();
+    document.querySelectorAll(".gantt-zoom-presets .zoom-preset").forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.gran === gran);
+    });
+  }
+
+  // Step) Throttle re-render to one per animation frame while dragging the slider
+  var rafPending = false;
+  function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(function() {
+      rafPending = false;
+      renderGantt();
+    });
+  }
+
+  // Step) Slider drag → set width → sync UI → re-render
+  slider.addEventListener("input", function() {
+    setDayWidth(parseInt(slider.value, 10));
+    syncZoomUI();
+    scheduleRender();
+  });
+
+  // Step) +/- step buttons
+  var zin = document.getElementById("ganttZoomIn");
+  var zout = document.getElementById("ganttZoomOut");
+  if (zin) zin.addEventListener("click", function() { zoomBy(8); syncZoomUI(); scheduleRender(); });
+  if (zout) zout.addEventListener("click", function() { zoomBy(-8); syncZoomUI(); scheduleRender(); });
+
+  // Step) Segmented Weeks / Days / Hours presets
+  if (presetWrap) {
+    presetWrap.addEventListener("click", function(e) {
+      var btn = e.target.closest(".zoom-preset");
+      if (!btn) return;
+      setGranularity(btn.dataset.gran);
+      syncZoomUI();
+      scheduleRender();
+    });
+  }
+
+  // Step) Ctrl + mouse wheel over the chart zooms (like a video editor timeline).
+  //  Shift/Alt wheel is already horizontal scroll (ganttView), so we only claim Ctrl.
+  if (scroll) {
+    scroll.addEventListener("wheel", function(e) {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 6 : -6);
+      syncZoomUI();
+      scheduleRender();
+    }, { passive: false });
+  }
+
+  syncZoomUI();
+})();
 
 document.getElementById("btnAutoSchedule").addEventListener("click", function() {
   autoSchedule();
