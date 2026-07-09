@@ -92,37 +92,58 @@ function buildStatusBadge(blast) {
     "<span class=\"status-badge " + st.badgeClass + "\">" + st.label + "</span>";
 }
 
-// Step 0c) Build draggable drill-ID chips for the info column.
-//  Each chip can be dragged back to the palette to unassign.
+// Step 0c) Build draggable drill-ID chips for the EQUIP column.
 function buildDrillChips(drillIds, blastIdx, blockIdx) {
   if (!drillIds || drillIds.length === 0) return "";
   var html = "";
   for (var i = 0; i < drillIds.length; i++) {
     var did = drillIds[i];
-    var blockPart = (blockIdx !== null && blockIdx !== undefined) ? ":" + blockIdx : "";
-    html += "<span class=\"gantt-drill-chip\" draggable=\"true\" " +
+    html += "<span class=\"gantt-drill-chip gantt-equip-chip\" draggable=\"true\" " +
       "data-drag-type=\"gantt-drill\" data-drag-id=\"" + did + "\" " +
       "data-blast-idx=\"" + blastIdx + "\" data-block-idx=\"" + (blockIdx !== null && blockIdx !== undefined ? blockIdx : "") + "\" " +
-      "title=\"Drag back to palette to unassign " + did + "\">" + did + "</span>";
+      "title=\"Drag to another drill row or back to palette to unassign " + did + "\">" + did + "</span>";
   }
   return html;
 }
 
-// Step 0d) Build a single draggable MPU chip for the info column.
-function buildMPUChip(mpuId, blastIdx) {
-  if (!mpuId) return "";
-  return "<span class=\"gantt-mpu-chip\" draggable=\"true\" " +
-    "data-drag-type=\"gantt-mpu\" data-drag-id=\"" + mpuId + "\" " +
-    "data-blast-idx=\"" + blastIdx + "\" " +
-    "title=\"Drag back to palette to unassign " + mpuId + "\">" + mpuId + "</span> ";
-}
-
-// Step 0d-ii) Build draggable MPU chips for an array of MPU IDs (multi-MPU support).
+// Step 0d) Build draggable MPU chips for the EQUIP column.
 function buildMPUChips(mpuIds, blastIdx) {
   if (!mpuIds || mpuIds.length === 0) return "";
   var html = "";
   for (var i = 0; i < mpuIds.length; i++) {
-    html += buildMPUChip(mpuIds[i], blastIdx);
+    var mid = mpuIds[i];
+    html += "<span class=\"gantt-mpu-chip gantt-equip-chip\" draggable=\"true\" " +
+      "data-drag-type=\"gantt-mpu\" data-drag-id=\"" + mid + "\" " +
+      "data-blast-idx=\"" + blastIdx + "\" " +
+      "title=\"Drag to another loading row or back to palette to unassign " + mid + "\">" + mid + "</span>";
+  }
+  return html;
+}
+
+// Step 0d-ii) Build draggable ancillary chips for Pattern Prep rows.
+function buildAncillaryChips(ancIds, blastIdx) {
+  if (!ancIds || ancIds.length === 0) return "";
+  var html = "";
+  for (var i = 0; i < ancIds.length; i++) {
+    var aid = ancIds[i];
+    html += "<span class=\"gantt-ancillary-chip gantt-equip-chip\" draggable=\"true\" " +
+      "data-drag-type=\"gantt-ancillary\" data-drag-id=\"" + aid + "\" " +
+      "data-blast-idx=\"" + blastIdx + "\" " +
+      "title=\"Drag to another prep row or back to palette to unassign " + aid + "\">" + aid + "</span>";
+  }
+  return html;
+}
+
+// Step 0d-iii) Build draggable excavation chips for Excavation rows.
+function buildExcavatorChips(excavIds, blastIdx) {
+  if (!excavIds || excavIds.length === 0) return "";
+  var html = "";
+  for (var i = 0; i < excavIds.length; i++) {
+    var eid = excavIds[i];
+    html += "<span class=\"gantt-excav-chip gantt-equip-chip\" draggable=\"true\" " +
+      "data-drag-type=\"gantt-excav\" data-drag-id=\"" + eid + "\" " +
+      "data-blast-idx=\"" + blastIdx + "\" " +
+      "title=\"Drag to another excavation row or back to palette to unassign " + eid + "\">" + eid + "</span>";
   }
   return html;
 }
@@ -666,7 +687,7 @@ function renderGantt() {
       if (sectionName === "PATTERN PREP") {
         // Step 1f-ii-prep) Ancillary equipment + prep-days
         var ancIds = blast.assignedAncillary || [];
-        equipHtml = ancIds.length > 0 ? ancIds.join(", ") : "";
+        equipHtml = buildAncillaryChips(ancIds, idx);
         valueHtml = blast.prepDays ? (blast.prepDays + "d") : "";
       } else if (sectionName === "DRILLING") {
         equipHtml = buildDrillChips(blast.assignedDrills || [], idx, null);
@@ -699,7 +720,7 @@ function renderGantt() {
       } else if (sectionName === "EXCAVATION") {
         // Step 1f-ii-excav) Assigned excavation ancillary + days/volume
         var excavIds = blast.assignedExcavators || [];
-        equipHtml = excavIds.length > 0 ? excavIds.join(", ") : "";
+        equipHtml = buildExcavatorChips(excavIds, idx);
         valueHtml = (blast.excavDays ? (blast.excavDays + "d ") : "") + formatNum(blast.volume) + " bcm";
       } else {
         valueHtml = formatNum(blast.volume) + " bcm";
@@ -865,15 +886,16 @@ function renderGantt() {
   initGanttResize();
   initGanttReorder();
 
-  // Step 1j-b) Attach drag events to inline drill/mpu chips in the info column
-  document.querySelectorAll(".gantt-drill-chip, .gantt-mpu-chip").forEach(function(chip) {
+  // Step 1j-b) Attach drag events to inline equipment chips in the EQUIP column
+  document.querySelectorAll(".gantt-equip-chip").forEach(function(chip) {
     chip.addEventListener("dragstart", function(e) {
       e.stopPropagation();
       var dragType = chip.dataset.dragType;
       var dragId = chip.dataset.dragId;
       var blastIdx = chip.dataset.blastIdx;
       var blockIdx = chip.dataset.blockIdx;
-      var payload = dragType + ":" + dragId + ":" + blastIdx + (blockIdx !== "" ? ":" + blockIdx : "");
+      var payload = dragType + ":" + dragId + ":" + blastIdx;
+      if (blockIdx !== undefined && blockIdx !== "") payload += ":" + blockIdx;
       e.dataTransfer.setData("text/plain", payload);
       e.dataTransfer.effectAllowed = "move";
       chip.classList.add("chip-dragging");

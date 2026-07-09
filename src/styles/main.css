@@ -1587,6 +1587,13 @@ select[multiple] option:checked {
   overflow: visible;
 }
 
+/* Step 30b) Dependency links show/hide toggle — active = links visible */
+#btnToggleDepLinks.active {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  background: rgba(16, 185, 129, 0.12);
+}
+
 /* Step 31) Start-time indicator */
 .gantt-bar .start-time-label {
   position: absolute;
@@ -2128,17 +2135,14 @@ select[multiple] option:checked {
 }
 
 /* ============================================================
-   Step 46) Draggable drill/mpu chips in the Gantt info column
-   Drag back to the palette to unassign equipment
+   Step 46) Draggable equipment chips in the Gantt EQUIP column
+   Drag to another row (same phase) or back to the palette to unassign
    ============================================================ */
-.gantt-drill-chip {
+.gantt-equip-chip {
   display: inline-block;
   font-family: 'JetBrains Mono', monospace;
   font-size: 8px;
   font-weight: 700;
-  color: var(--accent-cyan);
-  background: rgba(6, 182, 212, 0.1);
-  border: 1px solid rgba(6, 182, 212, 0.3);
   border-radius: 3px;
   padding: 0 3px;
   margin-right: 2px;
@@ -2147,40 +2151,89 @@ select[multiple] option:checked {
   line-height: 1.4;
   white-space: nowrap;
   transition: all 0.15s;
+}
+.gantt-equip-chip.chip-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.gantt-drill-chip {
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
 }
 .gantt-drill-chip:hover {
   background: rgba(6, 182, 212, 0.25);
   border-color: var(--accent-cyan);
 }
-.gantt-drill-chip.chip-dragging {
-  opacity: 0.4;
-  cursor: grabbing;
-}
 
 .gantt-mpu-chip {
-  display: inline-block;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  font-weight: 700;
   color: var(--accent-load);
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 3px;
-  padding: 0 3px;
-  margin-right: 2px;
-  cursor: grab;
-  vertical-align: middle;
-  line-height: 1.4;
-  white-space: nowrap;
-  transition: all 0.15s;
 }
 .gantt-mpu-chip:hover {
   background: rgba(245, 158, 11, 0.25);
   border-color: var(--accent-load);
 }
-.gantt-mpu-chip.chip-dragging {
-  opacity: 0.4;
-  cursor: grabbing;
+
+.gantt-ancillary-chip {
+  color: var(--accent-prep);
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+.gantt-ancillary-chip:hover {
+  background: rgba(20, 184, 166, 0.25);
+  border-color: var(--accent-prep);
+}
+
+.gantt-excav-chip {
+  color: var(--accent-excav);
+  background: rgba(161, 98, 7, 0.12);
+  border: 1px solid rgba(161, 98, 7, 0.35);
+}
+.gantt-excav-chip:hover {
+  background: rgba(161, 98, 7, 0.28);
+  border-color: var(--accent-excav);
+}
+
+/* Step 46b) Light mode — darker chip text/borders so EQUIP chips stay readable
+   on the pale grey row background. Dark mode styles above are unchanged. */
+[data-theme="light"] .gantt-drill-chip {
+  color: #0e7490;
+  background: rgba(6, 182, 212, 0.28);
+  border-color: rgba(14, 116, 144, 0.55);
+}
+[data-theme="light"] .gantt-drill-chip:hover {
+  background: rgba(6, 182, 212, 0.4);
+  border-color: #0e7490;
+}
+[data-theme="light"] .gantt-mpu-chip {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.32);
+  border-color: rgba(180, 83, 9, 0.55);
+}
+[data-theme="light"] .gantt-mpu-chip:hover {
+  background: rgba(245, 158, 11, 0.45);
+  border-color: #b45309;
+}
+[data-theme="light"] .gantt-ancillary-chip {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.28);
+  border-color: rgba(15, 118, 110, 0.55);
+}
+[data-theme="light"] .gantt-ancillary-chip:hover {
+  background: rgba(20, 184, 166, 0.4);
+  border-color: #0f766e;
+}
+[data-theme="light"] .gantt-excav-chip {
+  color: #78350f;
+  background: rgba(161, 98, 7, 0.22);
+  border-color: rgba(120, 53, 15, 0.55);
+}
+[data-theme="light"] .gantt-excav-chip:hover {
+  background: rgba(161, 98, 7, 0.35);
+  border-color: #78350f;
 }
 
 /* Palette glows when accepting a returning chip */

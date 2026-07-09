@@ -1,25 +1,123 @@
 // ============================================================
 //  GANTT CONNECTORS
-//  Draws SVG dependency arrows between Gantt chart sections
-//  (Drill → Load → Blast) for each blast.
+//  Draws SVG dependency arrows on the Gantt:
+//    • Within each blast: Prep → Drill → Load → Blast → Excavation
+//    • Cross-blast predecessor links (green = satisfied, red = breached)
 //  Handles collapsed sections: when a source section is hidden,
 //  the arrow enters the visible target row from the top.
 // ============================================================
 
 import { APP } from "../state/appState.js";
+import { getBlastDeps } from "../engine/dependencyEngine.js";
+import { addDays, isoDate } from "../utils/dateUtils.js";
+
+// Step 0) Show/hide preference — persisted locally (not exported in KGP)
+var LS_SHOW_LINKS = "kirrasched.ganttShowDepLinks";
+var _showLinks = true;
+
+function loadShowLinksPref() {
+  try {
+    var stored = localStorage.getItem(LS_SHOW_LINKS);
+    if (stored === "0" || stored === "false") _showLinks = false;
+    else if (stored === "1" || stored === "true") _showLinks = true;
+  } catch (e) { /* ignore */ }
+}
+
+function saveShowLinksPref() {
+  try {
+    localStorage.setItem(LS_SHOW_LINKS, _showLinks ? "1" : "0");
+  } catch (e) { /* ignore */ }
+}
+
+function areConnectorsVisible() {
+  return _showLinks;
+}
+
+function setConnectorsVisible(show) {
+  _showLinks = !!show;
+  saveShowLinksPref();
+  syncDepLinksButton();
+  renderConnectors();
+}
+
+function toggleConnectorsVisible() {
+  setConnectorsVisible(!_showLinks);
+}
+
+// Step 0b) Wire the show/hide button in the Dependencies bar
+function initConnectorLinksToggle() {
+  loadShowLinksPref();
+  var btn = document.getElementById("btnToggleDepLinks");
+  if (!btn || btn._depLinksBound) return;
+  btn._depLinksBound = true;
+  btn.addEventListener("click", function() {
+    toggleConnectorsVisible();
+  });
+  syncDepLinksButton();
+}
+
+function syncDepLinksButton() {
+  var btn = document.getElementById("btnToggleDepLinks");
+  if (!btn) return;
+  if (_showLinks) {
+    btn.classList.add("active");
+    btn.title = "Hide dependency arrows on the Gantt chart";
+    btn.innerHTML = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"width:12px;height:12px\"><path d=\"M5 12h14\"/><path d=\"M12 5l7 7-7 7\"/></svg> Hide Links";
+  } else {
+    btn.classList.remove("active");
+    btn.title = "Show dependency arrows on the Gantt chart";
+    btn.innerHTML = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"width:12px;height:12px\"><path d=\"M5 12h14\"/><path d=\"M12 5l7 7-7 7\"/></svg> Show Links";
+  }
+}
+
+loadShowLinksPref();
 
 // Step 1) Check if a row is visible (not in a collapsed section)
 function isRowVisible(row) {
   return row && !row.classList.contains("section-hidden");
 }
 
-// Step 2) Main render function — call after renderGantt()
+// Step 2) Phase end/start helpers for breach colouring
+function prepEndIso(blast) {
+  if (!blast.prepStart || !blast.prepDays) return null;
+  return isoDate(addDays(new Date(blast.prepStart), Math.max((blast.prepDays || 1) - 1, 0)));
+}
+
+function drillEndIso(blast) {
+  if (blast.noDrill || !blast.drillStart || !blast.drillDays) return null;
+  return isoDate(addDays(new Date(blast.drillStart), Math.max((blast.drillDays || 1) - 1, 0)));
+}
+
+function loadEndIso(blast) {
+  if (blast.noLoad || !blast.loadStart) return null;
+  var days = blast.loadDays || 1;
+  return isoDate(addDays(new Date(blast.loadStart), Math.max(days - 1, 0)));
+}
+
+function excavEndIso(blast) {
+  if (blast.noExcav || !blast.excavStart || !blast.excavDays) return null;
+  return isoDate(addDays(new Date(blast.excavStart), Math.max((blast.excavDays || 1) - 1, 0)));
+}
+
+// Step 2b) True when the target phase starts before the source phase has finished
+function startsBeforeEnd(endIso, startIso) {
+  if (!endIso || !startIso) return false;
+  return new Date(startIso) < new Date(endIso);
+}
+
+// Step 2c) First row that receives the drill-cycle entry (prep if present, else drill)
+function getDrillEntryRow(g, blast) {
+  if (g["pattern prep"] && blast.prepStart && blast.prepDays) return g["pattern prep"];
+  return g.drilling || null;
+}
+
+// Step 3) Main render function — call after renderGantt()
 function renderConnectors() {
   var scrollEl = document.getElementById("ganttScroll");
   var table = document.getElementById("ganttTable");
   if (!scrollEl || !table) return;
 
-  // Step 3) Ensure a wrapper div exists so SVG scrolls with content
+  // Step 3a) Ensure a wrapper div exists so SVG scrolls with content
   var wrapper = table.parentElement;
   if (!wrapper || wrapper.id !== "ganttContentWrapper") {
     wrapper = document.createElement("div");
@@ -29,29 +127,32 @@ function renderConnectors() {
     wrapper.appendChild(table);
   }
 
-  // Step 4) Remove old SVG if present
+  // Step 3b) Remove old SVG if present
   var oldSvg = document.getElementById("ganttConnectorSvg");
   if (oldSvg) oldSvg.remove();
 
-  // Step 5) Create SVG element sized to the table
+  // Step 3b-ii) User toggled links off — leave SVG removed
+  if (!_showLinks) return;
+
+  // Step 3c) Create SVG element sized to the table
   var ns = "http://www.w3.org/2000/svg";
   var svg = document.createElementNS(ns, "svg");
   svg.id = "ganttConnectorSvg";
   svg.setAttribute("width", table.scrollWidth || table.offsetWidth);
   svg.setAttribute("height", table.scrollHeight || table.offsetHeight);
 
-  // Step 6) Read theme-aware colors from CSS variables
+  // Step 3d) Read theme-aware colours from CSS variables
   var styles = getComputedStyle(document.documentElement);
   var colorOk = styles.getPropertyValue("--accent-green").trim() || "#10b981";
   var colorBreach = styles.getPropertyValue("--accent-blast").trim() || "#ef4444";
 
-  // Step 6b) Define arrowhead markers using theme colors
+  // Step 3e) Define arrowhead markers using theme colours
   var defs = document.createElementNS(ns, "defs");
   defs.appendChild(makeMarker(ns, "arrOk", colorOk));
   defs.appendChild(makeMarker(ns, "arrWarn", colorBreach));
   svg.appendChild(defs);
 
-  // Step 7) Gather blast rows indexed by (blastIdx, section)
+  // Step 4) Gather blast rows indexed by (blastIdx, section)
   var groups = {};
   var allRows = document.querySelectorAll(".gantt-row[data-blast]");
   allRows.forEach(function(row) {
@@ -67,7 +168,7 @@ function renderConnectors() {
     }
   });
 
-  // Step 7b) For block blasts, find the last-ending drilling row
+  // Step 4b) For block blasts, find the last-ending drilling row
   Object.keys(groups).forEach(function(key) {
     var g = groups[key];
     if (g._drillRows && g._drillRows.length > 0 && !g.drilling) {
@@ -90,72 +191,146 @@ function renderConnectors() {
     }
   });
 
-  // Step 8) Draw connectors for each blast
   var tableRect = table.getBoundingClientRect();
+  var drawCtx = { ns: ns, svg: svg, tableRect: tableRect, colorOk: colorOk, colorBreach: colorBreach };
 
+  // Step 5) Within-blast cycle connectors
   Object.keys(groups).forEach(function(key) {
     var blast = APP.blasts[parseInt(key)];
     if (!blast) return;
-
     var g = groups[key];
-    var breach = !!blast._depWarning;
 
-    // Step 8a) Drill end → Load start connector
-    if (g.drilling && g.loading) {
-      var fromVisible = isRowVisible(g.drilling);
-      var toVisible = isRowVisible(g.loading);
-
-      if (fromVisible && toVisible) {
-        // Step 8a-i) Both visible: standard L-shaped path going downward
-        var from = lastBarPos(g.drilling, tableRect);
-        var to = firstBarPos(g.loading, tableRect);
-        if (from && to) drawDownPath(ns, svg, from, to, breach, colorOk, colorBreach);
-      } else if (!fromVisible && toVisible) {
-        // Step 8a-ii) Drill collapsed: arrow enters loading from the top
-        var to1 = firstBarPos(g.loading, tableRect);
-        if (to1) drawFromTopPath(ns, svg, to1, breach, colorOk, colorBreach);
-      }
-      // If target is collapsed, skip — no visible endpoint
+    // Step 5a) Pattern Prep end → Drill start
+    if (g["pattern prep"] && g.drilling && blast.prepStart && blast.drillStart) {
+      var prepBreach = startsBeforeEnd(prepEndIso(blast), blast.drillStart);
+      connectRows(g["pattern prep"], g.drilling, lastBarPos, firstBarPos, prepBreach, drawCtx);
     }
 
-    // Step 8b) Load end → Blast connector
-    if (g.loading && g.blasting) {
-      var fromVisible2 = isRowVisible(g.loading);
-      var toVisible2 = isRowVisible(g.blasting);
-
-      if (fromVisible2 && toVisible2) {
-        // Step 8b-i) Both visible: standard L-shaped path going downward
-        var from2 = lastBarPos(g.loading, tableRect);
-        var to2 = midBarPos(g.blasting, tableRect);
-        if (from2 && to2) drawDownPath(ns, svg, from2, to2, breach, colorOk, colorBreach);
-      } else if (!fromVisible2 && toVisible2) {
-        // Step 8b-ii) Loading collapsed: arrow enters blasting from the top
-        var to3 = midBarPos(g.blasting, tableRect);
-        if (to3) drawFromTopPath(ns, svg, to3, breach, colorOk, colorBreach);
-      }
+    // Step 5b) Drill end → Load start
+    if (g.drilling && g.loading && !blast.noDrill && !blast.noLoad) {
+      var drillLoadBreach = startsBeforeEnd(drillEndIso(blast), blast.loadStart);
+      connectRows(g.drilling, g.loading, lastBarPos, firstBarPos, drillLoadBreach, drawCtx);
     }
 
-    // Step 8c) Drill → Blast when loading is absent (noLoad) or both drill + load collapsed
-    if (g.drilling && !g.loading && g.blasting) {
-      var dVis = isRowVisible(g.drilling);
-      var bVis = isRowVisible(g.blasting);
+    // Step 5c) Load end → Blast
+    if (g.loading && g.blasting && !blast.noLoad && !blast.noBlast) {
+      var loadBlastBreach = blast.blastDate && blast.loadStart
+        ? startsBeforeEnd(loadEndIso(blast), blast.blastDate) : false;
+      connectRows(g.loading, g.blasting, lastBarPos, midBarPos, loadBlastBreach, drawCtx);
+    }
 
-      if (dVis && bVis) {
-        var fromD = lastBarPos(g.drilling, tableRect);
-        var toB = midBarPos(g.blasting, tableRect);
-        if (fromD && toB) drawDownPath(ns, svg, fromD, toB, breach, colorOk, colorBreach);
-      } else if (!dVis && bVis) {
-        var toB2 = midBarPos(g.blasting, tableRect);
-        if (toB2) drawFromTopPath(ns, svg, toB2, breach, colorOk, colorBreach);
-      }
+    // Step 5d) Drill → Blast when loading is skipped
+    if (g.drilling && !g.loading && g.blasting && !blast.noDrill && !blast.noBlast && blast.noLoad) {
+      var drillBlastBreach = blast.blastDate && blast.drillStart
+        ? startsBeforeEnd(drillEndIso(blast), blast.blastDate) : false;
+      connectRows(g.drilling, g.blasting, lastBarPos, midBarPos, drillBlastBreach, drawCtx);
+    }
+
+    // Step 5e) Blast → Excavation start (dig-out after firing)
+    if (g.blasting && g.excavation && !blast.noBlast && !blast.noExcav && blast.blastDate && blast.excavStart) {
+      var blastExcavBreach = new Date(blast.excavStart) < new Date(blast.blastDate);
+      connectRows(g.blasting, g.excavation, midBarPos, firstBarPos, blastExcavBreach, drawCtx);
     }
   });
 
-  // Step 9) Append SVG to wrapper
+  // Step 6) Cross-blast predecessor connectors
+  for (var si = 0; si < APP.blasts.length; si++) {
+    var succ = APP.blasts[si];
+    var deps = getBlastDeps(succ);
+    if (!deps.predecessor) continue;
+
+    var pred = null;
+    var predIdx = -1;
+    for (var pi = 0; pi < APP.blasts.length; pi++) {
+      if (APP.blasts[pi].name === deps.predecessor) {
+        pred = APP.blasts[pi];
+        predIdx = pi;
+        break;
+      }
+    }
+    if (!pred || predIdx < 0) continue;
+
+    var predG = groups[String(predIdx)];
+    var succG = groups[String(si)];
+    if (!predG || !succG) continue;
+
+    var predType = deps.predType || "blast-before-drill";
+    var fromRow = null;
+    var toRow = null;
+    var fromPosFn = lastBarPos;
+    var toPosFn = firstBarPos;
+    var breach = false;
+
+    // Step 6a) Predecessor excavated before this drill (arrow to prep or drill)
+    if (predType === "excav-before-drill") {
+      fromRow = predG.excavation;
+      fromPosFn = lastBarPos;
+      toRow = getDrillEntryRow(succG, succ);
+      if (toRow === succG["pattern prep"]) {
+        breach = succ.prepStart && pred.excavStart
+          ? startsBeforeEnd(excavEndIso(pred), succ.prepStart) : false;
+        if (!breach && succ.drillStart) {
+          breach = startsBeforeEnd(excavEndIso(pred), succ.drillStart);
+        }
+      } else if (toRow === succG.drilling && succ.drillStart) {
+        breach = startsBeforeEnd(excavEndIso(pred), succ.drillStart);
+      }
+    // Step 6b) Predecessor must fire before drill
+    } else if (predType === "blast-before-drill") {
+      fromRow = predG.blasting;
+      fromPosFn = midBarPos;
+      toRow = getDrillEntryRow(succG, succ);
+      if (succ.drillStart && pred.blastDate) {
+        breach = new Date(succ.drillStart) < new Date(pred.blastDate);
+      }
+    // Step 6c) Predecessor drill done before this drill
+    } else if (predType === "drill-before-drill") {
+      fromRow = predG.drilling;
+      fromPosFn = lastBarPos;
+      toRow = getDrillEntryRow(succG, succ);
+      if (succ.drillStart && pred.drillStart) {
+        breach = startsBeforeEnd(drillEndIso(pred), succ.drillStart);
+      }
+    // Step 6d) Predecessor must fire before loading
+    } else if (predType === "blast-before-load") {
+      fromRow = predG.blasting;
+      fromPosFn = midBarPos;
+      toRow = succG.loading;
+      if (succ.loadStart && pred.blastDate) {
+        breach = new Date(succ.loadStart) < new Date(pred.blastDate);
+      }
+    }
+
+    if (fromRow && toRow) {
+      connectRows(fromRow, toRow, fromPosFn, toPosFn, breach, drawCtx);
+    }
+  }
+
+  // Step 7) Append SVG to wrapper
   wrapper.appendChild(svg);
 }
 
-// Step 10) Create an SVG arrowhead <marker>
+// Step 8) Connect two rows — handles collapsed source sections
+function connectRows(fromRow, toRow, fromPosFn, toPosFn, breach, ctx) {
+  var fromVisible = isRowVisible(fromRow);
+  var toVisible = isRowVisible(toRow);
+  if (!toVisible) return;
+
+  if (fromVisible) {
+    var from = fromPosFn(fromRow, ctx.tableRect);
+    var to = toPosFn(toRow, ctx.tableRect);
+    if (from && to) {
+      drawConnectorPath(ctx.ns, ctx.svg, from, to, breach, ctx.colorOk, ctx.colorBreach);
+    }
+  } else {
+    var toOnly = toPosFn(toRow, ctx.tableRect);
+    if (toOnly) {
+      drawFromTopPath(ctx.ns, ctx.svg, toOnly, breach, ctx.colorOk, ctx.colorBreach);
+    }
+  }
+}
+
+// Step 9) Create an SVG arrowhead <marker>
 function makeMarker(ns, id, color) {
   var m = document.createElementNS(ns, "marker");
   m.setAttribute("id", id);
@@ -171,7 +346,7 @@ function makeMarker(ns, id, color) {
   return m;
 }
 
-// Step 11) Position helpers — relative to table origin
+// Step 10) Position helpers — relative to table origin
 function relPos(el, tableRect) {
   var r = el.getBoundingClientRect();
   return {
@@ -212,11 +387,10 @@ function midBarPos(row, tableRect) {
   return { x: cr.left + cr.width / 2, y: rr.top + rr.height / 2 };
 }
 
-// Step 12) Draw a downward L-shaped SVG path between two points
-//          Always routes right from "from", then down, then across to "to"
-function drawDownPath(ns, svg, from, to, breach, colorOk, colorBreach) {
+// Step 11) L-shaped connector — works for targets above or below the source
+function drawConnectorPath(ns, svg, from, to, breach, colorOk, colorBreach) {
   var path = document.createElementNS(ns, "path");
-  var mx = from.x + 6;
+  var mx = Math.max(from.x, to.x) + 10;
   var d = "M " + from.x + " " + from.y +
           " L " + mx + " " + from.y +
           " L " + mx + " " + to.y +
@@ -226,8 +400,7 @@ function drawDownPath(ns, svg, from, to, breach, colorOk, colorBreach) {
   svg.appendChild(path);
 }
 
-// Step 13) Draw a "from top" connector — vertical arrow entering from above
-//          Used when the source section is collapsed
+// Step 12) Vertical arrow entering from above when the source section is collapsed
 function drawFromTopPath(ns, svg, to, breach, colorOk, colorBreach) {
   var path = document.createElementNS(ns, "path");
   var topY = to.y - 16;
@@ -238,7 +411,7 @@ function drawFromTopPath(ns, svg, to, breach, colorOk, colorBreach) {
   svg.appendChild(path);
 }
 
-// Step 14) Shared path styling
+// Step 13) Shared path styling — green solid = OK, red dashed = breached
 function applyPathStyle(path, d, breach, colorOk, colorBreach) {
   path.setAttribute("d", d);
   path.setAttribute("fill", "none");
@@ -253,4 +426,4 @@ function applyPathStyle(path, d, breach, colorOk, colorBreach) {
   }
 }
 
-export { renderConnectors };
+export { renderConnectors, initConnectorLinksToggle, areConnectorsVisible, setConnectorsVisible };

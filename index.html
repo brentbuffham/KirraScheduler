@@ -170,6 +170,10 @@
         <label>Drill Overlap %</label>
         <input type="number" id="depDrillOverlap" value="100" min="0" max="200" step="5" style="width:60px" title="Previous blast drill % complete before next blast can start drilling. 100 = no overlap (finish first), 50 = 50% overlap">
       </div>
+      <button class="btn" id="btnToggleDepLinks" title="Show or hide dependency arrows on the Gantt chart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        Hide Links
+      </button>
       <button class="btn" id="btnRecalcDates" style="margin-left:auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
         Recalc Dates

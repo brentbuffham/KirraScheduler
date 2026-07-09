@@ -4,12 +4,12 @@
 //    - PATTERNS: drag onto any row to assign a drill pattern
 //    - DRILLS:   drag onto a drilling row to assign a drill
 //    - MPUs:     drag onto a loading row to assign an MPU
-//    - DELAYS:   drag onto any row to add a delay block
+//    - ANCILLARY: drag onto pattern prep or excavation rows
 // ============================================================
 
 import { DELAY_TYPES, createDelay } from "../state/delayTypes.js";
 import { CREW_ROLES, ensureCrewAllocated } from "../state/crewRoles.js";
-import { drills, mpus, ancillary } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, getDigRate } from "../state/equipmentState.js";
 import { APP } from "../state/appState.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { syncBlastFromBlocks } from "../engine/blockHelpers.js";
@@ -293,6 +293,10 @@ function initGanttDropTarget() {
     } else if (dragType === "gantt-mpu") {
       // Step 4c-c) Reassign MPU from one blast to another via drag
       handleMPUReassign(blast, dragId, parseInt(parts[2]), section);
+    } else if (dragType === "gantt-ancillary") {
+      handleAncillaryReassign(blast, dragId, parseInt(parts[2]), section);
+    } else if (dragType === "gantt-excav") {
+      handleExcavReassign(blast, dragId, parseInt(parts[2]), section);
     }
   });
 }
@@ -355,14 +359,24 @@ function batchApplyDrop(dragType, dragId, selection) {
       delete blast.mpuRates;
       applied++;
 
-    // Step 4d-iii) ANCILLARY batch — only on pattern prep rows
+    // Step 4d-iii) ANCILLARY batch — pattern prep or excavation rows
     } else if (dragType === "ancillary") {
-      if (section !== "pattern prep") continue;
-      if (!blast.assignedAncillary) blast.assignedAncillary = [];
-      if (blast.assignedAncillary.indexOf(dragId) !== -1) { skipped++; continue; }
-      blast.assignedAncillary.push(dragId);
-      delete blast.ancillaryRates;
-      applied++;
+      if (section !== "pattern prep" && section !== "excavation") continue;
+      if (section === "pattern prep") {
+        if (!blast.assignedAncillary) blast.assignedAncillary = [];
+        if (blast.assignedAncillary.indexOf(dragId) !== -1) { skipped++; continue; }
+        blast.assignedAncillary.push(dragId);
+        delete blast.ancillaryRates;
+        applied++;
+      } else if (section === "excavation") {
+        if (!blast.excavStart) { skipped++; continue; }
+        var batchUnit = ancillary.find(function(a) { return a.id === dragId; });
+        if (!batchUnit || getDigRate(batchUnit) <= 0) { skipped++; continue; }
+        if (!blast.assignedExcavators) blast.assignedExcavators = [];
+        if (blast.assignedExcavators.indexOf(dragId) !== -1) { skipped++; continue; }
+        blast.assignedExcavators.push(dragId);
+        applied++;
+      }
 
     // Step 4d-iv) CREW batch — on drilling or loading rows
     } else if (dragType === "crew") {
@@ -566,28 +580,56 @@ function handleMPUDrop(blast, mpuId, section) {
   showDropFeedback(mpuId + " assigned to " + blast.name, true);
 }
 
-// Step 7a-ii) Handle ancillary drop — assign ancillary equipment to pattern prep
+// Step 7a-ii) Handle ancillary drop — assign to pattern prep or excavation
 function handleAncillaryDrop(blast, unitId, section) {
-  // Step 7a-ii-a) Only valid on pattern prep rows
-  if (section !== "pattern prep") {
-    showDropFeedback("Ancillary can only be dropped on PATTERN PREP rows");
+  // Step 7a-ii-a) Valid on pattern prep or excavation rows only
+  if (section !== "pattern prep" && section !== "excavation") {
+    showDropFeedback("Ancillary can be dropped on PATTERN PREP or EXCAVATION rows");
     return;
   }
 
-  // Step 7a-ii-b) Add to array if not already assigned
-  if (!blast.assignedAncillary) blast.assignedAncillary = [];
-  if (blast.assignedAncillary.indexOf(unitId) !== -1) {
+  if (section === "pattern prep") {
+    // Step 7a-ii-b) Add to prep ancillary array if not already assigned
+    if (!blast.assignedAncillary) blast.assignedAncillary = [];
+    if (blast.assignedAncillary.indexOf(unitId) !== -1) {
+      showDropFeedback(unitId + " already assigned to " + blast.name);
+      return;
+    }
+    blast.assignedAncillary.push(unitId);
+
+    // Step 7a-ii-c) Clear per-blast ancillary rate overrides so recalc uses fleet defaults
+    delete blast.ancillaryRates;
+
+    debouncedSave();
+    renderGantt();
+    showDropFeedback(unitId + " assigned to " + blast.name + " prep", true);
+    return;
+  }
+
+  // Step 7a-ii-d) Excavation — dig-capable ancillary only
+  if (!blast.excavStart) {
+    showDropFeedback("Send this blast to Excavation first (right-click or Send all to Excavation)");
+    return;
+  }
+  var unit = null;
+  for (var ui = 0; ui < ancillary.length; ui++) {
+    if (ancillary[ui].id === unitId) { unit = ancillary[ui]; break; }
+  }
+  if (!unit || getDigRate(unit) <= 0) {
+    showDropFeedback(unitId + " cannot excavate (use Excavator, Loader, Dozer, or Dragline)");
+    return;
+  }
+  if (!blast.assignedExcavators) blast.assignedExcavators = [];
+  if (blast.assignedExcavators.indexOf(unitId) !== -1) {
     showDropFeedback(unitId + " already assigned to " + blast.name);
     return;
   }
-  blast.assignedAncillary.push(unitId);
+  blast.assignedExcavators.push(unitId);
 
-  // Step 7a-ii-c) Clear per-blast ancillary rate overrides so recalc uses fleet defaults
-  delete blast.ancillaryRates;
-
+  recalcDependencies();
   debouncedSave();
   renderGantt();
-  showDropFeedback(unitId + " assigned to " + blast.name + " prep", true);
+  showDropFeedback(unitId + " assigned to " + blast.name + " excavation", true);
 }
 
 // Step 7b) Handle crew drop — increment crew allocation on a blast section
@@ -773,6 +815,10 @@ function initPaletteReturnTarget() {
       handleDrillReturn(blast, dragId, blockIdx);
     } else if (dragType === "gantt-mpu") {
       handleMPUReturn(blast, dragId);
+    } else if (dragType === "gantt-ancillary") {
+      handleAncillaryReturn(blast, dragId);
+    } else if (dragType === "gantt-excav") {
+      handleExcavReturn(blast, dragId);
     }
   });
 }
@@ -809,6 +855,93 @@ function handleMPUReturn(blast, mpuId) {
   debouncedSave();
   renderGantt();
   showDropFeedback(mpuId + " removed from " + blast.name, true);
+}
+
+// Step 13b) Remove ancillary from prep when dropped back on palette
+function handleAncillaryReturn(blast, unitId) {
+  var arr = blast.assignedAncillary || [];
+  var idx = arr.indexOf(unitId);
+  if (idx !== -1) arr.splice(idx, 1);
+  blast.assignedAncillary = arr;
+  delete blast.ancillaryRates;
+
+  debouncedSave();
+  renderGantt();
+  showDropFeedback(unitId + " removed from " + blast.name + " prep", true);
+}
+
+// Step 13c) Remove excavator from excavation when dropped back on palette
+function handleExcavReturn(blast, unitId) {
+  var arr = blast.assignedExcavators || [];
+  var idx = arr.indexOf(unitId);
+  if (idx !== -1) arr.splice(idx, 1);
+  blast.assignedExcavators = arr;
+
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+  showDropFeedback(unitId + " removed from " + blast.name + " excavation", true);
+}
+
+// Step 13d) Reassign ancillary chip from one prep row to another
+function handleAncillaryReassign(targetBlast, unitId, sourceBlastIdx, section) {
+  if (section !== "pattern prep") {
+    showDropFeedback("Ancillary chips can only be dropped on PATTERN PREP rows");
+    return;
+  }
+  if (!targetBlast.prepStart) {
+    showDropFeedback("Send this blast to Pattern Prep first");
+    return;
+  }
+
+  var sourceBlast = APP.blasts[sourceBlastIdx];
+  if (!sourceBlast || sourceBlast === targetBlast) return;
+
+  var srcArr = sourceBlast.assignedAncillary || [];
+  var srcIdx = srcArr.indexOf(unitId);
+  if (srcIdx !== -1) srcArr.splice(srcIdx, 1);
+  sourceBlast.assignedAncillary = srcArr;
+  delete sourceBlast.ancillaryRates;
+
+  if (!targetBlast.assignedAncillary) targetBlast.assignedAncillary = [];
+  if (targetBlast.assignedAncillary.indexOf(unitId) === -1) {
+    targetBlast.assignedAncillary.push(unitId);
+  }
+  delete targetBlast.ancillaryRates;
+
+  debouncedSave();
+  renderGantt();
+  showDropFeedback(unitId + ": " + sourceBlast.name + " \u2192 " + targetBlast.name + " prep", true);
+}
+
+// Step 13e) Reassign excavator chip from one excavation row to another
+function handleExcavReassign(targetBlast, unitId, sourceBlastIdx, section) {
+  if (section !== "excavation") {
+    showDropFeedback("Excavator chips can only be dropped on EXCAVATION rows");
+    return;
+  }
+  if (!targetBlast.excavStart) {
+    showDropFeedback("Send this blast to Excavation first");
+    return;
+  }
+
+  var sourceBlast = APP.blasts[sourceBlastIdx];
+  if (!sourceBlast || sourceBlast === targetBlast) return;
+
+  var srcArr = sourceBlast.assignedExcavators || [];
+  var srcIdx = srcArr.indexOf(unitId);
+  if (srcIdx !== -1) srcArr.splice(srcIdx, 1);
+  sourceBlast.assignedExcavators = srcArr;
+
+  if (!targetBlast.assignedExcavators) targetBlast.assignedExcavators = [];
+  if (targetBlast.assignedExcavators.indexOf(unitId) === -1) {
+    targetBlast.assignedExcavators.push(unitId);
+  }
+
+  recalcDependencies();
+  debouncedSave();
+  renderGantt();
+  showDropFeedback(unitId + ": " + sourceBlast.name + " \u2192 " + targetBlast.name + " excavation", true);
 }
 
 export { initDelayPalette, renderDelayPalette };
