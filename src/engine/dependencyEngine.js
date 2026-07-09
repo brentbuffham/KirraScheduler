@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { drills, mpus, ancillary, isDrillInMaintenance } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, getDigRate, isDrillInMaintenance } from "../state/equipmentState.js";
 import { hasBlocks, syncBlastFromBlocks, getLatestBlockEnd } from "../engine/blockHelpers.js";
 import { addDays, isoDate, formatDate } from "../utils/dateUtils.js";
 
@@ -265,7 +265,7 @@ function recalcDependencies() {
         var excavRateSum = 0;
         excavIds.forEach(function(id) {
           var unit = ancillary.find(function(a) { return a.id === id; });
-          if (unit && unit.rateBCM_per_day) excavRateSum += unit.rateBCM_per_day;
+          if (unit) excavRateSum += getDigRate(unit);
         });
         var excavVol = blast.volume || 0;
         blast.excavDays = (excavRateSum > 0 && excavVol > 0)

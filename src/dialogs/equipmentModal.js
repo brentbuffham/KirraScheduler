@@ -435,7 +435,15 @@ function buildAncillaryForm(a) {
   // Step 2d-iii) Type and Rate row
   body += "<div class=\"form-row\">";
   body += "  <div class=\"form-field\"><label>Type</label>" + buildTypeSelect(ANCILLARY_TYPES, a ? a.type : "Dozer") + "</div>";
-  body += "  <div class=\"form-field\"><label>Rate (m\u00B2/day)</label><input type=\"number\" id=\"fEqRate\" value=\"" + (a ? a.rateM2_per_day : "8000") + "\"></div>";
+  body += "  <div class=\"form-field\"><label>Prep Rate (m\u00B2/day)</label><input type=\"number\" id=\"fEqRate\" value=\"" + (a ? a.rateM2_per_day : "8000") + "\"></div>";
+  body += "</div>";
+  // Step 2d-iv) Excavation dig rate row — drives rate-based excavation duration.
+  //   Blank uses the per-type default (see getDigRate); set 0 for units that
+  //   don't excavate (grader/roller).
+  var digVal = (a && typeof a.rateBCM_per_day === "number") ? a.rateBCM_per_day : "";
+  body += "<div class=\"form-row\">";
+  body += "  <div class=\"form-field\"><label>Dig Rate (bcm/day)</label><input type=\"number\" id=\"fEqDigRate\" value=\"" + digVal + "\" placeholder=\"auto by type\" title=\"Excavation dig-out rate in bank cubic metres/day. Leave blank to use the type default; 0 = does not excavate.\"></div>";
+  body += "  <div class=\"form-field\"></div>";
   body += "</div>";
   return body;
 }
@@ -670,6 +678,11 @@ function saveEquipment() {
       });
     }
   } else if (editingEquipType === "ancillary") {
+    // Step 6h-pre) Read the excavation dig rate. Blank => undefined (use type
+    //   default at runtime); any number (incl. 0) is stored verbatim.
+    var digEl = document.getElementById("fEqDigRate");
+    var digRaw = digEl ? digEl.value.trim() : "";
+    var digRate = digRaw === "" ? undefined : (parseFloat(digRaw) || 0);
     if (isEditing) {
       // Step 6h) Update existing ancillary in-place
       var unit = collection[editingEquipIdx];
@@ -680,13 +693,17 @@ function saveEquipment() {
       unit.model = model;
       unit.type = type;
       unit.rateM2_per_day = parseFloat(rateField.value) || 8000;
+      if (digRate === undefined) delete unit.rateBCM_per_day;
+      else unit.rateBCM_per_day = digRate;
     } else {
-      collection.push({
+      var newAnc = {
         id: id, name: name, brand: brand, model: model, type: type,
         rateM2_per_day: parseFloat(rateField.value) || 8000,
         status: "available",
         maintenance: []
-      });
+      };
+      if (digRate !== undefined) newAnc.rateBCM_per_day = digRate;
+      collection.push(newAnc);
     }
   } else if (editingEquipType === "person") {
     var certs = rateField.value.split(",").map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });

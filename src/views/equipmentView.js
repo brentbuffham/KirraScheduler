@@ -4,7 +4,7 @@
 // ============================================================
 
 import { APP } from "../state/appState.js";
-import { drills, mpus, ancillary, people, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, people, getDigRate, mobiliseEquipment, demobiliseEquipment, removeEquipment } from "../state/equipmentState.js";
 import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { showEditEquipModal, showEditMaintenanceModal, duplicateEquip } from "../dialogs/equipmentModal.js";
 import { debouncedSave } from "../state/schedulerDB.js";
@@ -254,7 +254,8 @@ function renderAncillaryTable() {
   html += sortTh("ancillary", "brand", "Brand");
   html += sortTh("ancillary", "model", "Model");
   html += sortTh("ancillary", "type", "Type");
-  html += sortTh("ancillary", "rateM2_per_day", "Rate (m\u00B2/day)", "num");
+  html += sortTh("ancillary", "rateM2_per_day", "Prep (m\u00B2/day)", "num");
+  html += sortTh("ancillary", "rateBCM_per_day", "Dig (bcm/day)", "num");
   html += sortTh("ancillary", "status", "Status");
   html += "<th>Assigned To</th><th>Actions</th>";
   html += "</tr></thead><tbody>";
@@ -262,8 +263,16 @@ function renderAncillaryTable() {
   var sorted = sortArray(ancillary, sortState.ancillary.column, sortState.ancillary.direction);
   sorted.forEach(function(unit) {
     var assignments = APP.blasts.filter(function(b) {
-      return (b.assignedAncillary || []).indexOf(unit.id) !== -1;
+      return (b.assignedAncillary || []).indexOf(unit.id) !== -1 ||
+             (b.assignedExcavators || []).indexOf(unit.id) !== -1;
     }).map(function(b) { return b.name; });
+
+    // Step) Effective dig rate — explicit value shown plainly, type-default muted
+    var digRate = getDigRate(unit);
+    var digExplicit = (typeof unit.rateBCM_per_day === "number");
+    var digCell = digRate > 0
+      ? (digExplicit ? formatNum(digRate) : "<span style=\"color:var(--text-muted)\" title=\"Type default — edit the unit to set an explicit rate\">" + formatNum(digRate) + "*</span>")
+      : "<span style=\"color:var(--text-muted)\">\u2014</span>";
 
     var statusBadge = getStatusBadgeClass(unit.status);
     var actions = buildEquipActions(unit.status, unit.id, "ancillary");
@@ -275,6 +284,7 @@ function renderAncillaryTable() {
     html += "<td>" + (unit.model || "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td><span class=\"badge\" style=\"background:rgba(20,184,166,0.15);color:var(--accent-prep);\">" + unit.type + "</span></td>";
     html += "<td class=\"num\">" + formatNum(unit.rateM2_per_day) + "</td>";
+    html += "<td class=\"num\">" + digCell + "</td>";
     html += "<td><span class=\"badge " + statusBadge + "\">" + unit.status + "</span></td>";
     html += "<td style=\"font-size:12px;\">" + (assignments.length > 0 ? assignments.join(", ") : "<span style=\"color:var(--text-muted)\">\u2014</span>") + "</td>";
     html += "<td class=\"equip-actions\">" + actions + "</td>";

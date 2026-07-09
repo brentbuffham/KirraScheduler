@@ -112,6 +112,31 @@ function canDrillDiameter(drill, diamMm) {
   return diamMm >= drill.minDiam && diamMm <= drill.maxDiam;
 }
 
+// Step 4a-i) Default excavation dig rate (bank m3/day) by equipment type.
+//   Used when an ancillary unit has no explicit rateBCM_per_day (e.g. added
+//   via the modal, imported from a CSV/KGP that predates the field, or a
+//   custom type). Keeps rate-driven excavation working for every unit.
+var DEFAULT_DIG_RATE_BY_TYPE = {
+  Excavator: 20000,
+  Dragline:  35000,
+  Loader:    10000,
+  Dozer:     4000,
+  Grader:    0,
+  Roller:    0
+};
+
+// Step 4a-ii) Resolve an ancillary unit's dig rate. Explicit value wins;
+//   otherwise fall back to the per-type default; unknown types get a modest
+//   default so they still contribute something to the excavation duration.
+function getDigRate(unit) {
+  if (!unit) return 0;
+  if (typeof unit.rateBCM_per_day === "number" && unit.rateBCM_per_day > 0) return unit.rateBCM_per_day;
+  if (unit.rateBCM_per_day === 0) return 0; // explicitly non-digging (grader/roller)
+  var byType = DEFAULT_DIG_RATE_BY_TYPE[unit.type];
+  if (typeof byType === "number") return byType;
+  return 5000; // Step) sensible fallback for unknown ancillary types
+}
+
 // Step 4b) Equipment status management — valid statuses: "available", "mobilised", "demobilised"
 function mobiliseEquipment(collection, equipId) {
   var equip = collection.find(function(e) { return e.id === equipId; });
@@ -209,6 +234,8 @@ export {
   ancillary,
   people,
   canDrillDiameter,
+  getDigRate,
+  DEFAULT_DIG_RATE_BY_TYPE,
   isDrillInMaintenance,
   getMaintenanceDays,
   getCompatibleDrills,

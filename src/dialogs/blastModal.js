@@ -5,7 +5,7 @@
 // ============================================================
 
 import { APP, getTotalDrillMeters } from "../state/appState.js";
-import { drills, mpus, ancillary, canDrillDiameter } from "../state/equipmentState.js";
+import { drills, mpus, ancillary, canDrillDiameter, getDigRate } from "../state/equipmentState.js";
 import { openModal, closeModal } from "../ui/modal.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { recalcDependencies } from "../engine/dependencyEngine.js";
@@ -487,17 +487,28 @@ function populateAncillaryDropdown(selectedIds) {
   });
 }
 
-// Step 5d-ii) Populate excavation equipment multi-select — only units that can
-//  actually dig (rateBCM_per_day > 0), so graders/rollers are excluded.
+// Step 5d-ii) Populate excavation equipment multi-select. Lists EVERY ancillary
+//  unit (so nothing is silently unavailable); the effective dig rate is
+//  resolved via getDigRate() which falls back to a per-type default when the
+//  unit has no explicit rateBCM_per_day. Non-digging units (grader/roller,
+//  rate 0) are shown but flagged so the user knows they add no duration.
 function populateExcavatorDropdown(selectedIds) {
   var sel = document.getElementById("fAssignedExcavators");
   if (!sel) return;
   sel.innerHTML = "";
+  if (!ancillary || ancillary.length === 0) {
+    var empty = document.createElement("option");
+    empty.disabled = true;
+    empty.textContent = "No ancillary equipment — add some in the Equipment tab";
+    sel.appendChild(empty);
+    return;
+  }
   ancillary.forEach(function(a) {
-    if (!a.rateBCM_per_day || a.rateBCM_per_day <= 0) return;
+    var rate = getDigRate(a);
     var opt = document.createElement("option");
     opt.value = a.id;
-    opt.textContent = a.id + " (" + a.type + ", " + a.rateBCM_per_day + " bcm/d)";
+    opt.textContent = a.id + " (" + a.type + ", " + (rate > 0 ? rate + " bcm/d" : "no dig rate") + ")";
+    if (rate <= 0) opt.style.color = "var(--text-muted)";
     if (selectedIds && selectedIds.indexOf(a.id) !== -1) opt.selected = true;
     sel.appendChild(opt);
   });
