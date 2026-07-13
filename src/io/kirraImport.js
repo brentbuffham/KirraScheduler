@@ -291,7 +291,10 @@ function parseKGPProject(file) {
         return;
       }
 
-      log.innerHTML += "<div class=\"log-ok\">Kirra Gantt Project v" + (data.version || "?") + " (" + Math.round(file.size / 1024) + " KB)</div>";
+      var verLabel = data.appVersion
+        ? ("app v" + data.appVersion + ", format v" + (data.version || "?"))
+        : ("v" + (data.version || "?"));
+      log.innerHTML += "<div class=\"log-ok\">Kirra Gantt Project " + verLabel + " (" + Math.round(file.size / 1024) + " KB)</div>";
       log.innerHTML += "<div class=\"log-info\">Exported: " + (data.exportDate || "unknown") + "</div>";
 
       // Step 2b) Restore global settings (including all dependency thresholds and

@@ -44,10 +44,11 @@ import { initEquipmentLibrary } from "./io/equipmentLibrary.js";
 import { initPlaybackView } from "./views/playbackView.js";
 import { shouldShowStartup, showStartupDialog, clearSeedData, markStartupComplete } from "./dialogs/startupDialog.js";
 import { loadState, debouncedSave, syncUIFromState } from "./state/schedulerDB.js";
+import { formattedAppVersion } from "./config/appVersion.js";
 
-// Step 2b) Stamp the app version (injected from package.json by Vite) into the header
+// Step 2b) Stamp the app version from package.json into the header badge
 var _versionEl = document.getElementById("appVersion");
-if (_versionEl) _versionEl.textContent = "v" + __APP_VERSION__;
+if (_versionEl) _versionEl.textContent = formattedAppVersion();
 
 // Step 3) Initialise UI event listeners (safe before data decisions)
 initThemeToggle();

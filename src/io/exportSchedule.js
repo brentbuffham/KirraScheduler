@@ -8,6 +8,7 @@ import { drills, mpus, ancillary, people } from "../state/equipmentState.js";
 import { isoDate } from "../utils/dateUtils.js";
 import { exportPatternTemplate, exportPatternLibrary } from "../views/patternLibrary.js";
 import { exportEquipmentTemplate, exportEquipmentLibrary } from "./equipmentLibrary.js";
+import { APP_VERSION } from "../config/appVersion.js";
 
 // Step 1) Export full project as .kgp (JSON with all state)
 function exportKGP() {
@@ -15,6 +16,7 @@ function exportKGP() {
     // Step 1a) File header
     format: "KirraGanttProject",
     version: "1.0.0",
+    appVersion: APP_VERSION,
     exportDate: new Date().toISOString(),
 
     // Step 1b) Global settings — full snapshot so an imported project reproduces
