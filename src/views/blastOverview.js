@@ -13,6 +13,7 @@ import { formatNum, formatDate } from "../utils/dateUtils.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { renderGantt } from "./ganttView.js";
 import { debouncedSave } from "../state/schedulerDB.js";
+import { isPatternVisibleToGantt } from "../helpers/patternVisibility.js";
 import { renderBlastCalendar, initBlastCalendar } from "./blastCalendar.js";
 import { renderDepthProfileBar } from "../engine/depthBinning.js";
 
@@ -187,6 +188,10 @@ function attachBlastDropTargets() {
 
       var pattern = APP.patterns.find(function(p) { return p.id === patternId; });
       if (!pattern) { alert("Pattern '" + patternId + "' not found in library."); return; }
+      if (!isPatternVisibleToGantt(pattern)) {
+        alert("Pattern '" + patternId + "' is hidden from Gantt (check group or pattern visibility).");
+        return;
+      }
 
       // Step 5b) Show the pattern allocation dialog
       showPatternAllocDialog(blast, blastIdx, pattern);

@@ -9,6 +9,7 @@ import { APP } from "../state/appState.js";
 import { closeOnBackdrop } from "../utils/domUtils.js";
 import { debouncedSave } from "../state/schedulerDB.js";
 import { renderDelayPalette } from "../ui/delayPalette.js";
+import { isPatternVisibleToGantt, isGroupVisibleToGantt } from "../helpers/patternVisibility.js";
 
 var typeColors = {
   PRODUCTION: "var(--production)",
@@ -26,6 +27,221 @@ var typeColors = {
   PRESPLIT: "var(--presplit)",
   YELLOW: "var(--yellow-zone)"
 };
+
+// Step 0f) Track which pattern cards are collapsed (default = expanded / full detail visible)
+var _expandedPatternCards = {};
+
+// Step 0f-ii) Escape text for HTML attribute values
+function escAttr(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+// ============================================================
+//  PATTERN GROUPS — renamable, reorderable blocks in the library
+// ============================================================
+
+// Step 0g) Generate a unique group id
+function newGroupId() {
+  return "pg-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 10000);
+}
+
+// Step 0g-ii) Find a group object by id
+function findPatternGroup(groupId) {
+  if (!APP.patternGroups) APP.patternGroups = [];
+  for (var i = 0; i < APP.patternGroups.length; i++) {
+    if (APP.patternGroups[i].id === groupId) return APP.patternGroups[i];
+  }
+  return null;
+}
+
+// Step 0g-iii) Find which group currently owns a pattern id
+function findGroupForPattern(patternId) {
+  if (!APP.patternGroups) return null;
+  for (var gi = 0; gi < APP.patternGroups.length; gi++) {
+    var g = APP.patternGroups[gi];
+    if ((g.patternIds || []).indexOf(patternId) !== -1) return g;
+  }
+  return null;
+}
+
+// Step 0g-iv) Keep group membership aligned with APP.patterns
+function syncPatternGroupMembership() {
+  if (!APP.patternGroups) APP.patternGroups = [];
+  var validIds = {};
+  for (var pi = 0; pi < APP.patterns.length; pi++) {
+    validIds[APP.patterns[pi].id] = true;
+  }
+
+  // Step) Remove stale ids from every group
+  for (var gi = 0; gi < APP.patternGroups.length; gi++) {
+    var ids = APP.patternGroups[gi].patternIds || [];
+    var cleaned = [];
+    for (var ii = 0; ii < ids.length; ii++) {
+      if (validIds[ids[ii]]) cleaned.push(ids[ii]);
+    }
+    APP.patternGroups[gi].patternIds = cleaned;
+  }
+
+  // Step) If no groups, seed one block with every pattern
+  if (APP.patternGroups.length === 0) {
+    var allIds = [];
+    for (var ai = 0; ai < APP.patterns.length; ai++) allIds.push(APP.patterns[ai].id);
+    APP.patternGroups.push({
+      id: newGroupId(),
+      name: "Production Drill & Blast Patterns",
+      order: 0,
+      visibleToGantt: true,
+      patternIds: allIds
+    });
+    return;
+  }
+
+  // Step) Orphans (not listed in any group) go into the first group
+  var assigned = {};
+  for (var gj = 0; gj < APP.patternGroups.length; gj++) {
+    var pids = APP.patternGroups[gj].patternIds || [];
+    for (var pj = 0; pj < pids.length; pj++) assigned[pids[pj]] = true;
+  }
+  for (var pk = 0; pk < APP.patterns.length; pk++) {
+    var pid = APP.patterns[pk].id;
+    if (!assigned[pid]) {
+      APP.patternGroups[0].patternIds.push(pid);
+    }
+  }
+
+  // Step) Normalise order field
+  APP.patternGroups.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  for (var oi = 0; oi < APP.patternGroups.length; oi++) {
+    APP.patternGroups[oi].order = oi;
+  }
+}
+
+// Step 0g-v) Create a new empty group block
+function addPatternGroup(name) {
+  syncPatternGroupMembership();
+  var grp = {
+    id: newGroupId(),
+    name: name || ("Group " + (APP.patternGroups.length + 1)),
+    order: APP.patternGroups.length,
+    visibleToGantt: true,
+    patternIds: []
+  };
+  APP.patternGroups.push(grp);
+  debouncedSave();
+  return grp;
+}
+
+// Step 0g-vi) Move a pattern between groups (or reorder within a group)
+function movePatternInGroups(patternId, toGroupId, insertBeforeId) {
+  var fromGroup = findGroupForPattern(patternId);
+  var toGroup = findPatternGroup(toGroupId);
+  if (!toGroup) return;
+
+  if (fromGroup) {
+    var fi = fromGroup.patternIds.indexOf(patternId);
+    if (fi !== -1) fromGroup.patternIds.splice(fi, 1);
+  }
+  if (toGroup.patternIds.indexOf(patternId) !== -1) {
+    var dup = toGroup.patternIds.indexOf(patternId);
+    if (dup !== -1) toGroup.patternIds.splice(dup, 1);
+  }
+
+  if (insertBeforeId) {
+    var ins = toGroup.patternIds.indexOf(insertBeforeId);
+    if (ins === -1) toGroup.patternIds.push(patternId);
+    else toGroup.patternIds.splice(ins, 0, patternId);
+  } else {
+    toGroup.patternIds.push(patternId);
+  }
+  debouncedSave();
+}
+
+// Step 0g-vii) Reorder group blocks
+function reorderPatternGroups(fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  if (fromIdx < 0 || toIdx < 0) return;
+  if (fromIdx >= APP.patternGroups.length || toIdx >= APP.patternGroups.length) return;
+  var item = APP.patternGroups.splice(fromIdx, 1)[0];
+  APP.patternGroups.splice(toIdx, 0, item);
+  for (var i = 0; i < APP.patternGroups.length; i++) {
+    APP.patternGroups[i].order = i;
+  }
+  debouncedSave();
+}
+
+// Step 0g-viii) Build HTML for one collapsible pattern card
+function buildPatternCardHtml(p, idx, group) {
+  var color = typeColors[p.type] || "var(--custom-type)";
+  var groupHidden = !isGroupVisibleToGantt(group);
+  var patternHidden = (p.visibleToGantt === false);
+  var effectivelyHidden = !isPatternVisibleToGantt(p);
+  var dimStyle = effectivelyHidden ? " opacity:0.55;" : "";
+  var isExpanded = _expandedPatternCards[p.id] !== false;
+  var stateCls = isExpanded ? " is-expanded" : " is-collapsed";
+  var summary = p.benchHt + "m · " + p.diam + "mm · " + p.burden + "×" + p.spacing;
+  var html = "";
+
+  html += "<div class=\"pattern-card" + stateCls + "\" data-pattern-idx=\"" + idx + "\" data-pattern-id=\"" + p.id + "\" style=\"position:relative;" + dimStyle + "\">";
+
+  // Step) Compact header — always visible; click chevron to expand details
+  html += "  <div class=\"pattern-card-header\">";
+  html += "    <span class=\"pattern-card-grip\" draggable=\"true\" title=\"Drag to move within or between groups\">";
+  html += "      <svg viewBox=\"0 0 8 14\" width=\"8\" height=\"14\" fill=\"currentColor\" opacity=\"0.4\">";
+  html += "        <circle cx=\"2\" cy=\"2\" r=\"1.2\"/><circle cx=\"6\" cy=\"2\" r=\"1.2\"/>";
+  html += "        <circle cx=\"2\" cy=\"7\" r=\"1.2\"/><circle cx=\"6\" cy=\"7\" r=\"1.2\"/>";
+  html += "        <circle cx=\"2\" cy=\"12\" r=\"1.2\"/><circle cx=\"6\" cy=\"12\" r=\"1.2\"/>";
+  html += "      </svg></span>";
+  html += "    <button type=\"button\" class=\"pattern-card-toggle\" title=\"Expand/collapse pattern details\">\u25BC</button>";
+  html += "    <span class=\"pattern-id\">" + p.id + "</span>";
+  html += "    <span class=\"badge pattern-card-type\" style=\"background:" + color + "20;color:" + color + "\">" + p.type + "</span>";
+  html += "    <span class=\"pattern-card-summary\">" + summary + "</span>";
+  if (effectivelyHidden) {
+    html += "    <span class=\"pattern-gantt-drag is-disabled\" title=\"Hidden from Gantt\">";
+  } else {
+    html += "    <span class=\"pattern-gantt-drag\" draggable=\"true\" title=\"Drag to Gantt to assign this pattern\">";
+  }
+  html += "      <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"12\" height=\"12\"><path d=\"M7 17L17 7\"/><path d=\"M7 7h10v10\"/></svg>";
+  html += "    </span>";
+  html += "  </div>";
+
+  // Step) Expandable body — full specs + actions
+  html += "  <div class=\"pattern-card-body\">";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Bench Height</span><span class=\"value\">" + p.benchHt + " m</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Diameter</span><span class=\"value\">" + p.diam + " mm</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Burden</span><span class=\"value\">" + p.burden + " m</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Spacing</span><span class=\"value\">" + p.spacing + " m</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Powder Factor</span><span class=\"value\">" + p.pf + " kg/bcm</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Sub-drill</span><span class=\"value\">" + p.subdrill + " m</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Stemming</span><span class=\"value\">" + p.stemming + " m</span></div>";
+  html += "    <div class=\"pattern-detail\"><span class=\"label\">Hole Angle</span><span class=\"value\">" + (p.holeAngle || 90) + "&deg;</span></div>";
+  html += "    <div class=\"pattern-card-actions\">";
+  html += "      <button class=\"pat-action-btn pat-edit-btn\" data-idx=\"" + idx + "\" title=\"Edit pattern\">";
+  html += "        <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"13\" height=\"13\"><path d=\"M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7\"/><path d=\"M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z\"/></svg>";
+  html += "        Edit</button>";
+  html += "      <button class=\"pat-action-btn pat-copy-btn\" data-idx=\"" + idx + "\" title=\"Duplicate pattern\">";
+  html += "        <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"13\" height=\"13\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1\"/></svg>";
+  html += "        Copy</button>";
+  html += "      <label class=\"pat-action-toggle\" title=\"" + (groupHidden ? "Group is hidden from Gantt" : (patternHidden ? "Hidden from Gantt palette" : "Visible in Gantt palette")) + "\">";
+  html += "        <input type=\"checkbox\" class=\"pat-vis-cb\" data-idx=\"" + idx + "\"" + (patternHidden ? "" : " checked") + (groupHidden ? " disabled" : "") + ">";
+  html += "        <span style=\"font-size:10px;\">" + (effectivelyHidden ? "Hidden" : "Gantt") + "</span>";
+  html += "      </label>";
+  html += "    </div>";
+  html += "  </div>";
+
+  html += "</div>";
+  return html;
+}
+
+// Step 0g-ix) Resolve pattern index in APP.patterns by id
+function patternIndexById(patternId) {
+  for (var i = 0; i < APP.patterns.length; i++) {
+    if (APP.patterns[i].id === patternId) return i;
+  }
+  return -1;
+}
 
 // ============================================================
 //  PATTERN ADD / EDIT / COPY DIALOG
@@ -145,10 +361,20 @@ function showPatternDialog(editIdx, prefill) {
       holeAngle: parseFloat(document.getElementById("pdAngle").value) || 90
     };
 
-    // Step 0d-i) Preserve visibility flag
+    // Step 0d-i) Preserve visibility flag; update group ids if pattern id renamed
     if (isEdit && APP.patterns[editIdx]) {
+      var oldId = APP.patterns[editIdx].id;
       newP.visibleToGantt = APP.patterns[editIdx].visibleToGantt;
       APP.patterns[editIdx] = newP;
+      if (oldId !== id) {
+        syncPatternGroupMembership();
+        for (var gi = 0; gi < APP.patternGroups.length; gi++) {
+          var ids = APP.patternGroups[gi].patternIds || [];
+          for (var ii = 0; ii < ids.length; ii++) {
+            if (ids[ii] === oldId) ids[ii] = id;
+          }
+        }
+      }
     } else {
       // Step 0d-ii) Check for duplicate ID on add/copy
       var dup = APP.patterns.find(function(pp) { return pp.id === id; });
@@ -157,6 +383,7 @@ function showPatternDialog(editIdx, prefill) {
       APP.patterns.push(newP);
     }
 
+    syncPatternGroupMembership();
     debouncedSave();
     renderPatterns();
     renderDelayPalette();
@@ -172,107 +399,325 @@ function showPatternDialog(editIdx, prefill) {
 //  RENDER PATTERN CARDS
 // ============================================================
 
-// Step 1) Render pattern library grid
+// Step 1) Render pattern library — grouped blocks with drag-and-drop
 function renderPatterns() {
+  syncPatternGroupMembership();
+
   var grid = document.getElementById("patternGrid");
   var html = "";
 
   if (APP.patterns.length === 0) {
-    html += "<div style=\"grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--text-muted);\">";
+    html += "<div style=\"text-align:center;padding:48px 24px;color:var(--text-muted);\">";
     html += "  <div style=\"font-size:36px;margin-bottom:12px;\">&#x1F4CB;</div>";
     html += "  <div style=\"font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;\">No Patterns Loaded</div>";
     html += "  <div style=\"font-size:13px;margin-top:6px;\">Export a blank CSV template, fill in your site patterns, then import it back.</div>";
     html += "</div>";
+    grid.innerHTML = html;
+    var countEl0 = document.getElementById("patternCount");
+    if (countEl0) countEl0.textContent = "0 pattern(s)";
+    return;
   }
 
-  APP.patterns.forEach(function(p, idx) {
-    var color = typeColors[p.type] || "var(--custom-type)";
-    var isHidden = (p.visibleToGantt === false);
-    var dimStyle = isHidden ? " opacity:0.5;" : "";
+  html += "<div class=\"pattern-groups\">";
 
-    html += "<div class=\"pattern-card\" data-pattern-idx=\"" + idx + "\" draggable=\"true\" data-drag-type=\"pattern\" data-pattern-id=\"" + p.id + "\" style=\"position:relative;" + dimStyle + "\">";
+  for (var gi = 0; gi < APP.patternGroups.length; gi++) {
+    var group = APP.patternGroups[gi];
+    var gIds = group.patternIds || [];
+    var groupCollapsed = !!group.collapsed;
+    var groupGanttVisible = isGroupVisibleToGantt(group);
+    var blockCls = "pattern-group-block" + (groupCollapsed ? " group-collapsed" : "") + (groupGanttVisible ? "" : " group-gantt-hidden");
+    html += "<div class=\"" + blockCls + "\" data-group-id=\"" + group.id + "\" data-group-idx=\"" + gi + "\">";
 
-    // Step 1a) Header row — ID + type badge
-    html += "  <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\">";
-    html += "    <div class=\"pattern-id\">" + p.id + "</div>";
-    html += "    <span class=\"badge\" style=\"background:" + color + "20;color:" + color + "\">" + p.type + "</span>";
+    // Step 1a) Group header — collapse, grip, editable name, count, delete
+    html += "  <div class=\"pattern-group-header\">";
+    html += "    <button type=\"button\" class=\"pattern-group-collapse\" title=\"Collapse/expand group\">\u25BC</button>";
+    html += "    <span class=\"pattern-group-grip\" draggable=\"true\" title=\"Drag to reorder groups\">";
+    html += "      <svg viewBox=\"0 0 8 14\" width=\"8\" height=\"14\" fill=\"currentColor\" opacity=\"0.45\">";
+    html += "        <circle cx=\"2\" cy=\"2\" r=\"1.2\"/><circle cx=\"6\" cy=\"2\" r=\"1.2\"/>";
+    html += "        <circle cx=\"2\" cy=\"7\" r=\"1.2\"/><circle cx=\"6\" cy=\"7\" r=\"1.2\"/>";
+    html += "        <circle cx=\"2\" cy=\"12\" r=\"1.2\"/><circle cx=\"6\" cy=\"12\" r=\"1.2\"/>";
+    html += "      </svg></span>";
+    html += "    <input type=\"text\" class=\"pattern-group-name-input\" data-group-id=\"" + group.id + "\" value=\"" + escAttr(group.name) + "\" title=\"Edit group name\">";
+    html += "    <label class=\"pattern-group-gantt-toggle\" title=\"Show/hide all patterns in this group on the Gantt palette\">";
+    html += "      <input type=\"checkbox\" class=\"pattern-group-vis-cb\" data-group-id=\"" + group.id + "\"" + (groupGanttVisible ? " checked" : "") + ">";
+    html += "      <span>Gantt</span>";
+    html += "    </label>";
+    html += "    <span class=\"pattern-group-count\">" + gIds.length + "</span>";
+    if (APP.patternGroups.length > 1) {
+      html += "    <button type=\"button\" class=\"pattern-group-delete\" data-group-id=\"" + group.id + "\" title=\"Delete group (patterns move to the group above)\">&times;</button>";
+    }
     html += "  </div>";
 
-    // Step 1b) Detail rows
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Bench Height</span><span class=\"value\">" + p.benchHt + " m</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Diameter</span><span class=\"value\">" + p.diam + " mm</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Burden</span><span class=\"value\">" + p.burden + " m</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Spacing</span><span class=\"value\">" + p.spacing + " m</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Powder Factor</span><span class=\"value\">" + p.pf + " kg/bcm</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Sub-drill</span><span class=\"value\">" + p.subdrill + " m</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Stemming</span><span class=\"value\">" + p.stemming + " m</span></div>";
-    html += "  <div class=\"pattern-detail\"><span class=\"label\">Hole Angle</span><span class=\"value\">" + (p.holeAngle || 90) + "&deg;</span></div>";
-
-    // Step 1c) Action toolbar — Edit, Copy, Visible toggle
-    html += "  <div class=\"pattern-card-actions\">";
-    html += "    <button class=\"pat-action-btn pat-edit-btn\" data-idx=\"" + idx + "\" title=\"Edit pattern\">";
-    html += "      <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"13\" height=\"13\"><path d=\"M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7\"/><path d=\"M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z\"/></svg>";
-    html += "      Edit</button>";
-    html += "    <button class=\"pat-action-btn pat-copy-btn\" data-idx=\"" + idx + "\" title=\"Duplicate pattern\">";
-    html += "      <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"13\" height=\"13\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1\"/></svg>";
-    html += "      Copy</button>";
-    html += "    <label class=\"pat-action-toggle\" title=\"" + (isHidden ? "Hidden from Gantt palette" : "Visible in Gantt palette") + "\">";
-    html += "      <input type=\"checkbox\" class=\"pat-vis-cb\" data-idx=\"" + idx + "\"" + (isHidden ? "" : " checked") + ">";
-    html += "      <span style=\"font-size:10px;\">" + (isHidden ? "Hidden" : "Gantt") + "</span>";
-    html += "    </label>";
+    // Step 1b) Scrollable card list inside each group block
+    html += "  <div class=\"pattern-group-body\" data-group-id=\"" + group.id + "\">";
+    if (gIds.length === 0) {
+      html += "    <div class=\"pattern-group-empty\">Drop patterns here</div>";
+    }
+    for (var pi = 0; pi < gIds.length; pi++) {
+      var pIdx = patternIndexById(gIds[pi]);
+      if (pIdx === -1) continue;
+      html += buildPatternCardHtml(APP.patterns[pIdx], pIdx, group);
+    }
     html += "  </div>";
 
     html += "</div>";
-  });
-
-  grid.innerHTML = html;
-
-  // Step 1d) Update the pattern count badge
-  var countEl = document.getElementById("patternCount");
-  if (countEl) {
-    countEl.textContent = APP.patterns.length + " pattern(s)";
   }
 
-  // Step 1e) Attach drag handlers to pattern cards
-  grid.querySelectorAll(".pattern-card[draggable]").forEach(function(card) {
-    card.addEventListener("dragstart", function(e) {
+  html += "</div>";
+  grid.innerHTML = html;
+
+  // Step 1c) Update the pattern count badge
+  var countEl = document.getElementById("patternCount");
+  if (countEl) {
+    countEl.textContent = APP.patterns.length + " pattern(s) in " + APP.patternGroups.length + " group(s)";
+  }
+
+  bindPatternLibraryInteractions(grid);
+}
+
+// Step 1d) Wire drag-drop, rename, delete, and card actions after render
+function bindPatternLibraryInteractions(grid) {
+  // Step 1d-i) Gantt drag handle on each card (only when visible)
+  grid.querySelectorAll(".pattern-gantt-drag").forEach(function(handle) {
+    if (handle.classList.contains("is-disabled")) return;
+    handle.addEventListener("dragstart", function(e) {
+      e.stopPropagation();
+      var card = handle.closest(".pattern-card");
+      if (!card) return;
+      if (!isPatternVisibleToGantt(card.dataset.patternId)) {
+        e.preventDefault();
+        return;
+      }
       e.dataTransfer.setData("text/plain", "pattern:" + card.dataset.patternId);
       e.dataTransfer.effectAllowed = "copy";
       card.classList.add("dragging");
     });
-    card.addEventListener("dragend", function() {
-      card.classList.remove("dragging");
+    handle.addEventListener("dragend", function() {
+      var card = handle.closest(".pattern-card");
+      if (card) card.classList.remove("dragging");
     });
   });
 
-  // Step 1f) Attach Edit button handlers
+  // Step 1d-ii) Library grip — move/reorder within and between groups
+  grid.querySelectorAll(".pattern-card-grip").forEach(function(grip) {
+    grip.addEventListener("dragstart", function(e) {
+      e.stopPropagation();
+      var card = grip.closest(".pattern-card");
+      var body = grip.closest(".pattern-group-body");
+      if (!card || !body) return;
+      e.dataTransfer.setData("text/plain", "pattern-lib:" + card.dataset.patternId + ":" + body.dataset.groupId);
+      e.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+    });
+    grip.addEventListener("dragend", function() {
+      var card = grip.closest(".pattern-card");
+      if (card) card.classList.remove("dragging");
+      grid.querySelectorAll(".pattern-drop-target").forEach(function(el) {
+        el.classList.remove("pattern-drop-target");
+      });
+    });
+  });
+
+  // Step 1d-iii) Group header grip — reorder group blocks
+  grid.querySelectorAll(".pattern-group-grip").forEach(function(grip) {
+    grip.addEventListener("dragstart", function(e) {
+      e.stopPropagation();
+      var block = grip.closest(".pattern-group-block");
+      if (!block) return;
+      e.dataTransfer.setData("text/plain", "pattern-group:" + block.dataset.groupIdx);
+      e.dataTransfer.effectAllowed = "move";
+      block.classList.add("group-dragging");
+    });
+    grip.addEventListener("dragend", function() {
+      grid.querySelectorAll(".pattern-group-block").forEach(function(b) {
+        b.classList.remove("group-dragging");
+        b.classList.remove("group-drop-target");
+      });
+    });
+  });
+
+  // Step 1d-iv) Drop targets — group bodies and cards
+  grid.querySelectorAll(".pattern-group-body, .pattern-group-block").forEach(function(zone) {
+    zone.addEventListener("dragover", function(e) {
+      var data = e.dataTransfer.types;
+      if (data.indexOf("text/plain") === -1) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      zone.classList.add(zone.classList.contains("pattern-group-block") ? "group-drop-target" : "pattern-drop-target");
+    });
+    zone.addEventListener("dragleave", function(e) {
+      if (!zone.contains(e.relatedTarget)) {
+        zone.classList.remove("pattern-drop-target");
+        zone.classList.remove("group-drop-target");
+      }
+    });
+    zone.addEventListener("drop", function(e) {
+      e.preventDefault();
+      zone.classList.remove("pattern-drop-target");
+      zone.classList.remove("group-drop-target");
+      var payload = e.dataTransfer.getData("text/plain");
+      if (!payload) return;
+      var parts = payload.split(":");
+
+      // Step) Pattern dropped into a group
+      if (parts[0] === "pattern-lib" && parts.length >= 3) {
+        var patternId = parts[1];
+        var toBody = zone.classList.contains("pattern-group-body") ? zone : zone.querySelector(".pattern-group-body");
+        if (!toBody && zone.classList.contains("pattern-group-body")) toBody = zone;
+        if (!toBody) return;
+        var toGroupId = toBody.dataset.groupId;
+        var cardTarget = e.target.closest(".pattern-card");
+        if (cardTarget && cardTarget.dataset.patternId !== patternId) {
+          movePatternInGroups(patternId, toGroupId, cardTarget.dataset.patternId);
+        } else {
+          movePatternInGroups(patternId, toGroupId, null);
+        }
+        renderPatterns();
+        return;
+      }
+
+      // Step) Group block reorder
+      if (parts[0] === "pattern-group" && zone.classList.contains("pattern-group-block")) {
+        var fromIdx = parseInt(parts[1]);
+        var toBlock = zone.classList.contains("pattern-group-block") ? zone : zone.closest(".pattern-group-block");
+        if (!toBlock || isNaN(fromIdx)) return;
+        var toIdx = parseInt(toBlock.dataset.groupIdx);
+        reorderPatternGroups(fromIdx, toIdx);
+        renderPatterns();
+      }
+    });
+  });
+
+  // Step 1d-v) Card-level drop for insert-before positioning
+  grid.querySelectorAll(".pattern-card").forEach(function(card) {
+    card.addEventListener("dragover", function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      card.classList.add("pattern-drop-target");
+    });
+    card.addEventListener("dragleave", function() {
+      card.classList.remove("pattern-drop-target");
+    });
+    card.addEventListener("drop", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.remove("pattern-drop-target");
+      var payload = e.dataTransfer.getData("text/plain");
+      if (!payload || payload.indexOf("pattern-lib:") !== 0) return;
+      var parts = payload.split(":");
+      if (parts.length < 3) return;
+      var body = card.closest(".pattern-group-body");
+      if (!body) return;
+      movePatternInGroups(parts[1], body.dataset.groupId, card.dataset.patternId);
+      renderPatterns();
+    });
+  });
+
+  // Step 1d-vi) Editable group name inputs
+  grid.querySelectorAll(".pattern-group-name-input").forEach(function(input) {
+    input.addEventListener("click", function(e) { e.stopPropagation(); });
+    input.addEventListener("change", function() {
+      var group = findPatternGroup(input.dataset.groupId);
+      if (!group) return;
+      var val = input.value.trim();
+      if (val) group.name = val;
+      else input.value = group.name;
+      debouncedSave();
+    });
+    input.addEventListener("keydown", function(e) { e.stopPropagation(); });
+  });
+
+  // Step 1d-vi-b) Group Gantt visibility toggle
+  grid.querySelectorAll(".pattern-group-vis-cb").forEach(function(cb) {
+    cb.addEventListener("click", function(e) { e.stopPropagation(); });
+    cb.addEventListener("change", function() {
+      var group = findPatternGroup(cb.dataset.groupId);
+      if (!group) return;
+      group.visibleToGantt = cb.checked;
+      debouncedSave();
+      renderPatterns();
+      renderDelayPalette();
+    });
+  });
+
+  // Step 1d-vi-c) Collapse/expand entire group
+  grid.querySelectorAll(".pattern-group-collapse").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var block = btn.closest(".pattern-group-block");
+      if (!block) return;
+      var group = findPatternGroup(block.dataset.groupId);
+      if (!group) return;
+      group.collapsed = !group.collapsed;
+      debouncedSave();
+      renderPatterns();
+    });
+  });
+
+  // Step 1d-vi-c) Collapse/expand individual pattern cards
+  grid.querySelectorAll(".pattern-card-toggle").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var card = btn.closest(".pattern-card");
+      if (!card) return;
+      var expanded = card.classList.toggle("is-expanded");
+      card.classList.toggle("is-collapsed", !expanded);
+      _expandedPatternCards[card.dataset.patternId] = expanded;
+      if (expanded) {
+        card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    });
+  });
+
+  // Step 1d-vii) Delete group button
+  grid.querySelectorAll(".pattern-group-delete").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var gid = btn.dataset.groupId;
+      var gIdx = -1;
+      for (var i = 0; i < APP.patternGroups.length; i++) {
+        if (APP.patternGroups[i].id === gid) { gIdx = i; break; }
+      }
+      if (gIdx < 0 || APP.patternGroups.length <= 1) return;
+      var victim = APP.patternGroups[gIdx];
+      var dest = APP.patternGroups[gIdx > 0 ? gIdx - 1 : 1];
+      if (dest && victim.patternIds) {
+        for (var vi = 0; vi < victim.patternIds.length; vi++) {
+          if (dest.patternIds.indexOf(victim.patternIds[vi]) === -1) {
+            dest.patternIds.push(victim.patternIds[vi]);
+          }
+        }
+      }
+      APP.patternGroups.splice(gIdx, 1);
+      for (var oi = 0; oi < APP.patternGroups.length; oi++) {
+        APP.patternGroups[oi].order = oi;
+      }
+      debouncedSave();
+      renderPatterns();
+    });
+  });
+
+  // Step 1d-viii) Edit / Copy / Visible toggles (unchanged behaviour)
   grid.querySelectorAll(".pat-edit-btn").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();
-      var idx = parseInt(btn.dataset.idx);
-      showPatternDialog(idx, null);
+      showPatternDialog(parseInt(btn.dataset.idx), null);
     });
   });
-
-  // Step 1g) Attach Copy button handlers
   grid.querySelectorAll(".pat-copy-btn").forEach(function(btn) {
     btn.addEventListener("click", function(e) {
       e.stopPropagation();
-      var idx = parseInt(btn.dataset.idx);
-      var src = APP.patterns[idx];
+      var src = APP.patterns[parseInt(btn.dataset.idx)];
       var copy = {};
       for (var k in src) { copy[k] = src[k]; }
       copy.id = src.id + "-COPY";
       showPatternDialog(null, copy);
     });
   });
-
-  // Step 1h) Attach Visible-to-Gantt toggle handlers
   grid.querySelectorAll(".pat-vis-cb").forEach(function(cb) {
     cb.addEventListener("change", function(e) {
       e.stopPropagation();
-      var idx = parseInt(cb.dataset.idx);
-      APP.patterns[idx].visibleToGantt = cb.checked;
+      APP.patterns[parseInt(cb.dataset.idx)].visibleToGantt = cb.checked;
       debouncedSave();
       renderPatterns();
       renderDelayPalette();
@@ -452,6 +897,8 @@ function importPatternCSV(file) {
 
     if (imported.length > 0) {
       APP.patterns = imported;
+      APP.patternGroups = [];
+      syncPatternGroupMembership();
       debouncedSave();
       renderPatterns();
       renderDelayPalette();
@@ -551,6 +998,15 @@ function initPatternLibrary() {
   if (btnAdd) {
     btnAdd.addEventListener("click", function() {
       showPatternDialog(null, null);
+    });
+  }
+
+  // Step 10e) Add Group button — new empty renamable block
+  var btnAddGroup = document.getElementById("btnAddPatternGroup");
+  if (btnAddGroup) {
+    btnAddGroup.addEventListener("click", function() {
+      addPatternGroup("New Group");
+      renderPatterns();
     });
   }
 }

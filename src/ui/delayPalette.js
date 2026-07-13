@@ -19,6 +19,7 @@ import { debouncedSave } from "../state/schedulerDB.js";
 import { showPatternAllocDialog } from "../views/blastOverview.js";
 import { getSelection, clearSelection } from "./ganttSelect.js";
 import { isHoursMode } from "./ganttScale.js";
+import { isPatternVisibleToGantt } from "../helpers/patternVisibility.js";
 
 // Step 1) Track collapsed palette sections between renders
 var _paletteCollapsed = { patterns: false, drills: false, mpus: false, ancillary: true, crew: false, delays: false };
@@ -38,8 +39,8 @@ function renderDelayPalette() {
       html += "<div style=\"font-size:11px;color:var(--text-muted);padding:4px 8px;\">No patterns loaded</div>";
     }
     APP.patterns.forEach(function(p) {
-      // Step 2b-i) Skip patterns hidden from Gantt
-      if (p.visibleToGantt === false) return;
+      // Step 2b-i) Skip patterns hidden from Gantt (per-pattern or group-level)
+      if (!isPatternVisibleToGantt(p)) return;
       var typeChar = p.type.charAt(0);
       var chipColorMap = {
         PRODUCTION: "var(--production)",
@@ -392,7 +393,7 @@ function batchApplyDrop(dragType, dragId, selection) {
       uniqueBlasts[sel.blastIdx] = true;
 
       var pattern = APP.patterns.find(function(p) { return p.id === dragId; });
-      if (!pattern) continue;
+      if (!pattern || !isPatternVisibleToGantt(pattern)) continue;
 
       if (!blast.holeTypes) blast.holeTypes = [];
 
@@ -487,6 +488,10 @@ function handlePatternDrop(blast, blastIdx, patternId) {
   var pattern = APP.patterns.find(function(p) { return p.id === patternId; });
   if (!pattern) {
     showDropFeedback("Pattern " + patternId + " not found");
+    return;
+  }
+  if (!isPatternVisibleToGantt(pattern)) {
+    showDropFeedback("Pattern " + patternId + " is hidden from Gantt");
     return;
   }
 

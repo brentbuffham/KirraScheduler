@@ -326,6 +326,16 @@ input[type="range"] {
   align-self: flex-start;
 }
 
+/* Step 7b) Pattern tab — scroll with main-content (same model as other non-Gantt tabs).
+   Avoid height:100% + nested overflow here; Chrome and embedded browsers resolve that chain differently. */
+#tab-patterns.active {
+  display: block;
+  min-height: 0;
+}
+#patternGrid {
+  width: 100%;
+}
+
 /* Step 8) Settings bar */
 .settings-bar {
   display: flex;
@@ -471,7 +481,29 @@ input[type="range"] {
 .gantt-header-date.weekend { color: var(--accent-blast); }
 .gantt-header-date.today { color: var(--accent-cyan); font-weight: 700; }
 
-/* Step 10) Gantt rows */
+/* Step 10) Gantt rows — section headers */
+.gantt-section-header td.gantt-section-header-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 25;
+  background: var(--bg-tertiary);
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-top: 2px solid var(--border-active);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.12);
+}
+.gantt-section-header td.gantt-section-header-scroll {
+  background: var(--bg-tertiary);
+  border-top: 2px solid var(--border-active);
+  padding: 0;
+  cursor: pointer;
+}
 .gantt-section-header td {
   background: var(--bg-tertiary);
   padding: 6px 12px;
@@ -1047,7 +1079,230 @@ input[type="range"] {
 .gantt-row.fired-row td,
 .gantt-block-row.fired-row td { opacity: 0.55; }
 
-/* Step 15) Pattern cards */
+/* Step 15) Pattern cards — groups grid + collapsible compact cards */
+.pattern-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 640px), 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 0;
+  width: 100%;
+}
+.pattern-group-block {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* Step) visible — overflow:hidden clips expanded card action buttons in some engines */
+  overflow: visible;
+  min-height: 180px;
+}
+.pattern-group-block.group-collapsed {
+  overflow: hidden;
+}
+.pattern-group-block.group-collapsed .pattern-group-body {
+  display: none;
+}
+.pattern-group-block.group-dragging {
+  opacity: 0.55;
+}
+.pattern-group-block.group-drop-target {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -2px;
+}
+.pattern-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  user-select: none;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.pattern-group-block.group-collapsed .pattern-group-header {
+  border-bottom: none;
+  border-radius: var(--radius-lg);
+}
+.pattern-group-collapse {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.pattern-group-block.group-collapsed .pattern-group-collapse {
+  transform: rotate(-90deg);
+}
+.pattern-group-grip,
+.pattern-card-grip {
+  cursor: grab;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.pattern-group-grip:active,
+.pattern-card-grip:active {
+  cursor: grabbing;
+}
+.pattern-group-name-input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.pattern-group-name-input:focus {
+  border-color: var(--accent-cyan);
+  outline: none;
+}
+.pattern-group-gantt-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.pattern-group-gantt-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+.pattern-group-block.group-gantt-hidden {
+  border-color: var(--border);
+}
+.pattern-group-block.group-gantt-hidden .pattern-group-header {
+  opacity: 0.85;
+}
+.pattern-gantt-drag.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.pattern-group-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+.pattern-group-delete {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.pattern-group-delete:hover {
+  color: var(--accent-blast);
+}
+.pattern-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.pattern-group-body.pattern-drop-target {
+  background: rgba(6, 182, 212, 0.08);
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -4px;
+}
+.pattern-group-empty {
+  text-align: center;
+  padding: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.pattern-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.pattern-card-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.pattern-card.is-collapsed .pattern-card-toggle {
+  transform: rotate(-90deg);
+}
+.pattern-card-summary {
+  flex: 1;
+  min-width: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pattern-card-type {
+  flex-shrink: 0;
+  font-size: 9px !important;
+  padding: 1px 5px !important;
+}
+.pattern-card-body {
+  padding: 8px 10px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+.pattern-card.is-expanded .pattern-card-body {
+  display: block;
+}
+.pattern-card.is-collapsed .pattern-card-body {
+  display: none;
+}
+.pattern-gantt-drag {
+  cursor: grab;
+  color: var(--accent-cyan);
+  opacity: 0.7;
+  padding: 2px;
+  border-radius: var(--radius);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.pattern-gantt-drag:hover {
+  opacity: 1;
+  background: rgba(6, 182, 212, 0.12);
+}
+.pattern-gantt-drag:active {
+  cursor: grabbing;
+}
+.pattern-card.pattern-drop-target {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -2px;
+}
 .pattern-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1058,16 +1313,28 @@ input[type="range"] {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 0;
   transition: border-color 0.15s;
+  cursor: default;
+  flex-shrink: 0;
+  width: 100%;
+}
+.pattern-card.is-expanded {
+  border-color: var(--border-active);
+}
+.pattern-card.is-expanded,
+.pattern-card.is-expanded .pattern-card-body,
+.pattern-card.is-expanded .pattern-card-actions {
+  overflow: visible;
 }
 .pattern-card:hover { border-color: var(--border-active); }
 .pattern-card .pattern-id {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--accent-cyan);
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  flex-shrink: 0;
 }
 .pattern-card .pattern-detail {
   display: flex;
@@ -1084,8 +1351,9 @@ input[type="range"] {
   align-items: center;
   gap: 6px;
   margin-top: 10px;
-  padding-top: 8px;
+  padding: 8px 0 2px 0;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 .pat-action-btn {
   display: inline-flex;
@@ -2613,10 +2881,12 @@ select[multiple] option:checked {
 /* ============================================================
    Step 40) Pattern card drag styling + blast row drop target
    ============================================================ */
-.pattern-card[draggable="true"] {
+.pattern-card[draggable="true"],
+.pattern-gantt-drag[draggable="true"] {
   cursor: grab;
 }
-.pattern-card[draggable="true"]:active {
+.pattern-card[draggable="true"]:active,
+.pattern-gantt-drag[draggable="true"]:active {
   cursor: grabbing;
   opacity: 0.7;
 }

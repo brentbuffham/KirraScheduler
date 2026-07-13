@@ -323,6 +323,12 @@ function parseKGPProject(file) {
         APP.patterns.forEach(function(p) { if (p.holeAngle === undefined) p.holeAngle = 90; });
         log.innerHTML += "<div class=\"log-ok\">" + data.patterns.length + " pattern(s) restored</div>";
       }
+      if (data.patternGroups && Array.isArray(data.patternGroups)) {
+        APP.patternGroups = data.patternGroups;
+        log.innerHTML += "<div class=\"log-ok\">" + data.patternGroups.length + " pattern group(s) restored</div>";
+      } else {
+        APP.patternGroups = [];
+      }
 
       // Step 2e) Restore charge configs
       if (data.chargeConfigs) {

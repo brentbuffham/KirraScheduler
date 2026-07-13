@@ -34,6 +34,7 @@ function exportKGP() {
     // Step 1c) Schedule data
     blasts: APP.blasts,
     patterns: APP.patterns,
+    patternGroups: APP.patternGroups || [],
     chargeConfigs: APP.chargeConfigs,
     importedBlasts: APP.importedBlasts,
 

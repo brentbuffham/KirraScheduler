@@ -138,6 +138,7 @@ function saveState() {
   return Promise.all([
     putRecord(STORE_BLASTS, "allBlasts", cleanBlasts),
     putRecord(STORE_PATTERNS, "allPatterns", APP.patterns),
+    putRecord(STORE_PATTERNS, "patternGroups", APP.patternGroups || []),
     putRecord(STORE_EQUIPMENT, "allEquipment", equipment),
     putRecord(STORE_SETTINGS, "appSettings", settings),
     putRecord(STORE_CONFORMANCE, "conformanceData", APP.conformance),
@@ -168,6 +169,7 @@ function loadState() {
     return Promise.all([
       getRecord(STORE_BLASTS, "allBlasts"),
       getRecord(STORE_PATTERNS, "allPatterns"),
+      getRecord(STORE_PATTERNS, "patternGroups"),
       getRecord(STORE_EQUIPMENT, "allEquipment"),
       getRecord(STORE_SETTINGS, "appSettings"),
       getRecord(STORE_CONFORMANCE, "conformanceData"),
@@ -179,13 +181,14 @@ function loadState() {
   }).then(function(results) {
     var savedBlasts = results[0];
     var savedPatterns = results[1];
-    var savedEquipment = results[2];
-    var savedSettings = results[3];
-    var savedConformance = results[4];
-    var savedChargeConfigs = results[5];
-    var savedProducts = results[6];
-    var savedSurfaces = results[7];
-    var savedSolids = results[8];
+    var savedPatternGroups = results[2];
+    var savedEquipment = results[3];
+    var savedSettings = results[4];
+    var savedConformance = results[5];
+    var savedChargeConfigs = results[6];
+    var savedProducts = results[7];
+    var savedSurfaces = results[8];
+    var savedSolids = results[9];
 
     // Step 7a) If no blasts saved, DB is empty — return false
     if (!savedBlasts) return false;
@@ -202,6 +205,13 @@ function loadState() {
       for (var j = 0; j < savedPatterns.length; j++) {
         APP.patterns.push(savedPatterns[j]);
       }
+    }
+
+    // Step 7c-ii) Restore pattern library groups (organizational blocks)
+    if (savedPatternGroups && savedPatternGroups.length > 0) {
+      APP.patternGroups = savedPatternGroups;
+    } else {
+      APP.patternGroups = [];
     }
 
     // Step 7d) Restore equipment arrays (replace contents, keep references)

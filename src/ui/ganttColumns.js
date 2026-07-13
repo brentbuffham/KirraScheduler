@@ -113,6 +113,14 @@ function applyColumnLayout() {
       el.style.maxWidth = w + "px";
     }
   }
+  // Step 9b) Keep section header sticky label width in sync when columns resize
+  var secSticky = document.querySelectorAll(".gantt-section-header-sticky");
+  var totalW = getTotalWidth();
+  for (var si = 0; si < secSticky.length; si++) {
+    secSticky[si].style.width = totalW + "px";
+    secSticky[si].style.minWidth = totalW + "px";
+    secSticky[si].style.maxWidth = totalW + "px";
+  }
 }
 
 export {

@@ -29,6 +29,7 @@ var APP = {
   },
 
   // Step 2) Pattern library
+  patternGroups: [],
   patterns: [
     { id: "1.1.01",    benchHt: 12, diam: 229, pf: 0.6,  burden: 7.65, spacing: 8.85, subdrill: 1.5, stemming: 4,   type: "WASTE",    holeAngle: 90 },
     { id: "1.1.02",    benchHt: 12, diam: 229, pf: 0.7,  burden: 7.1,  spacing: 8.2,  subdrill: 1.5, stemming: 4,   type: "WASTE",    holeAngle: 90 },

@@ -17,7 +17,7 @@ import { initGanttResize } from "../ui/ganttResize.js";
 import { applySelectionHighlight } from "../ui/ganttSelect.js";
 import { initGanttReorder } from "../ui/ganttReorder.js";
 import { renderConnectors } from "../ui/ganttConnectors.js";
-import { getColumns, getColumnCount, cellStyle, setWidth, applyColumnLayout } from "../ui/ganttColumns.js";
+import { getColumns, getColumnCount, getTotalWidth, cellStyle, setWidth, applyColumnLayout } from "../ui/ganttColumns.js";
 import { editBlast } from "../dialogs/blastModal.js";
 import { getDelayType } from "../state/delayTypes.js";
 import { getBlastStatus } from "../state/blastStatus.js";
@@ -608,8 +608,11 @@ function renderGantt() {
   function renderSection(sectionName, color, getDateRange) {
     var secKey = sectionName.toLowerCase();
     var collapsed = _collapsedSections[secKey] ? " collapsed" : "";
+    var frozenW = getTotalWidth();
     html += "<tr class=\"gantt-section-header" + collapsed + "\" data-section-toggle=\"" + secKey + "\">";
-    html += "<td colspan=\"" + (dates.length + getColumnCount()) + "\">";
+    // Step 1f-i) Sticky label spans the frozen columns; timeline filler scrolls away
+    html += "<td class=\"gantt-section-header-sticky\" colspan=\"" + getColumnCount() + "\" " +
+      "style=\"left:0;width:" + frozenW + "px;min-width:" + frozenW + "px;max-width:" + frozenW + "px;\">";
     html += "<span class=\"collapse-arrow\">\u25BC</span>";
     html += "<span class=\"section-icon\" style=\"background:" + color + "\"></span>" + sectionName;
     // Step 1f-0) DRILLING header gets a bulk "Send all patterns to Pattern Prep"
@@ -622,7 +625,9 @@ function renderGantt() {
     if (sectionName === "EXCAVATION") {
       html += "<button type=\"button\" class=\"btn btn-sm gantt-section-action\" id=\"btnSendAllExcav\" title=\"Give every blast an excavation cycle starting the day after it fires. Assign dig equipment in the blast to make the duration rate-driven, or drag/resize the bars.\">\u2192 Send all to Excavation</button>";
     }
-    html += "</td></tr>";
+    html += "</td>";
+    html += "<td class=\"gantt-section-header-scroll\" colspan=\"" + slots.length + "\"></td>";
+    html += "</tr>";
 
     APP.blasts.forEach(function(blast, idx) {
       var deps = getBlastDeps(blast);

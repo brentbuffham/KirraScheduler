@@ -300,6 +300,7 @@ function performReset() {
   // Step 7c) Configurations — Remove pattern specifications
   if (isAll || document.getElementById("resetPatterns").checked) {
     APP.patterns = [];
+    APP.patternGroups = [];
   }
 
   // Step 7d) Configurations — Remove charge configurations
